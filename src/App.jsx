@@ -83,6 +83,7 @@ const INITIAL_NOTAS = [
   {id:28,numero:"7469",cliente:"MUEBLES ASENJO LTDA.",fecha:"2026-05-19",total:1213047,cotizacion:"12127"},
   {id:29,numero:"7470",cliente:"THE ROCK SPA",fecha:"2026-05-19",total:67500,cotizacion:"12127"},
   {id:30,numero:"7471",cliente:"JORGE BORBARAN",fecha:"2026-05-19",total:128555,cotizacion:"12140"},
+  {id:31,numero:"7472",cliente:"GERO MATTE",fecha:"2026-05-25",total:401831,cotizacion:"12141"},
 ];
 
 function businessDaysSince(dateStr) {
@@ -266,7 +267,7 @@ export default function App() {
               <StatCard label="Activas" value={activas.length} sub={fmt(totalActiva)} icon="●" color="#5a8abe"/>
               <StatCard label="Seguimiento" value={urgentes.length} sub="7-10 días hábiles" icon="⚡" color={COLORS.warning}/>
               <StatCard label="Vencidas" value={vencidas.length} sub={fmt(totalVencida)} icon="✕" color="#9a7aaa"/>
-              <StatCard label="Total Vendido" value={fmt(totalSold)} sub="30 notas" icon="💰" color={COLORS.success}/>
+              <StatCard label="Total Vendido" value={fmt(totalSold)} sub="31 notas" icon="💰" color={COLORS.success}/>
             </div>
 
             {urgentes.length>0 && (
