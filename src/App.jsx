@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from '../lib/supabase'
-import { obtenerCotizaciones, crearCotizacion, aceptarCotizacion, obtenerNotasVenta, editarNumeroNotaVenta, importarNotaVentaExcel, eliminarNotaVenta } from '../lib/cotizaciones'
+import { obtenerCotizaciones, crearCotizacion, aceptarCotizacion, obtenerNotasVenta, editarNumeroNotaVenta, importarNotaVentaExcel, eliminarNotaVenta, importarCotizacionExcel } from '../lib/cotizaciones'
 import * as XLSX from 'xlsx'
 
 const COLORS = {
@@ -187,6 +187,36 @@ function NotasModal({ cotizacion, seguimiento, onSave, onClose }) {
 }
 
 export default function App() {
+  const importarCotizacion = async (event) => {
+  const file = event.target.files[0];
+
+  if (!file) return;
+
+  const data = await file.arrayBuffer();
+  const workbook = XLSX.read(data);
+  const sheet = workbook.Sheets["RESUMEN"];
+
+  if (!sheet) {
+    alert("No existe hoja RESUMEN");
+    return;
+  }
+
+  const numero = sheet["A2"]?.v;
+  const cliente = sheet["B2"]?.v;
+  const fecha = sheet["C2"]?.v;
+  const total = sheet["D2"]?.v;
+
+  const ok = await importarCotizacionExcel({
+    numero,
+    cliente,
+    fecha,
+    total
+  });
+
+  if (ok) {
+    window.location.reload();
+  }
+};
   const importarExcel = async (event) => {
     const file = event.target.files[0]
 
@@ -202,6 +232,7 @@ export default function App() {
       alert('No existe hoja RESUMEN')
       return
     }
+    
 
     const cotizacion = sheet['A2']?.v
     const notaVenta = sheet['B2']?.v
@@ -216,6 +247,7 @@ export default function App() {
       fecha,
       total
     })
+    
     const ok = await importarNotaVentaExcel({
   cotizacion,
   notaVenta,
@@ -379,11 +411,31 @@ setNuevoTotal("");
     color: "#fff"
   }}
 >
-  Importar Excel
+  Importar NV
   <input
     type="file"
     accept=".xlsx,.xls"
     onChange={importarExcel}
+    style={{ display: "none" }}
+  />
+</label>
+<label
+  style={{
+    padding: "10px 18px",
+    background: COLORS.accent,
+    borderRadius: 8,
+    fontWeight: 700,
+    cursor: "pointer",
+    color: "#fff",
+    display: "inline-block",
+    marginLeft: 10
+  }}
+>
+  Importar Cotización
+  <input
+    type="file"
+    accept=".xlsx,.xls"
+    onChange={importarCotizacion}
     style={{ display: "none" }}
   />
 </label>
