@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from '../lib/supabase'
-import { obtenerCotizaciones, crearCotizacion, aceptarCotizacion, obtenerNotasVenta, editarNumeroNotaVenta, migrarNotasVenta } from '../lib/cotizaciones'
+import { obtenerCotizaciones, crearCotizacion, aceptarCotizacion, obtenerNotasVenta, editarNumeroNotaVenta } from '../lib/cotizaciones'
 
 const COLORS = {
   bg: "#0f0e0c", surface: "#1a1916", card: "#222018", border: "#2e2b24",
@@ -326,20 +326,6 @@ setNuevoTotal("");
     Crear Cotización
   </button>
 </div>
-<button
-  onClick={() => migrarNotasVenta(INITIAL_NOTAS, INITIAL_COTIZACIONES)}
-  style={{
-    marginLeft: 20,
-    padding: "10px 16px",
-    background: COLORS.success,
-    border: "none",
-    borderRadius: 8,
-    fontWeight: 700,
-    cursor: "pointer"
-  }}
->
-  Migrar Notas Venta
-</button>
       <div style={{ background:COLORS.surface, borderBottom:`1px solid ${COLORS.border}`, padding:"14px 24px", display:"flex", alignItems:"center", gap:12 }}>
         <span style={{ fontSize:24 }}>🪑</span>
         <div>
