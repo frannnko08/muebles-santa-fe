@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from '../lib/supabase'
-import { obtenerCotizaciones, crearCotizacion, aceptarCotizacion, obtenerNotasVenta, editarNumeroNotaVenta } from '../lib/cotizaciones'
+import { obtenerCotizaciones, crearCotizacion, aceptarCotizacion, obtenerNotasVenta, editarNumeroNotaVenta, importarNotaVentaExcel, eliminarNotaVenta } from '../lib/cotizaciones'
+import * as XLSX from 'xlsx'
 
 const COLORS = {
   bg: "#0f0e0c", surface: "#1a1916", card: "#222018", border: "#2e2b24",
@@ -186,6 +187,47 @@ function NotasModal({ cotizacion, seguimiento, onSave, onClose }) {
 }
 
 export default function App() {
+  const importarExcel = async (event) => {
+    const file = event.target.files[0]
+
+    if (!file) return
+
+    const data = await file.arrayBuffer()
+
+    const workbook = XLSX.read(data)
+
+    const sheet = workbook.Sheets['RESUMEN']
+
+    if (!sheet) {
+      alert('No existe hoja RESUMEN')
+      return
+    }
+
+    const cotizacion = sheet['A2']?.v
+    const notaVenta = sheet['B2']?.v
+    const cliente = sheet['C2']?.v
+    const fecha = sheet['D2']?.v
+    const total = sheet['E2']?.v
+
+    console.log({
+      cotizacion,
+      notaVenta,
+      cliente,
+      fecha,
+      total
+    })
+    const ok = await importarNotaVentaExcel({
+  cotizacion,
+  notaVenta,
+  cliente,
+  fecha,
+  total
+});
+
+if (ok) {
+  window.location.reload();
+}
+  }
   useEffect(() => {
   async function cargarDatos() {
     const dataCotizaciones = await obtenerCotizaciones();
@@ -325,6 +367,26 @@ setNuevoTotal("");
   >
     Crear Cotización
   </button>
+
+  <label
+  style={{
+    padding: "10px 18px",
+    background: COLORS.success,
+    border: "none",
+    borderRadius: 8,
+    fontWeight: 700,
+    cursor: "pointer",
+    color: "#fff"
+  }}
+>
+  Importar Excel
+  <input
+    type="file"
+    accept=".xlsx,.xls"
+    onChange={importarExcel}
+    style={{ display: "none" }}
+  />
+</label>
 </div>
       <div style={{ background:COLORS.surface, borderBottom:`1px solid ${COLORS.border}`, padding:"14px 24px", display:"flex", alignItems:"center", gap:12 }}>
         <span style={{ fontSize:24 }}>🪑</span>
@@ -569,6 +631,30 @@ setNuevoTotal("");
       Editar NV
     </button>
   )}
+  <button
+  onClick={async () => {
+    const confirmar = confirm(`¿Eliminar NV ${s.numero}?`);
+
+    if (!confirmar) return;
+
+    const ok = await eliminarNotaVenta(s.id);
+
+    if (ok) {
+      window.location.reload();
+    }
+  }}
+  style={{
+    background: COLORS.danger,
+    border: "none",
+    borderRadius: 6,
+    padding: "4px 8px",
+    color: "#fff",
+    cursor: "pointer",
+    fontSize: 11
+  }}
+>
+  Eliminar
+</button>
 </div>
                 </div>
               ))}
