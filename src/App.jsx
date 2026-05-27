@@ -185,7 +185,205 @@ function NotasModal({ cotizacion, seguimiento, onSave, onClose }) {
     </div>
   );
 }
+function GestionNVModal({ nota, abonos = [], onClose, onSave }) {
+  const [nuevoAbono, setNuevoAbono] = useState("");
+  const [observacionAbono, setObservacionAbono] = useState("");
+  const [materiales, setMateriales] = useState(nota.materiales || "falta");
+  const [proceso, setProceso] = useState(nota.proceso || "en espera");
+  const [observaciones, setObservaciones] = useState(nota.observaciones || "");
 
+  const total = Number(nota.total) || 0;
+  const totalAbonado = abonos.reduce((sum, a) => sum + Number(a.monto || 0), 0);
+  const saldo = Math.max(total - totalAbonado, 0);
+
+  return (
+    <div style={{
+      position:"fixed",
+      inset:0,
+      background:"rgba(0,0,0,0.65)",
+      display:"flex",
+      alignItems:"center",
+      justifyContent:"center",
+      zIndex:9999
+    }}>
+      <div style={{
+        background:COLORS.card,
+        border:`1px solid ${COLORS.border}`,
+        borderRadius:14,
+        padding:22,
+        width:"420px",
+        maxWidth:"92%",
+        color:COLORS.text
+      }}>
+        <h2 style={{ marginTop:0, color:COLORS.accent }}>
+          Gestión NV #{nota.numero}
+        </h2>
+
+        <p><b>Cliente:</b> {nota.cliente}</p>
+        <p><b>Total:</b> {fmt(total)}</p>
+
+        <label>Nuevo abono</label>
+<input
+  type="number"
+  value={nuevoAbono}
+  onChange={(e) => setNuevoAbono(e.target.value)}
+  placeholder="Ej: 50000"
+  style={{
+    width:"100%",
+    padding:10,
+    margin:"6px 0 12px",
+    borderRadius:8,
+    border:`1px solid ${COLORS.border}`,
+    background:COLORS.surface,
+    color:COLORS.text
+  }}
+/>
+
+<label>Observación del abono</label>
+<input
+  type="text"
+  value={observacionAbono}
+  onChange={(e) => setObservacionAbono(e.target.value)}
+  placeholder="Ej: transferencia, efectivo, banco..."
+  style={{
+    width:"100%",
+    padding:10,
+    margin:"6px 0 12px",
+    borderRadius:8,
+    border:`1px solid ${COLORS.border}`,
+    background:COLORS.surface,
+    color:COLORS.text
+  }}
+/>
+<p><b>Total abonado:</b> {fmt(totalAbonado)}</p>
+
+<div style={{
+  margin:"12px 0",
+  padding:12,
+  borderRadius:10,
+  background:COLORS.surface,
+  border:`1px solid ${COLORS.border}`
+}}>
+  <b>Historial de abonos</b>
+
+  {abonos.length === 0 ? (
+    <p style={{ color:COLORS.muted, fontSize:13 }}>
+      Sin abonos registrados
+    </p>
+  ) : (
+    <div style={{ marginTop:8, display:"grid", gap:6 }}>
+      {abonos.map(a => (
+        <div key={a.id} style={{
+          display:"flex",
+          justifyContent:"space-between",
+          gap:10,
+          fontSize:13,
+          borderBottom:`1px solid ${COLORS.border}`,
+          paddingBottom:5
+        }}>
+          <span>{a.fecha}</span>
+          <span style={{ fontWeight:700 }}>{fmt(a.monto)}</span>
+          <span style={{ color:COLORS.muted }}>
+            {a.observacion || "Sin observación"}
+          </span>
+        </div>
+      ))}
+    </div>
+  )}
+</div>
+        <p>
+          <b>Saldo pendiente:</b>{" "}
+          <span style={{ color: saldo === 0 ? COLORS.success : COLORS.warning }}>
+            {fmt(saldo)}
+          </span>
+        </p>
+
+        <label>Materiales</label>
+        <select
+          value={materiales}
+          onChange={(e) => setMateriales(e.target.value)}
+          style={{
+            width:"100%",
+            padding:10,
+            margin:"6px 0 12px",
+            borderRadius:8,
+            background:COLORS.surface,
+            color:COLORS.text,
+            border:`1px solid ${COLORS.border}`
+          }}
+        >
+          <option value="falta">Falta</option>
+          <option value="comprados">Comprados</option>
+        </select>
+
+        <label>Proceso</label>
+        <select
+          value={proceso}
+          onChange={(e) => setProceso(e.target.value)}
+          style={{
+            width:"100%",
+            padding:10,
+            margin:"6px 0 12px",
+            borderRadius:8,
+            background:COLORS.surface,
+            color:COLORS.text,
+            border:`1px solid ${COLORS.border}`
+          }}
+        >
+          <option value="en espera">En espera</option>
+          <option value="en producción">En producción</option>
+          <option value="terminado">Terminado</option>
+          <option value="entregado">Entregado</option>
+        </select>
+
+        <label>Observaciones</label>
+        <textarea
+          value={observaciones}
+          onChange={(e) => setObservaciones(e.target.value)}
+          placeholder="Escribe una observación..."
+          style={{
+            width:"100%",
+            minHeight:90,
+            padding:10,
+            margin:"6px 0 14px",
+            borderRadius:8,
+            background:COLORS.surface,
+            color:COLORS.text,
+            border:`1px solid ${COLORS.border}`
+          }}
+        />
+
+        <div style={{ display:"flex", justifyContent:"flex-end", gap:10 }}>
+          <button onClick={onClose}>
+            Cancelar
+          </button>
+
+          <button
+            onClick={() => onSave({
+              ...nota,
+              nuevoAbono,
+              observacionAbono,
+              materiales,
+              proceso,
+              observaciones
+            })}
+            style={{
+              background:COLORS.success,
+              color:"#fff",
+              border:"none",
+              borderRadius:8,
+              padding:"9px 14px",
+              cursor:"pointer",
+              fontWeight:700
+            }}
+          >
+            Guardar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 export default function App() {
   const importarCotizacion = async (event) => {
   const file = event.target.files[0];
@@ -283,22 +481,41 @@ if (ok) {
       fecha: n.fecha?.split("T")[0] || new Date().toISOString().split("T")[0],
      total: n.cotizaciones?.total || n.total || 0,
       cotizacion: n.cotizaciones?.numero ? String(n.cotizaciones.numero) : null,
+      abono: n.abono || 0,
+      estado_pago: n.estado_pago || "pendiente",
+      materiales: n.materiales || "falta",
+      proceso: n.proceso || "en espera",
+      observaciones: n.observaciones || "",
 }));
 
     setNotas(notasFormateadas);
+    const { data: dataAbonos, error: errorAbonos } = await supabase
+  .from("abonos_nv")
+  .select("*")
+  .order("fecha", { ascending: false });
+
+if (!errorAbonos) {
+  setAbonosNV(dataAbonos || []);
+}
   }
 
   cargarDatos();
 }, []);
   const [tab, setTab] = useState("dashboard");
   const [filter, setFilter] = useState("");
+  const [fechaDesde, setFechaDesde] = useState("");
+  const [fechaHasta, setFechaHasta] = useState("");
   const [showVencidas, setShowVencidas] = useState(false);
   const [seguimiento, setSeguimiento] = useState({});
   const [cotizaciones, setCotizaciones] = useState([]);
   const [notas, setNotas] = useState([]);
+  const [abonosNV, setAbonosNV] = useState([]);
   const [modalCot, setModalCot] = useState(null);
+  const [modalNV, setModalNV] = useState(null);
   const [nuevoCliente, setNuevoCliente] = useState("");
   const [nuevoTotal, setNuevoTotal] = useState("");
+  const [busquedaCliente, setBusquedaCliente] = useState("")
+  
 
   // Load seguimiento from localStorage
   useEffect(() => {
@@ -317,6 +534,11 @@ if (ok) {
   const convertedNums = new Set(notas.filter(s => s.cotizacion).map(s => s.cotizacion));
   const sinCotizacion = notas.filter(s => !s.cotizacion);
   const withStatus = cotizaciones.map(q => ({ ...q, status: getStatus(q, convertedNums) }));
+  const cotizacionesFiltradas = withStatus.filter((q) =>
+  q.cliente
+    ?.toLowerCase()
+    .includes(busquedaCliente.toLowerCase())
+);
   const vendidas = withStatus.filter(q => q.status === "vendida");
   const urgentes = withStatus.filter(q => q.status === "urgente");
   const activas  = withStatus.filter(q => q.status === "activa");
@@ -330,10 +552,32 @@ if (ok) {
   const totalVencida = vencidas.reduce((s,q) => s + q.total, 0);
   const totalQuoted = cotizaciones.reduce((s,q) => s + q.total, 0);
 
-  const filteredQuotes = withStatus.filter(q =>
-    (q.numero.toLowerCase().includes(filter.toLowerCase()) || q.cliente.toLowerCase().includes(filter.toLowerCase())) &&
-    (showVencidas || q.status !== "vencida")
-  ).sort((a,b) => { const o={urgente:0,activa:1,vendida:2,vencida:3}; return o[a.status]-o[b.status]; });
+  const cumpleFecha = (fecha) => {
+  if (!fecha) return true;
+
+  const f = new Date(fecha);
+  const desde = fechaDesde ? new Date(fechaDesde) : null;
+  const hasta = fechaHasta ? new Date(fechaHasta) : null;
+
+  if (desde && f < desde) return false;
+  if (hasta && f > hasta) return false;
+
+  return true;
+};
+
+const filteredQuotes = withStatus.filter(q =>
+  (q.numero.toLowerCase().includes(filter.toLowerCase()) || q.cliente.toLowerCase().includes(filter.toLowerCase())) &&
+  cumpleFecha(q.fecha) &&
+  (showVencidas || q.status !== "vencida")
+).sort((a,b) => { 
+  const o={urgente:0,activa:1,vendida:2,vencida:3}; 
+  return o[a.status]-o[b.status]; 
+});
+
+const filteredNotas = notas.filter(s =>
+  (s.numero.toLowerCase().includes(filter.toLowerCase()) || s.cliente.toLowerCase().includes(filter.toLowerCase())) &&
+  cumpleFecha(s.fecha)
+);
 
   const r2=58,cx=80,cy=76;
   const toRad=d=>d*Math.PI/180;
@@ -344,7 +588,85 @@ if (ok) {
     return `M ${p1.x} ${p1.y} A ${r2} ${r2} 0 ${e-s>180?1:0} 1 ${p2.x} ${p2.y}`;
   };
   const fillEnd=startA+sweepA*(rate/100);
+  const guardarGestionNV = async (nvActualizada) => {
+  const idReal = Number(String(nvActualizada.id).replace("supabase-", ""));
 
+  const nuevoAbono = Number(nvActualizada.nuevoAbono) || 0;
+
+  if (nuevoAbono > 0) {
+    const { error: errorInsert } = await supabase
+      .from("abonos_nv")
+      .insert({
+        nota_venta_id: idReal,
+        monto: nuevoAbono,
+        fecha: new Date().toISOString().split("T")[0],
+        observacion: nvActualizada.observacionAbono || ""
+      });
+
+    if (errorInsert) {
+      alert("Error al guardar el abono");
+      console.error(errorInsert);
+      return;
+    }
+  }
+
+  const { data: abonosActualizados, error: errorAbonos } = await supabase
+    .from("abonos_nv")
+    .select("*")
+    .eq("nota_venta_id", idReal);
+
+  if (errorAbonos) {
+    alert("Error al calcular abonos");
+    console.error(errorAbonos);
+    return;
+  }
+
+  const totalAbonado = (abonosActualizados || []).reduce(
+    (sum, a) => sum + Number(a.monto || 0),
+    0
+  );
+
+  const total = Number(nvActualizada.total) || 0;
+
+  let estadoPago = "pendiente";
+
+  if (totalAbonado >= total && total > 0) {
+    estadoPago = "pagada";
+  } else if (totalAbonado > 0) {
+    estadoPago = "abonada";
+  }
+
+  const { error } = await supabase
+    .from("notas_venta")
+    .update({
+      abono: totalAbonado,
+      estado_pago: estadoPago,
+      materiales: nvActualizada.materiales,
+      proceso: nvActualizada.proceso,
+      observaciones: nvActualizada.observaciones,
+    })
+    .eq("id", idReal);
+
+  if (error) {
+    alert("Error al guardar gestión de NV");
+    console.error(error);
+    return;
+  }
+
+  setAbonosNV(prev => {
+    const otros = prev.filter(a => a.nota_venta_id !== idReal);
+    return [...otros, ...(abonosActualizados || [])];
+  });
+
+  setNotas(notas.map(n =>
+    n.id === nvActualizada.id
+      ? { ...nvActualizada, abono: totalAbonado, estado_pago: estadoPago }
+      : n
+  ));
+
+  setModalNV(null);
+};
+  
   const tabs=[
     {key:"dashboard",label:"📊 Resumen"},
     {key:"quotes",label:`📋 Cotizaciones (${cotizaciones.length})`},
@@ -560,6 +882,19 @@ setNuevoTotal("");
         {tab==="quotes" && (
           <div>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14, flexWrap:"wrap", gap:10 }}>
+              <input
+  type="text"
+  placeholder="Buscar cliente..."
+  value={busquedaCliente}
+  onChange={(e) => setBusquedaCliente(e.target.value)}
+  style={{
+    padding: "10px",
+    marginBottom: "15px",
+    width: "250px",
+    borderRadius: "8px",
+    border: "1px solid #444"
+  }}
+/>
               <h2 style={{ margin:0, fontFamily:"Georgia,serif", color:COLORS.accent, fontSize:17 }}>Cotizaciones Mayo 2026</h2>
               <label style={{ display:"flex", alignItems:"center", gap:8, fontSize:12, color:COLORS.muted, cursor:"pointer" }}>
                 <input type="checkbox" checked={showVencidas} onChange={e=>setShowVencidas(e.target.checked)}/> Mostrar vencidas ({vencidas.length})
@@ -567,6 +902,21 @@ setNuevoTotal("");
             </div>
             <input placeholder="Buscar por número o cliente..." value={filter} onChange={e=>setFilter(e.target.value)}
               style={{ width:"100%", boxSizing:"border-box", marginBottom:12, background:COLORS.surface, border:`1px solid ${COLORS.border}`, borderRadius:8, padding:"9px 14px", color:COLORS.text, fontSize:13, outline:"none" }}/>
+            <div style={{ display:"flex", gap:10, marginBottom:12, flexWrap:"wrap" }}>
+  <input
+    type="date"
+    value={fechaDesde}
+    onChange={e=>setFechaDesde(e.target.value)}
+    style={{ background:COLORS.surface, border:`1px solid ${COLORS.border}`, borderRadius:8, padding:"9px 14px", color:COLORS.text }}
+  />
+
+  <input
+    type="date"
+    value={fechaHasta}
+    onChange={e=>setFechaHasta(e.target.value)}
+    style={{ background:COLORS.surface, border:`1px solid ${COLORS.border}`, borderRadius:8, padding:"9px 14px", color:COLORS.text }}
+  />
+</div>
             <div style={{ display:"flex", flexDirection:"column", gap:7 }}>
               {filteredQuotes.map(q=>{
                 const nvs=notas.filter(s=>s.cotizacion===q.numero);
@@ -633,15 +983,80 @@ setNuevoTotal("");
               <div><span style={{ fontSize:11, color:COLORS.muted }}>NOTAS</span><div style={{ fontSize:18, fontWeight:700, color:COLORS.success }}>{notas.length}</div></div>
             </div>
             <div style={{ display:"flex", flexDirection:"column", gap:7 }}>
-              {notas.map(s=>(
-                <div key={s.id} style={{ background:COLORS.card, border:`1px solid ${s.cotizacion?"#2d5040":COLORS.border}`, borderLeft:`4px solid ${s.cotizacion?COLORS.success:COLORS.warning}`, borderRadius:10, padding:"11px 14px", display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:8 }}>
+              {filteredNotas.map(s=>(
+                <div
+                key={s.id}
+                onClick={() => setModalNV(s)}
+                style={{background:COLORS.card, border:`1px solid ${s.cotizacion?"#2d5040":COLORS.border}`, borderLeft:`4px solid ${s.cotizacion?COLORS.success:COLORS.warning}`, borderRadius:10, padding:"11px 14px", display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:8 }}>
                   <div>
-                    <span style={{ fontWeight:700, color:COLORS.success, marginRight:8 }}>NV#{s.numero}</span>
-                    <span style={{ color:COLORS.text }}>{s.cliente}</span>
-                    {s.cotizacion ? <span style={{ marginLeft:8, fontSize:11, color:COLORS.muted, background:COLORS.subtle, borderRadius:4, padding:"2px 7px" }}>← COT#{s.cotizacion}</span>
-                      : <span style={{ marginLeft:8, fontSize:11, color:COLORS.warning, background:"#2a1f0a", borderRadius:4, padding:"2px 7px", border:`1px solid ${COLORS.warning}` }}>sin cotización</span>}
-                    <span style={{ color:COLORS.muted, marginLeft:8, fontSize:11 }}>{s.fecha}</span>
-                  </div>
+  <div>
+    <span style={{ fontWeight:700, color:COLORS.success, marginRight:8 }}>NV#{s.numero}</span>
+    <span style={{ color:COLORS.text }}>{s.cliente}</span>
+    {s.cotizacion ? <span style={{ marginLeft:8, fontSize:11, color:COLORS.muted, background:COLORS.subtle, borderRadius:4, padding:"2px 7px" }}>← COT#{s.cotizacion}</span>
+      : <span style={{ marginLeft:8, fontSize:11, color:COLORS.warning, background:"#2a1f0a", borderRadius:4, padding:"2px 7px", border:`1px solid ${COLORS.warning}` }}>sin cotización</span>}
+    <span style={{ color:COLORS.muted, marginLeft:8, fontSize:11 }}>{s.fecha}</span>
+  </div>
+
+  <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginTop:7 }}>
+    <span style={{
+      padding:"3px 8px",
+      borderRadius:999,
+      fontSize:11,
+      fontWeight:700,
+      background:
+        s.estado_pago === "pagada"
+          ? "rgba(34,197,94,.18)"
+          : s.estado_pago === "abonada"
+          ? "rgba(250,204,21,.18)"
+          : "rgba(239,68,68,.18)",
+      color:
+        s.estado_pago === "pagada"
+          ? "#4ade80"
+          : s.estado_pago === "abonada"
+          ? "#fde047"
+          : "#f87171"
+    }}>
+      {s.estado_pago === "pagada"
+        ? "🟢 Pagada"
+        : s.estado_pago === "abonada"
+        ? "🟡 Abonada"
+        : "🔴 Pendiente"}
+    </span>
+
+    <span style={{
+      padding:"3px 8px",
+      borderRadius:999,
+      fontSize:11,
+      fontWeight:700,
+      background:"rgba(59,130,246,.15)",
+      color:"#60a5fa"
+    }}>
+      {s.proceso === "en espera" && "⏳ En espera"}
+      {s.proceso === "en producción" && "📦 En producción"}
+      {s.proceso === "terminado" && "✅ Terminado"}
+      {s.proceso === "entregado" && "🚚 Entregado"}
+    </span>
+
+    <span style={{
+      padding:"3px 8px",
+      borderRadius:999,
+      fontSize:11,
+      fontWeight:700,
+      background:
+        s.materiales === "comprados"
+          ? "rgba(34,197,94,.18)"
+          : "rgba(239,68,68,.18)",
+      color:
+        s.materiales === "comprados"
+          ? "#4ade80"
+          : "#f87171"
+    }}>
+      {s.materiales === "comprados"
+        ? "✅ Materiales"
+        : "❌ Falta material"}
+    </span>
+  </div>
+</div>
                   <div style={{ display:"flex", alignItems:"center", gap:8 }}>
   <span style={{ fontWeight:700, color:COLORS.success }}>{fmt(s.total)}</span>
 
@@ -739,6 +1154,14 @@ setNuevoTotal("");
       </div>
 
       {modalCot && <NotasModal cotizacion={modalCot} seguimiento={seguimiento} onSave={saveSeguimiento} onClose={()=>setModalCot(null)}/>}
+    {modalNV && (
+  <GestionNVModal
+  nota={modalNV}
+  abonos={abonosNV.filter(a => a.nota_venta_id === Number(String(modalNV.id).replace("supabase-", "")))}
+  onClose={() => setModalNV(null)}
+  onSave={guardarGestionNV}
+/>
+)}
     </div>
   );
 }
