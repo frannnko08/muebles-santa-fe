@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from '../lib/supabase'
-import { obtenerCotizaciones, crearCotizacion, aceptarCotizacion, obtenerNotasVenta, editarNumeroNotaVenta, importarNotaVentaExcel, eliminarNotaVenta, importarCotizacionExcel, obtenerDetallesCotizaciones } from '../lib/cotizaciones'
+import { obtenerCotizaciones, obtenerNotasVenta, editarNumeroNotaVenta, importarNotaVentaExcel, eliminarNotaVenta, importarCotizacionExcel, obtenerDetallesCotizaciones } from '../lib/cotizaciones'
 import * as XLSX from 'xlsx'
 
 const COLORS = {
@@ -807,8 +807,6 @@ if (!errorAbonos) {
   const [modalCot, setModalCot] = useState(null);
   const [modalNV, setModalNV] = useState(null);
   const [modalProduccion, setModalProduccion] = useState(null);
-  const [nuevoCliente, setNuevoCliente] = useState("");
-  const [nuevoTotal, setNuevoTotal] = useState("");
   const [busquedaCliente, setBusquedaCliente] = useState("")
   
 
@@ -1065,50 +1063,7 @@ const venceManana = (fecha) => {
   return (
     <div style={{ minHeight:"100vh", background:COLORS.bg, color:COLORS.text, fontFamily:"'Trebuchet MS',sans-serif", paddingBottom:60 }}>
  <div style={{ margin:20, padding:16, background:COLORS.card, border:`1px solid ${COLORS.border}`, borderRadius:12, display:"flex", gap:10, flexWrap:"wrap" }}>
-  <input
-    placeholder="Nombre cliente"
-    value={nuevoCliente}
-    onChange={(e) => setNuevoCliente(e.target.value)}
-    style={{ padding:10, borderRadius:8, border:`1px solid ${COLORS.border}`, background:COLORS.surface, color:COLORS.text }}
-  />
-
-  <input
-    type="number"
-    placeholder="Total"
-    value={nuevoTotal}
-    onChange={(e) => setNuevoTotal(e.target.value)}
-    style={{ padding:10, borderRadius:8, border:`1px solid ${COLORS.border}`, background:COLORS.surface, color:COLORS.text }}
-  />
-
-  <button
-    onClick={async () => {
-      if (!nuevoCliente || !nuevoTotal) {
-        alert("Completa cliente y total");
-        return;
-      }
-
-      await crearCotizacion(nuevoCliente, Number(nuevoTotal));
-
-const dataActualizada = await obtenerCotizaciones();
-
-const cotizacionesFormateadas = dataActualizada.map((c) => ({
-  id: c.id,
-  numero: String(c.numero),
-  cliente: c.cliente,
-  total: c.total,
-  fecha: c.fecha_creacion?.split("T")[0] || new Date().toISOString().split("T")[0],
-}));
-
-setCotizaciones([...INITIAL_COTIZACIONES, ...cotizacionesFormateadas]);
-
-alert("Cotización creada");
-setNuevoCliente("");
-setNuevoTotal("");
-    }}
-    style={{ padding:"10px 18px", background:COLORS.accent, border:"none", borderRadius:8, fontWeight:700, cursor:"pointer" }}
-  >
-    Crear Cotización
-  </button>
+  
 
   <label
   style={{
