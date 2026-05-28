@@ -250,6 +250,163 @@ function NotasModal({ cotizacion, detalles = [], seguimiento, onSave, onClose })
     </div>
   );
 }
+function ProduccionModal({ nota, onClose, onSave }) {
+  const [fechaEntrega, setFechaEntrega] = useState(nota.fecha_entrega_estimada || "");
+  const [observaciones, setObservaciones] = useState(nota.produccion_observaciones || "");
+
+  const [procesos, setProcesos] = useState({
+    mdf_cortado: nota.mdf_cortado || false,
+    lamina_cortada: nota.lamina_cortada || false,
+    tupizado: nota.tupizado || false,
+    armado: nota.armado || false,
+    pegado: nota.pegado || false,
+    postformado: nota.postformado || false,
+  });
+
+  const ordenProcesos = [
+    "mdf_cortado",
+    "lamina_cortada",
+    "tupizado",
+    "armado",
+    "pegado",
+    "postformado",
+  ];
+
+  const nombresProcesos = {
+    mdf_cortado: "MDF cortado",
+    lamina_cortada: "Lámina cortada",
+    tupizado: "Tupizado",
+    armado: "Armado",
+    pegado: "Pegado",
+    postformado: "Postformado",
+  };
+
+  const toggleProceso = (key) => {
+    const index = ordenProcesos.indexOf(key);
+
+    setProcesos(prev => {
+      const nuevo = { ...prev };
+      const nuevoValor = !prev[key];
+
+      if (nuevoValor) {
+        for (let i = 0; i <= index; i++) {
+          nuevo[ordenProcesos[i]] = true;
+        }
+      } else {
+        nuevo[key] = false;
+      }
+
+      return nuevo;
+    });
+  };
+
+  return (
+    <div style={{
+      position:"fixed",
+      inset:0,
+      background:"rgba(0,0,0,0.65)",
+      display:"flex",
+      alignItems:"center",
+      justifyContent:"center",
+      zIndex:9999
+    }}>
+      <div style={{
+        background:COLORS.card,
+        border:`1px solid ${COLORS.border}`,
+        borderRadius:14,
+        padding:22,
+        width:"460px",
+        maxWidth:"92%",
+        color:COLORS.text
+      }}>
+        <h2 style={{ marginTop:0, color:COLORS.accent }}>
+          Producción NV#{nota.numero}
+        </h2>
+
+        <p><b>Cliente:</b> {nota.cliente}</p>
+
+        <label>Fecha estimada de entrega</label>
+        <input
+          type="date"
+          value={fechaEntrega}
+          onChange={(e) => setFechaEntrega(e.target.value)}
+          style={{
+            width:"100%",
+            padding:10,
+            margin:"6px 0 14px",
+            borderRadius:8,
+            border:`1px solid ${COLORS.border}`,
+            background:COLORS.surface,
+            color:COLORS.text
+          }}
+        />
+
+        <div style={{ display:"grid", gap:8, marginBottom:14 }}>
+          {ordenProcesos.map(key => (
+            <label key={key} style={{
+              display:"flex",
+              alignItems:"center",
+              gap:8,
+              background:COLORS.surface,
+              border:`1px solid ${COLORS.border}`,
+              borderRadius:8,
+              padding:10,
+              cursor:"pointer"
+            }}>
+              <input
+                type="checkbox"
+                checked={procesos[key]}
+                onChange={() => toggleProceso(key)}
+              />
+              {nombresProcesos[key]}
+            </label>
+          ))}
+        </div>
+
+        <label>Observaciones producción</label>
+        <textarea
+          value={observaciones}
+          onChange={(e) => setObservaciones(e.target.value)}
+          placeholder="Ej: pedido urgente, falta lámina, cliente pidió cambio..."
+          style={{
+            width:"100%",
+            minHeight:90,
+            padding:10,
+            margin:"6px 0 14px",
+            borderRadius:8,
+            background:COLORS.surface,
+            color:COLORS.text,
+            border:`1px solid ${COLORS.border}`
+          }}
+        />
+
+        <div style={{ display:"flex", justifyContent:"flex-end", gap:10 }}>
+          <button onClick={onClose}>Cancelar</button>
+
+          <button
+            onClick={() => onSave({
+              ...nota,
+              fecha_entrega_estimada: fechaEntrega,
+              produccion_observaciones: observaciones,
+              ...procesos
+            })}
+            style={{
+              background:COLORS.success,
+              color:"#fff",
+              border:"none",
+              borderRadius:8,
+              padding:"9px 14px",
+              cursor:"pointer",
+              fontWeight:700
+            }}
+          >
+            Guardar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 function GestionNVModal({ nota, abonos = [], onClose, onSave }) {
   const [nuevoAbono, setNuevoAbono] = useState("");
   const [observacionAbono, setObservacionAbono] = useState("");
@@ -613,6 +770,14 @@ if (ok) {
       materiales: n.materiales || "falta",
       proceso: n.proceso || "en espera",
       observaciones: n.observaciones || "",
+      fecha_entrega_estimada: n.fecha_entrega_estimada || "",
+      produccion_observaciones: n.produccion_observaciones || "",
+      mdf_cortado: n.mdf_cortado || false,
+      lamina_cortada: n.lamina_cortada || false,
+      tupizado: n.tupizado || false,
+      armado: n.armado || false,
+      pegado: n.pegado || false,
+      postformado: n.postformado || false,
 }));
 
     setNotas(notasFormateadas);
@@ -632,6 +797,7 @@ if (!errorAbonos) {
   const [filter, setFilter] = useState("");
   const [fechaDesde, setFechaDesde] = useState("");
   const [fechaHasta, setFechaHasta] = useState("");
+  const [mesFiltro, setMesFiltro] = useState("");
   const [showVencidas, setShowVencidas] = useState(false);
   const [seguimiento, setSeguimiento] = useState({});
   const [cotizaciones, setCotizaciones] = useState([]);
@@ -640,6 +806,7 @@ if (!errorAbonos) {
   const [abonosNV, setAbonosNV] = useState([]);
   const [modalCot, setModalCot] = useState(null);
   const [modalNV, setModalNV] = useState(null);
+  const [modalProduccion, setModalProduccion] = useState(null);
   const [nuevoCliente, setNuevoCliente] = useState("");
   const [nuevoTotal, setNuevoTotal] = useState("");
   const [busquedaCliente, setBusquedaCliente] = useState("")
@@ -693,9 +860,27 @@ if (!errorAbonos) {
   return true;
 };
 
+const cumpleMes = (fecha) => {
+  if (!mesFiltro) return true;
+  if (!fecha) return false;
+
+  const fechaObj = new Date(fecha);
+  const year = fechaObj.getFullYear();
+  const month = String(fechaObj.getMonth() + 1).padStart(2, "0");
+
+  return `${year}-${month}` === mesFiltro;
+};
+  const limpiarFiltros = () => {
+  setSearch("");
+  setFechaDesde("");
+  setFechaHasta("");
+  setMesFiltro("");
+};
+
 const filteredQuotes = withStatus.filter(q =>
   (q.numero.toLowerCase().includes(filter.toLowerCase()) || q.cliente.toLowerCase().includes(filter.toLowerCase())) &&
   cumpleFecha(q.fecha) &&
+  cumpleMes(q.fecha) &&
   (showVencidas || q.status !== "vencida")
 ).sort((a,b) => { 
   const o={urgente:0,activa:1,vendida:2,vencida:3}; 
@@ -704,7 +889,8 @@ const filteredQuotes = withStatus.filter(q =>
 
 const filteredNotas = notas.filter(s =>
   (s.numero.toLowerCase().includes(filter.toLowerCase()) || s.cliente.toLowerCase().includes(filter.toLowerCase())) &&
-  cumpleFecha(s.fecha)
+  cumpleFecha(s.fecha) &&
+  cumpleMes(s.fecha)
 );
 
   const r2=58,cx=80,cy=76;
@@ -795,11 +981,85 @@ const filteredNotas = notas.filter(s =>
   setModalNV(null);
 };
   
+const guardarProduccion = async (notaActualizada) => {
+  const idReal = Number(String(notaActualizada.id).replace("supabase-", ""));
+
+  const { error } = await supabase
+    .from("notas_venta")
+    .update({
+      fecha_entrega_estimada: notaActualizada.fecha_entrega_estimada || null,
+      produccion_observaciones: notaActualizada.produccion_observaciones || "",
+      mdf_cortado: notaActualizada.mdf_cortado,
+      lamina_cortada: notaActualizada.lamina_cortada,
+      tupizado: notaActualizada.tupizado,
+      armado: notaActualizada.armado,
+      pegado: notaActualizada.pegado,
+      postformado: notaActualizada.postformado,
+    })
+    .eq("id", idReal);
+
+  if (error) {
+    alert("Error al guardar producción");
+    console.error(error);
+    return;
+  }
+
+  setNotas(notas.map(n =>
+    n.id === notaActualizada.id
+      ? { ...n, ...notaActualizada }
+      : n
+  ));
+
+  setModalProduccion(null);
+};
+const fechaLocal = (fecha) => {
+  if (!fecha) return null;
+
+  const [year, month, day] = fecha.split("-").map(Number);
+  return new Date(year, month - 1, day);
+};
+
+const estaAtrasada = (fecha) => {
+  if (!fecha) return false;
+
+  const hoy = new Date();
+  hoy.setHours(0, 0, 0, 0);
+
+  const entrega = fechaLocal(fecha);
+  entrega.setHours(0, 0, 0, 0);
+
+  return entrega < hoy;
+};
+
+const venceHoy = (fecha) => {
+  if (!fecha) return false;
+
+  const hoy = new Date();
+  hoy.setHours(0, 0, 0, 0);
+
+  const entrega = fechaLocal(fecha);
+  entrega.setHours(0, 0, 0, 0);
+
+  return entrega.getTime() === hoy.getTime();
+};
+const venceManana = (fecha) => {
+  if (!fecha) return false;
+
+  const manana = new Date();
+  manana.setDate(manana.getDate() + 1);
+  manana.setHours(0, 0, 0, 0);
+
+  const entrega = fechaLocal(fecha);
+  entrega.setHours(0, 0, 0, 0);
+
+  return entrega.getTime() === manana.getTime();
+};
   const tabs=[
     {key:"dashboard",label:"📊 Resumen"},
     {key:"quotes",label:`📋 Cotizaciones (${cotizaciones.length})`},
     {key:"sales",label:`✅ Notas de Venta (${notas.length})`},
     {key:"sinmatch",label:`⚠ Sin cruzar (${sinCotizacion.length})`},
+    {key:"produccion",label:`🏭 Producción`},
   ];
 
   return (
@@ -1044,6 +1304,56 @@ setNuevoTotal("");
     onChange={e=>setFechaHasta(e.target.value)}
     style={{ background:COLORS.surface, border:`1px solid ${COLORS.border}`, borderRadius:8, padding:"9px 14px", color:COLORS.text }}
   />
+  <select
+  value={mesFiltro}
+  onChange={(e) => setMesFiltro(e.target.value)}
+  style={{
+    background:COLORS.surface,
+    border:`1px solid ${COLORS.border}`,
+    borderRadius:8,
+    padding:"9px 14px",
+    color:COLORS.text
+  }}
+>
+  <option value="">Todos los meses</option>
+
+  {[...new Set([...cotizaciones, ...notas]
+    .map(item => item.fecha)
+    .filter(Boolean)
+    .map(fecha => {
+      const f = new Date(fecha);
+      const year = f.getFullYear();
+      const month = String(f.getMonth() + 1).padStart(2, "0");
+      return `${year}-${month}`;
+    })
+  )]
+    .sort((a, b) => b.localeCompare(a))
+    .map(mes => {
+      const [year, month] = mes.split("-");
+      const nombreMes = new Date(year, Number(month) - 1)
+        .toLocaleDateString("es-CL", { month:"long", year:"numeric" });
+
+      return (
+        <option key={mes} value={mes}>
+          {nombreMes.charAt(0).toUpperCase() + nombreMes.slice(1)}
+        </option>
+      );
+    })}
+</select>
+<button
+  onClick={limpiarFiltros}
+  style={{
+    background:COLORS.danger,
+    color:"#fff",
+    border:"none",
+    borderRadius:8,
+    padding:"9px 14px",
+    cursor:"pointer",
+    fontWeight:700
+  }}
+>
+  Limpiar filtros
+</button>
 </div>
             <div style={{ display:"flex", flexDirection:"column", gap:7 }}>
               {filteredQuotes.map(q=>{
@@ -1283,7 +1593,80 @@ setNuevoTotal("");
             </div>
           </div>
         )}
+{tab==="produccion" && (
+  <div>
+    <h2 style={{ margin:"0 0 14px", fontFamily:"Georgia,serif", color:COLORS.accent, fontSize:17 }}>
+      🏭 Producción
+    </h2>
 
+    <div style={{ display:"grid", gap:12 }}>
+      {notas
+  .filter(n => n.proceso !== "entregado")
+  .sort((a,b) => {
+    if (!a.fecha_entrega_estimada) return 1;
+    if (!b.fecha_entrega_estimada) return -1;
+    return new Date(a.fecha_entrega_estimada) - new Date(b.fecha_entrega_estimada);
+  })
+  .map(n => (
+          <div
+           key={n.id}
+            onClick={() => setModalProduccion(n)}
+           style={{
+            cursor:"pointer",
+            background:COLORS.card,
+            border: estaAtrasada(n.fecha_entrega_estimada)
+  ? `1px solid ${COLORS.danger}`
+  : venceHoy(n.fecha_entrega_estimada)
+  ? `1px solid ${COLORS.warning}`
+  : `1px solid ${COLORS.border}`,
+            borderRadius:12,
+            padding:14
+          }}
+          >
+            <div style={{ display:"flex", justifyContent:"space-between", gap:12, flexWrap:"wrap" }}>
+              <div>
+                <b style={{ color:COLORS.success }}>NV#{n.numero}</b>
+                <span style={{ marginLeft:8 }}>{n.cliente}</span>
+              </div>
+
+              <span style={{ color:COLORS.muted }}>
+                Entrega estimada: {n.fecha_entrega_estimada || "Sin fecha"}
+{" "}
+{estaAtrasada(n.fecha_entrega_estimada) && (
+  <b style={{ color:COLORS.danger }}>(Atrasada)</b>
+)}
+{venceHoy(n.fecha_entrega_estimada) && (
+  <b style={{ color:COLORS.warning }}>(Para hoy)</b>
+)}
+{venceManana(n.fecha_entrega_estimada) && (
+  <b style={{ color:"#60a5fa" }}>(Para mañana)</b>
+)}
+              </span>
+            </div>
+
+            <div style={{ marginTop:8, color:COLORS.muted, fontSize:13 }}>
+              Proceso: <b style={{ color:COLORS.text }}>{n.proceso}</b>
+            </div>
+
+            <div style={{ marginTop:10, display:"flex", gap:8, flexWrap:"wrap", fontSize:13 }}>
+              {n.mdf_cortado && <span>✅ MDF cortado</span>}
+              {n.lamina_cortada && <span>✅ Lámina cortada</span>}
+              {n.tupizado && <span>✅ Tupizado</span>}
+              {n.armado && <span>✅ Armado</span>}
+              {n.pegado && <span>✅ Pegado</span>}
+              {n.postformado && <span>✅ Postformado</span>}
+            </div>
+
+            {n.produccion_observaciones && (
+              <p style={{ marginTop:10, color:COLORS.warning }}>
+                Obs: {n.produccion_observaciones}
+              </p>
+            )}
+          </div>
+        ))}
+    </div>
+  </div>
+)}
         {tab==="sinmatch" && (
           <div>
             <h2 style={{ margin:"0 0 6px", fontFamily:"Georgia,serif", color:COLORS.warning, fontSize:17 }}>⚠ Ventas sin cotización cruzada</h2>
@@ -1317,6 +1700,13 @@ setNuevoTotal("");
     seguimiento={seguimiento}
     onSave={saveSeguimiento}
     onClose={() => setModalCot(null)}
+  />
+)}
+{modalProduccion && (
+  <ProduccionModal
+    nota={modalProduccion}
+    onClose={() => setModalProduccion(null)}
+    onSave={guardarProduccion}
   />
 )}
     {modalNV && (
