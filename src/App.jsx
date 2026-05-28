@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from '../lib/supabase'
-import { obtenerCotizaciones, crearCotizacion, aceptarCotizacion, obtenerNotasVenta, editarNumeroNotaVenta, importarNotaVentaExcel, eliminarNotaVenta, importarCotizacionExcel } from '../lib/cotizaciones'
+import { obtenerCotizaciones, crearCotizacion, aceptarCotizacion, obtenerNotasVenta, editarNumeroNotaVenta, importarNotaVentaExcel, eliminarNotaVenta, importarCotizacionExcel, obtenerDetallesCotizaciones } from '../lib/cotizaciones'
 import * as XLSX from 'xlsx'
 
 const COLORS = {
@@ -142,9 +142,12 @@ function StatCard({ label, value, sub, color, icon }) {
   );
 }
 
-function NotasModal({ cotizacion, seguimiento, onSave, onClose }) {
+function NotasModal({ cotizacion, detalles = [], seguimiento, onSave, onClose }) {
   const [texto, setTexto] = useState("");
   const existing = seguimiento[cotizacion.numero] || [];
+  const totalCotizacion = Number(cotizacion.total) || 0;
+  const netoCotizacion = Math.round(totalCotizacion / 1.19);
+  const ivaCotizacion = totalCotizacion - netoCotizacion;
 
   const handleAdd = () => {
     if (!texto.trim()) return;
@@ -163,6 +166,68 @@ function NotasModal({ cotizacion, seguimiento, onSave, onClose }) {
         <div style={{ marginBottom:16 }}>
           <h3 style={{ margin:"0 0 4px", color:COLORS.accent, fontFamily:"Georgia,serif", fontSize:17 }}>Seguimiento</h3>
           <span style={{ fontSize:12, color:COLORS.muted }}>#{cotizacion.numero} · {cotizacion.cliente}</span>
+        <div style={{
+  marginTop:14,
+  background:COLORS.surface,
+  border:`1px solid ${COLORS.border}`,
+  borderRadius:10,
+  padding:12
+}}>
+  <div style={{ fontSize:12, fontWeight:700, color:COLORS.accent, marginBottom:8 }}>
+    Detalle de cotización
+  </div>
+
+  {detalles.length === 0 ? (
+    <div style={{ fontSize:12, color:COLORS.muted }}>
+      Sin detalle guardado.
+    </div>
+  ) : (
+    detalles.map((d) => (
+      <div key={d.id} style={{
+        fontSize:12,
+        color:COLORS.text,
+        padding:"7px 0",
+        borderBottom:`1px solid ${COLORS.border}`
+      }}>
+        <b>{d.unidad}</b> x {d.tipo} · {d.largo} x {d.ancho} · {d.color}
+        <br />
+        <span style={{ color:COLORS.muted }}>
+          Valor: {fmt(d.valor)} · Total: {fmt(d.total)}
+        </span>
+      </div>
+    ))
+    
+  )}
+  <div style={{
+  marginTop:12,
+  paddingTop:10,
+  borderTop:`1px solid ${COLORS.border}`,
+  display:"grid",
+  gap:4,
+  fontSize:12
+}}>
+  <div style={{ display:"flex", justifyContent:"space-between" }}>
+    <span style={{ color:COLORS.muted }}>Neto</span>
+    <b>{fmt(netoCotizacion)}</b>
+  </div>
+
+  <div style={{ display:"flex", justifyContent:"space-between" }}>
+    <span style={{ color:COLORS.muted }}>IVA 19%</span>
+    <b>{fmt(ivaCotizacion)}</b>
+  </div>
+
+  <div style={{
+    display:"flex",
+    justifyContent:"space-between",
+    color:COLORS.accent,
+    fontSize:14,
+    marginTop:4
+  }}>
+    <span><b>Total</b></span>
+    <b>{fmt(totalCotizacion)}</b>
+  </div>
+</div>
+</div>
         </div>
         <div style={{ flex:1, overflowY:"auto", marginBottom:16 }}>
           {existing.length === 0 && <p style={{ color:COLORS.muted, fontSize:12, textAlign:"center", padding:"20px 0" }}>Sin notas aún.</p>}
@@ -393,6 +458,65 @@ export default function App() {
   const data = await file.arrayBuffer();
   const workbook = XLSX.read(data);
   const sheet = workbook.Sheets["RESUMEN"];
+  const nombresHojas = workbook.SheetNames;
+
+  const hojaDetalleNombre = nombresHojas.find(
+  n =>
+    n !== "RESUMEN" &&
+    n !== "NOTA DE VENTA" &&
+    n !== "PRODUCCION" &&
+    n !== "SEGUIMIENTO"
+);
+
+  const hojaDetalle = workbook.Sheets[hojaDetalleNombre];
+
+  const detalleJson = XLSX.utils.sheet_to_json(hojaDetalle, {
+  header: 1,
+  defval: ""
+});
+  let inicioDetalle = -1;
+
+for (let i = 0; i < detalleJson.length; i++) {
+  const filaTexto = detalleJson[i].join(" ").toUpperCase();
+
+  if (
+    filaTexto.includes("UNIDAD") &&
+    filaTexto.includes("TIPO")
+  ) {
+    inicioDetalle = i + 1;
+    break;
+  }
+}
+
+const detalles = [];
+
+if (inicioDetalle !== -1) {
+  for (let i = inicioDetalle; i < detalleJson.length; i++) {
+    const fila = detalleJson[i];
+
+    const textoFila = fila.join(" ").toUpperCase();
+
+    if (
+      textoFila.includes("NETO") ||
+      textoFila.includes("IVA") ||
+      textoFila.includes("TOTAL")
+    ) {
+      break;
+    }
+
+    if (!fila[1]) continue;
+
+    detalles.push({
+  unidad: Number(fila[1]) || 0,
+  tipo: String(fila[2] || ""),
+  largo: Number(fila[3]) || 0,
+  ancho: Number(fila[4]) || 0,
+  color: String(fila[5] || ""),
+  valor: Number(fila[6]) || 0,
+  total: Number(fila[7]) || 0,
+});
+  }
+}
 
   if (!sheet) {
     alert("No existe hoja RESUMEN");
@@ -405,11 +529,12 @@ export default function App() {
   const total = sheet["D2"]?.v;
 
   const ok = await importarCotizacionExcel({
-    numero,
-    cliente,
-    fecha,
-    total
-  });
+  numero,
+  cliente,
+  fecha,
+  total,
+  detalles
+});
 
   if (ok) {
     window.location.reload();
@@ -471,6 +596,8 @@ if (ok) {
     }));
 
     setCotizaciones(cotizacionesFormateadas);
+    const detallesData = await obtenerDetallesCotizaciones();
+    setDetallesCotizaciones(detallesData);
 
     const dataNotas = await obtenerNotasVenta();
 
@@ -508,6 +635,7 @@ if (!errorAbonos) {
   const [showVencidas, setShowVencidas] = useState(false);
   const [seguimiento, setSeguimiento] = useState({});
   const [cotizaciones, setCotizaciones] = useState([]);
+  const [detallesCotizaciones, setDetallesCotizaciones] = useState([]);
   const [notas, setNotas] = useState([]);
   const [abonosNV, setAbonosNV] = useState([]);
   const [modalCot, setModalCot] = useState(null);
@@ -926,8 +1054,35 @@ setNuevoTotal("");
                   <div key={q.id} style={{ background:COLORS.card, border:`1px solid ${STATUS_CONFIG[q.status].border}`, borderLeft:`4px solid ${LEFT_COLOR[q.status]}`, borderRadius:10, padding:"11px 14px", opacity:q.status==="vencida"?0.55:1 }}>
                     <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:8 }}>
                       <div>
-                        <span style={{ fontWeight:700, color:COLORS.accent, marginRight:8 }}>#{q.numero}</span>
-                        <span style={{ color:COLORS.text }}>{q.cliente}</span>
+                        <span
+  onClick={() => setModalCot(q)}
+  style={{
+    fontWeight:700,
+    color:COLORS.accent,
+    marginRight:8,
+    cursor:"pointer"
+  }}
+>
+  #{q.numero}
+</span>
+
+<span
+  onClick={() => setModalCot(q)}
+  style={{
+    color:
+      q.status === "vendida"
+        ? COLORS.success
+        : q.status === "vencida"
+        ? COLORS.danger
+        : q.status === "urgente"
+        ? COLORS.warning
+        : COLORS.text,
+    cursor:"pointer",
+    textDecoration:"underline"
+  }}
+>
+  {q.cliente}
+</span>
                         <span style={{ color:COLORS.muted, marginLeft:8, fontSize:11 }}>{q.fecha} · {businessDaysSince(q.fecha)}d háb.</span>
                         {nvs.length>0 && <span style={{ marginLeft:8, fontSize:11, color:COLORS.success }}>→ {nvs.map(n=>`NV#${n.numero}`).join(", ")}</span>}
                       </div>
@@ -1153,7 +1308,17 @@ setNuevoTotal("");
         )}
       </div>
 
-      {modalCot && <NotasModal cotizacion={modalCot} seguimiento={seguimiento} onSave={saveSeguimiento} onClose={()=>setModalCot(null)}/>}
+      {modalCot && (
+  <NotasModal
+    cotizacion={modalCot}
+    detalles={detallesCotizaciones.filter(d =>
+      d.cotizacion_id === Number(String(modalCot.id).replace("supabase-", ""))
+    )}
+    seguimiento={seguimiento}
+    onSave={saveSeguimiento}
+    onClose={() => setModalCot(null)}
+  />
+)}
     {modalNV && (
   <GestionNVModal
   nota={modalNV}
