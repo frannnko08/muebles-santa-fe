@@ -1769,6 +1769,539 @@ function NuevoProductoModal({ onClose, onSave }) {
     </div>
   );
 }
+
+function calcularResumenVentaLaminas(venta) {
+  const ventaTotal = Number(venta?.total_venta || 0);
+  const costoTotal = Number(venta?.costo_compra_total || 0);
+
+  const ventaNeta = Math.round(ventaTotal / 1.19);
+  const ivaVenta = ventaTotal - ventaNeta;
+
+  const costoNeto = Math.round(costoTotal / 1.19);
+  const ivaCompra = costoTotal - costoNeto;
+
+  const utilidadNeta = ventaNeta - costoNeto;
+  const ivaProvisionar = ivaVenta - ivaCompra;
+
+  return {
+    ventaTotal,
+    costoTotal,
+    ventaNeta,
+    ivaVenta,
+    costoNeto,
+    ivaCompra,
+    utilidadNeta,
+    ivaProvisionar
+  };
+}
+
+function VentaLaminasModal({ venta, detalles = [], onClose, onSaveCosto }) {
+  const [costoCompra, setCostoCompra] = useState(venta.costo_compra_total || "");
+  const resumen = calcularResumenVentaLaminas({ ...venta, costo_compra_total: costoCompra });
+
+  useEffect(() => {
+    const cerrarConEsc = (e) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", cerrarConEsc);
+    return () => window.removeEventListener("keydown", cerrarConEsc);
+  }, [onClose]);
+
+  const guardar = () => {
+    onSaveCosto(venta, Number(costoCompra) || 0);
+  };
+
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position:"fixed",
+        inset:0,
+        background:"rgba(0,0,0,0.75)",
+        display:"flex",
+        alignItems:"flex-start",
+        justifyContent:"center",
+        zIndex:120,
+        overflowY:"auto",
+        padding:"20px 10px"
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background:COLORS.card,
+          border:`1px solid ${COLORS.border}`,
+          borderRadius:16,
+          padding:24,
+          width:760,
+          maxWidth:"95vw",
+          maxHeight:"90vh",
+          overflowY:"auto",
+          boxSizing:"border-box"
+        }}
+      >
+        <div style={{ display:"flex", justifyContent:"space-between", gap:12, alignItems:"flex-start", marginBottom:16 }}>
+          <div>
+            <h3 style={{ margin:"0 0 4px", color:COLORS.accent, fontFamily:"Georgia,serif", fontSize:18 }}>
+              Venta de láminas #{venta.numero}
+            </h3>
+            <div style={{ fontSize:12, color:COLORS.muted }}>
+              {venta.cliente} · {fmtDate(venta.fecha)}
+            </div>
+          </div>
+          <button onClick={onClose} style={{ background:"transparent", border:`1px solid ${COLORS.border}`, color:COLORS.muted, borderRadius:8, padding:"6px 10px", cursor:"pointer" }}>✕</button>
+        </div>
+
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))", gap:10, marginBottom:16 }}>
+          <StatCard label="Venta c/IVA" value={fmt(resumen.ventaTotal)} icon="💰" color={COLORS.success}/>
+          <StatCard label="Costo c/IVA" value={fmt(resumen.costoTotal)} icon="🧾" color={COLORS.warning}/>
+          <StatCard label="Utilidad neta" value={fmt(resumen.utilidadNeta)} icon="📈" color={resumen.utilidadNeta >= 0 ? COLORS.success : COLORS.danger}/>
+          <StatCard label="IVA a provisionar" value={fmt(resumen.ivaProvisionar)} icon="🏛️" color={resumen.ivaProvisionar >= 0 ? COLORS.accent : COLORS.danger}/>
+        </div>
+
+        <div style={{ background:COLORS.surface, border:`1px solid ${COLORS.border}`, borderRadius:12, padding:14, marginBottom:16 }}>
+          <label style={{ display:"block", fontSize:11, color:COLORS.muted, marginBottom:6, textTransform:"uppercase", letterSpacing:1 }}>
+            Costo compra IVA incluido
+          </label>
+          <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+            <input
+              type="number"
+              value={costoCompra}
+              onChange={(e) => setCostoCompra(e.target.value)}
+              placeholder="Ej: 80000"
+              style={{ flex:"1 1 180px", minWidth:0, background:COLORS.bg, border:`1px solid ${COLORS.border}`, color:COLORS.text, borderRadius:8, padding:"10px 12px" }}
+            />
+            <button onClick={guardar} style={{ background:COLORS.accent, color:"#111", border:"none", borderRadius:8, padding:"10px 14px", fontWeight:700, cursor:"pointer" }}>
+              Guardar costo
+            </button>
+          </div>
+          <div style={{ marginTop:10, fontSize:12, color:COLORS.muted }}>
+            Venta neta: {fmt(resumen.ventaNeta)} · IVA venta: {fmt(resumen.ivaVenta)} · Costo neto: {fmt(resumen.costoNeto)} · IVA compra: {fmt(resumen.ivaCompra)}
+          </div>
+        </div>
+
+        <div style={{ background:COLORS.surface, border:`1px solid ${COLORS.border}`, borderRadius:12, padding:14 }}>
+          <div style={{ fontSize:13, fontWeight:700, color:COLORS.accent, marginBottom:10 }}>Detalle importado desde Excel</div>
+          {detalles.length === 0 ? (
+            <div style={{ fontSize:12, color:COLORS.muted }}>No hay detalle guardado para esta venta.</div>
+          ) : (
+            <div style={{ overflowX:"auto" }}>
+              <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
+                <thead>
+                  <tr style={{ color:COLORS.muted, textAlign:"left" }}>
+                    <th style={{ padding:"8px", borderBottom:`1px solid ${COLORS.border}` }}>Cant.</th>
+                    <th style={{ padding:"8px", borderBottom:`1px solid ${COLORS.border}` }}>Tipo</th>
+                    <th style={{ padding:"8px", borderBottom:`1px solid ${COLORS.border}` }}>Medida</th>
+                    <th style={{ padding:"8px", borderBottom:`1px solid ${COLORS.border}` }}>Color</th>
+                    <th style={{ padding:"8px", borderBottom:`1px solid ${COLORS.border}`, textAlign:"right" }}>Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {detalles.map((d) => (
+                    <tr key={d.id || d.orden}>
+                      <td style={{ padding:"8px", borderBottom:`1px solid ${COLORS.border}` }}>{d.cantidad}</td>
+                      <td style={{ padding:"8px", borderBottom:`1px solid ${COLORS.border}` }}>{d.tipo}</td>
+                      <td style={{ padding:"8px", borderBottom:`1px solid ${COLORS.border}` }}>{d.largo} x {d.ancho}</td>
+                      <td style={{ padding:"8px", borderBottom:`1px solid ${COLORS.border}`, color:COLORS.accent }}>{d.color}</td>
+                      <td style={{ padding:"8px", borderBottom:`1px solid ${COLORS.border}`, textAlign:"right", fontWeight:700 }}>{fmt(d.total)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+function ContabilidadModal({ asiento, onClose, onSave }) {
+  const hoy = new Date().toISOString().slice(0, 10);
+  const [form, setForm] = useState({
+    fecha: asiento?.fecha || hoy,
+    detalle: asiento?.detalle || "",
+    desglose: asiento?.desglose || "",
+    documento: asiento?.documento || "",
+    definicion: asiento?.definicion || "",
+    debe: asiento?.debe || "",
+    haber: asiento?.haber || ""
+  });
+
+  useEffect(() => {
+    const cerrarConEsc = (e) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", cerrarConEsc);
+    return () => window.removeEventListener("keydown", cerrarConEsc);
+  }, [onClose]);
+
+  const setCampo = (campo, valor) => setForm(prev => ({ ...prev, [campo]: valor }));
+
+  const guardar = () => {
+    if (!form.fecha) {
+      alert("Debes ingresar una fecha.");
+      return;
+    }
+    if (!form.detalle.trim()) {
+      alert("Debes ingresar el detalle/cuenta del asiento.");
+      return;
+    }
+
+    const debe = Number(form.debe) || 0;
+    const haber = Number(form.haber) || 0;
+
+    if (debe <= 0 && haber <= 0) {
+      alert("Debes ingresar un monto en Debe o Haber.");
+      return;
+    }
+
+    if (debe > 0 && haber > 0) {
+      alert("Un asiento no debe tener Debe y Haber al mismo tiempo. Deja uno de los dos en cero.");
+      return;
+    }
+
+    onSave({
+      ...asiento,
+      fecha: form.fecha,
+      detalle: form.detalle.trim().toUpperCase(),
+      desglose: form.desglose.trim(),
+      documento: form.documento.trim(),
+      definicion: form.definicion.trim(),
+      debe,
+      haber
+    });
+  };
+
+  const inputStyle = {
+    width:"100%",
+    boxSizing:"border-box",
+    background:COLORS.bg,
+    border:`1px solid ${COLORS.border}`,
+    color:COLORS.text,
+    borderRadius:8,
+    padding:"10px 12px"
+  };
+
+  const labelStyle = { display:"block", fontSize:11, color:COLORS.muted, marginBottom:6, textTransform:"uppercase", letterSpacing:0.8 };
+
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position:"fixed",
+        inset:0,
+        background:"rgba(0,0,0,0.75)",
+        display:"flex",
+        alignItems:"flex-start",
+        justifyContent:"center",
+        zIndex:130,
+        overflowY:"auto",
+        padding:"20px 10px"
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background:COLORS.card,
+          border:`1px solid ${COLORS.border}`,
+          borderRadius:16,
+          padding:22,
+          width:720,
+          maxWidth:"95vw",
+          boxSizing:"border-box"
+        }}
+      >
+        <div style={{ display:"flex", justifyContent:"space-between", gap:12, alignItems:"flex-start", marginBottom:16 }}>
+          <div>
+            <h3 style={{ margin:"0 0 4px", color:COLORS.accent, fontFamily:"Georgia,serif", fontSize:18 }}>
+              {asiento?.id ? "Editar asiento contable" : "Nuevo asiento contable"}
+            </h3>
+            <div style={{ fontSize:12, color:COLORS.muted }}>Registra una línea del libro diario.</div>
+          </div>
+          <button onClick={onClose} style={{ background:"transparent", border:`1px solid ${COLORS.border}`, color:COLORS.muted, borderRadius:8, padding:"6px 10px", cursor:"pointer" }}>✕</button>
+        </div>
+
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))", gap:12 }}>
+          <div>
+            <label style={labelStyle}>Fecha</label>
+            <input type="date" value={form.fecha} onChange={(e) => setCampo("fecha", e.target.value)} style={inputStyle} />
+          </div>
+          <div>
+            <label style={labelStyle}>Detalle / Cuenta</label>
+            <input value={form.detalle} onChange={(e) => setCampo("detalle", e.target.value)} placeholder="Ej: BANCO, CAJA, IVA CF" style={inputStyle} />
+          </div>
+          <div>
+            <label style={labelStyle}>NV / Factura</label>
+            <input value={form.documento} onChange={(e) => setCampo("documento", e.target.value)} placeholder="Ej: F1234 / NV 7500" style={inputStyle} />
+          </div>
+          <div>
+            <label style={labelStyle}>Definición</label>
+            <input value={form.definicion} onChange={(e) => setCampo("definicion", e.target.value)} placeholder="Ej: COCINA, LÁMINAS" style={inputStyle} />
+          </div>
+        </div>
+
+        <div style={{ marginTop:12 }}>
+          <label style={labelStyle}>Desglose</label>
+          <input value={form.desglose} onChange={(e) => setCampo("desglose", e.target.value)} placeholder="Ej: Cliente, proveedor o explicación" style={inputStyle} />
+        </div>
+
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))", gap:12, marginTop:12 }}>
+          <div>
+            <label style={labelStyle}>Debe</label>
+            <input type="number" value={form.debe} onChange={(e) => setCampo("debe", e.target.value)} placeholder="0" style={inputStyle} />
+          </div>
+          <div>
+            <label style={labelStyle}>Haber</label>
+            <input type="number" value={form.haber} onChange={(e) => setCampo("haber", e.target.value)} placeholder="0" style={inputStyle} />
+          </div>
+        </div>
+
+        <div style={{ marginTop:16, display:"flex", justifyContent:"flex-end", gap:10, flexWrap:"wrap" }}>
+          <button onClick={onClose} style={{ padding:"10px 14px", borderRadius:8, border:`1px solid ${COLORS.border}`, background:COLORS.surface, color:COLORS.text, cursor:"pointer" }}>
+            Cancelar
+          </button>
+          <button onClick={guardar} style={{ padding:"10px 16px", borderRadius:8, border:"none", background:COLORS.accent, color:"#111", fontWeight:700, cursor:"pointer" }}>
+            Guardar asiento
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+function GestionRapidaContabilidadModal({ tipo, onClose, onSave }) {
+  const hoy = new Date().toISOString().slice(0, 10);
+  const [form, setForm] = useState({
+    fecha: hoy,
+    nombre: "",
+    documento: "",
+    definicion: "",
+    descripcion: "",
+    total: "",
+    formaPago: "Banco",
+    estado: "Contado",
+    origen: "Banco",
+    destino: "Caja"
+  });
+
+  useEffect(() => {
+    const cerrarConEsc = (e) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", cerrarConEsc);
+    return () => window.removeEventListener("keydown", cerrarConEsc);
+  }, [onClose]);
+
+  const setCampo = (campo, valor) => setForm(prev => ({ ...prev, [campo]: valor }));
+
+  const inputStyle = {
+    width:"100%",
+    boxSizing:"border-box",
+    background:COLORS.bg,
+    border:`1px solid ${COLORS.border}`,
+    color:COLORS.text,
+    borderRadius:8,
+    padding:"10px 12px"
+  };
+
+  const labelStyle = { display:"block", fontSize:11, color:COLORS.muted, marginBottom:6, textTransform:"uppercase", letterSpacing:0.8 };
+
+  const titulos = {
+    compra: "Registrar compra",
+    venta: "Registrar venta",
+    pago_cliente: "Pago de cliente",
+    pago_proveedor: "Pago a proveedor",
+    movimiento: "Movimiento caja/banco"
+  };
+
+  const total = Math.round(Number(form.total || 0));
+  const neto = Math.round(total / 1.19);
+  const iva = total - neto;
+
+  const construirAsientos = () => {
+    if (!form.fecha) {
+      alert("Debes ingresar una fecha.");
+      return null;
+    }
+    if (total <= 0) {
+      alert("Debes ingresar un monto mayor a cero.");
+      return null;
+    }
+
+    const nombre = form.nombre.trim().toUpperCase();
+    const documento = form.documento.trim();
+    const definicion = form.definicion.trim().toUpperCase();
+    const descripcion = form.descripcion.trim();
+    const desgloseBase = [nombre, descripcion].filter(Boolean).join(" - ");
+    const base = { fecha: form.fecha, documento, definicion, desglose: desgloseBase };
+
+    if (tipo === "compra") {
+      const pago = form.formaPago.toUpperCase();
+      const asientos = [
+        { ...base, detalle:"COMPRAS / MATERIALES", debe: neto, haber: 0 },
+        { ...base, detalle:"IVA CF", debe: iva, haber: 0 },
+        { ...base, detalle:"PROVEEDORES", debe: 0, haber: total }
+      ];
+
+      if (form.formaPago !== "Pendiente") {
+        asientos.push(
+          { ...base, detalle:"PROVEEDORES", debe: total, haber: 0 },
+          { ...base, detalle:pago, debe: 0, haber: total }
+        );
+      }
+
+      return asientos;
+    }
+
+    if (tipo === "venta") {
+      const cuentaCobro = form.estado === "Crédito" ? "CLIENTES / CXC" : form.formaPago.toUpperCase();
+      return [
+        { ...base, detalle:cuentaCobro, debe: total, haber: 0 },
+        { ...base, detalle:"VENTAS", debe: 0, haber: neto },
+        { ...base, detalle:"IVA DF", debe: 0, haber: iva }
+      ];
+    }
+
+    if (tipo === "pago_cliente") {
+      return [
+        { ...base, detalle:form.formaPago.toUpperCase(), debe: total, haber: 0 },
+        { ...base, detalle:"CLIENTES / CXC", debe: 0, haber: total }
+      ];
+    }
+
+    if (tipo === "pago_proveedor") {
+      return [
+        { ...base, detalle:"PROVEEDORES", debe: total, haber: 0 },
+        { ...base, detalle:form.formaPago.toUpperCase(), debe: 0, haber: total }
+      ];
+    }
+
+    if (tipo === "movimiento") {
+      if (form.origen === form.destino) {
+        alert("El origen y destino no pueden ser iguales.");
+        return null;
+      }
+      return [
+        { ...base, detalle:form.destino.toUpperCase(), debe: total, haber: 0 },
+        { ...base, detalle:form.origen.toUpperCase(), debe: 0, haber: total }
+      ];
+    }
+
+    return null;
+  };
+
+  const guardar = () => {
+    const asientos = construirAsientos();
+    if (!asientos) return;
+    onSave(asientos);
+  };
+
+  const vistaPrevia = construirAsientosNoAlert();
+
+  function construirAsientosNoAlert() {
+    if (!total || total <= 0) return [];
+    const nombre = form.nombre.trim().toUpperCase();
+    const documento = form.documento.trim();
+    const definicion = form.definicion.trim().toUpperCase();
+    const descripcion = form.descripcion.trim();
+    const desgloseBase = [nombre, descripcion].filter(Boolean).join(" - ");
+    const base = { fecha: form.fecha, documento, definicion, desglose: desgloseBase };
+    if (tipo === "compra") {
+      const pago = form.formaPago.toUpperCase();
+      const arr = [
+        { ...base, detalle:"COMPRAS / MATERIALES", debe: neto, haber: 0 },
+        { ...base, detalle:"IVA CF", debe: iva, haber: 0 },
+        { ...base, detalle:"PROVEEDORES", debe: 0, haber: total }
+      ];
+      if (form.formaPago !== "Pendiente") arr.push({ ...base, detalle:"PROVEEDORES", debe: total, haber: 0 }, { ...base, detalle:pago, debe: 0, haber: total });
+      return arr;
+    }
+    if (tipo === "venta") return [
+      { ...base, detalle:form.estado === "Crédito" ? "CLIENTES / CXC" : form.formaPago.toUpperCase(), debe: total, haber: 0 },
+      { ...base, detalle:"VENTAS", debe: 0, haber: neto },
+      { ...base, detalle:"IVA DF", debe: 0, haber: iva }
+    ];
+    if (tipo === "pago_cliente") return [
+      { ...base, detalle:form.formaPago.toUpperCase(), debe: total, haber: 0 },
+      { ...base, detalle:"CLIENTES / CXC", debe: 0, haber: total }
+    ];
+    if (tipo === "pago_proveedor") return [
+      { ...base, detalle:"PROVEEDORES", debe: total, haber: 0 },
+      { ...base, detalle:form.formaPago.toUpperCase(), debe: 0, haber: total }
+    ];
+    if (tipo === "movimiento") return [
+      { ...base, detalle:form.destino.toUpperCase(), debe: total, haber: 0 },
+      { ...base, detalle:form.origen.toUpperCase(), debe: 0, haber: total }
+    ];
+    return [];
+  }
+
+  return (
+    <div onClick={onClose} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.75)", display:"flex", alignItems:"flex-start", justifyContent:"center", zIndex:135, overflowY:"auto", padding:"20px 10px" }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ background:COLORS.card, border:`1px solid ${COLORS.border}`, borderRadius:16, padding:22, width:760, maxWidth:"95vw", boxSizing:"border-box" }}>
+        <div style={{ display:"flex", justifyContent:"space-between", gap:12, alignItems:"flex-start", marginBottom:16 }}>
+          <div>
+            <h3 style={{ margin:"0 0 4px", color:COLORS.accent, fontFamily:"Georgia,serif", fontSize:18 }}>{titulos[tipo] || "Gestión contable"}</h3>
+            <div style={{ fontSize:12, color:COLORS.muted }}>Ingresas una gestión y la app genera los asientos automáticamente.</div>
+          </div>
+          <button onClick={onClose} style={{ background:"transparent", border:`1px solid ${COLORS.border}`, color:COLORS.muted, borderRadius:8, padding:"6px 10px", cursor:"pointer" }}>✕</button>
+        </div>
+
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))", gap:12 }}>
+          <div><label style={labelStyle}>Fecha</label><input type="date" value={form.fecha} onChange={(e) => setCampo("fecha", e.target.value)} style={inputStyle} /></div>
+          <div><label style={labelStyle}>{tipo === "compra" || tipo === "pago_proveedor" ? "Proveedor" : tipo === "movimiento" ? "Responsable / detalle" : "Cliente"}</label><input value={form.nombre} onChange={(e) => setCampo("nombre", e.target.value)} placeholder="Nombre" style={inputStyle} /></div>
+          <div><label style={labelStyle}>NV / Factura</label><input value={form.documento} onChange={(e) => setCampo("documento", e.target.value)} placeholder="Ej: F1234 / NV 7500" style={inputStyle} /></div>
+          <div><label style={labelStyle}>Definición</label><input value={form.definicion} onChange={(e) => setCampo("definicion", e.target.value)} placeholder="Ej: MATERIALES, COCINA" style={inputStyle} /></div>
+        </div>
+
+        <div style={{ marginTop:12 }}><label style={labelStyle}>Descripción</label><input value={form.descripcion} onChange={(e) => setCampo("descripcion", e.target.value)} placeholder="Ej: Compra de MDF, venta cubierta, abono cliente..." style={inputStyle} /></div>
+
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))", gap:12, marginTop:12 }}>
+          <div><label style={labelStyle}>Monto IVA incluido</label><input type="number" value={form.total} onChange={(e) => setCampo("total", e.target.value)} placeholder="0" style={inputStyle} /></div>
+          {(tipo === "compra" || tipo === "venta" || tipo === "pago_cliente" || tipo === "pago_proveedor") && (
+            <div><label style={labelStyle}>Forma de pago</label><select value={form.formaPago} onChange={(e) => setCampo("formaPago", e.target.value)} style={inputStyle}>
+              <option>Banco</option><option>Caja</option>{tipo === "compra" && <option>Pendiente</option>}
+            </select></div>
+          )}
+          {tipo === "venta" && (
+            <div><label style={labelStyle}>Estado</label><select value={form.estado} onChange={(e) => setCampo("estado", e.target.value)} style={inputStyle}><option>Contado</option><option>Crédito</option></select></div>
+          )}
+          {tipo === "movimiento" && (<>
+            <div><label style={labelStyle}>Origen</label><select value={form.origen} onChange={(e) => setCampo("origen", e.target.value)} style={inputStyle}><option>Banco</option><option>Caja</option></select></div>
+            <div><label style={labelStyle}>Destino</label><select value={form.destino} onChange={(e) => setCampo("destino", e.target.value)} style={inputStyle}><option>Caja</option><option>Banco</option></select></div>
+          </>)}
+        </div>
+
+        {(tipo === "compra" || tipo === "venta") && total > 0 && (
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))", gap:10, marginTop:12 }}>
+            <StatCard label="Neto" value={fmt(neto)} icon="📄" color={COLORS.success}/>
+            <StatCard label={tipo === "compra" ? "IVA CF" : "IVA DF"} value={fmt(iva)} icon="🧾" color={COLORS.accent}/>
+            <StatCard label="Total" value={fmt(total)} icon="💰" color={COLORS.warning}/>
+          </div>
+        )}
+
+        <div style={{ marginTop:16, background:COLORS.surface, border:`1px solid ${COLORS.border}`, borderRadius:12, padding:12 }}>
+          <div style={{ fontSize:13, fontWeight:700, color:COLORS.accent, marginBottom:8 }}>Vista previa de asientos</div>
+          {vistaPrevia.length === 0 ? <div style={{ fontSize:12, color:COLORS.muted }}>Ingresa un monto para ver los asientos que se crearán.</div> : (
+            <div style={{ overflowX:"auto" }}><table style={{ width:"100%", borderCollapse:"collapse", fontSize:12, minWidth:520 }}>
+              <thead><tr style={{ color:COLORS.muted, textAlign:"left" }}><th style={{ padding:7, borderBottom:`1px solid ${COLORS.border}` }}>Cuenta</th><th style={{ padding:7, borderBottom:`1px solid ${COLORS.border}`, textAlign:"right" }}>Debe</th><th style={{ padding:7, borderBottom:`1px solid ${COLORS.border}`, textAlign:"right" }}>Haber</th></tr></thead>
+              <tbody>{vistaPrevia.map((a, i) => <tr key={i}><td style={{ padding:7, borderBottom:`1px solid ${COLORS.border}`, color:COLORS.accent, fontWeight:700 }}>{a.detalle}</td><td style={{ padding:7, borderBottom:`1px solid ${COLORS.border}`, textAlign:"right" }}>{a.debe ? fmt(a.debe) : "-"}</td><td style={{ padding:7, borderBottom:`1px solid ${COLORS.border}`, textAlign:"right" }}>{a.haber ? fmt(a.haber) : "-"}</td></tr>)}</tbody>
+            </table></div>
+          )}
+        </div>
+
+        <div style={{ marginTop:16, display:"flex", justifyContent:"flex-end", gap:10, flexWrap:"wrap" }}>
+          <button onClick={onClose} style={{ padding:"10px 14px", borderRadius:8, border:`1px solid ${COLORS.border}`, background:COLORS.surface, color:COLORS.text, cursor:"pointer" }}>Cancelar</button>
+          <button onClick={guardar} style={{ padding:"10px 16px", borderRadius:8, border:"none", background:COLORS.accent, color:"#111", fontWeight:700, cursor:"pointer" }}>Crear asientos</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const obtenerDetalleProduccionDesdeExcel = (workbook) => {
   const hoja = workbook.Sheets["CUBIERTA"];
@@ -2079,6 +2612,32 @@ const { data: dataSobrantesLaminados, error: errorSobrantesLaminados } = await s
 if (!errorSobrantesLaminados) {
   setSobrantesLaminados(dataSobrantesLaminados || []);
 }
+const { data: dataVentasLaminas, error: errorVentasLaminas } = await supabase
+  .from("ventas_laminas")
+  .select("*")
+  .order("fecha", { ascending: false });
+
+if (!errorVentasLaminas) {
+  setVentasLaminas(dataVentasLaminas || []);
+}
+
+const { data: dataDetallesVentasLaminas, error: errorDetallesVentasLaminas } = await supabase
+  .from("detalles_ventas_laminas")
+  .select("*")
+  .order("orden", { ascending: true });
+
+if (!errorDetallesVentasLaminas) {
+  setDetallesVentasLaminas(dataDetallesVentasLaminas || []);
+}
+const { data: dataAsientosContables, error: errorAsientosContables } = await supabase
+  .from("asientos_contables")
+  .select("*")
+  .order("fecha", { ascending: false })
+  .order("created_at", { ascending: false });
+
+if (!errorAsientosContables) {
+  setAsientosContables(dataAsientosContables || []);
+}
   }
 
   cargarDatos();
@@ -2115,6 +2674,16 @@ if (!errorSobrantesLaminados) {
   const [modalProduccion, setModalProduccion] = useState(null);
   const [filtroProduccion, setFiltroProduccion] = useState("todos");
   const [busquedaCliente, setBusquedaCliente] = useState("")
+  const [ventasLaminas, setVentasLaminas] = useState([]);
+  const [detallesVentasLaminas, setDetallesVentasLaminas] = useState([]);
+  const [modalVentaLaminas, setModalVentaLaminas] = useState(null);
+  const [mesVentaLaminas, setMesVentaLaminas] = useState(new Date().toISOString().slice(0, 7));
+  const [topLaminasCantidad, setTopLaminasCantidad] = useState(10);
+  const [asientosContables, setAsientosContables] = useState([]);
+  const [modalContabilidad, setModalContabilidad] = useState(null);
+  const [modalGestionContable, setModalGestionContable] = useState(null);
+  const [mesContabilidad, setMesContabilidad] = useState(new Date().toISOString().slice(0, 7));
+  const [busquedaContabilidad, setBusquedaContabilidad] = useState("");
   
 
   // Load seguimiento from localStorage
@@ -2823,6 +3392,421 @@ const confirmarImportacionOC = async () => {
   setModalPreviewOC(false);
   alert("Orden de compra importada correctamente.");
 };
+
+const excelDateToISO = (value) => {
+  if (!value) return new Date().toISOString().split("T")[0];
+
+  if (typeof value === "number") {
+    const parsed = XLSX.SSF.parse_date_code(value);
+    if (parsed) {
+      return `${parsed.y}-${String(parsed.m).padStart(2, "0")}-${String(parsed.d).padStart(2, "0")}`;
+    }
+  }
+
+  const fecha = new Date(value);
+  if (!isNaN(fecha.getTime())) return fecha.toISOString().split("T")[0];
+
+  return new Date().toISOString().split("T")[0];
+};
+
+const importarVentaLaminasExcel = async (event) => {
+  const file = event.target.files?.[0];
+  if (!file) return;
+
+  const buffer = await file.arrayBuffer();
+  const workbook = XLSX.read(buffer, { type:"array" });
+  const hojaNombre = workbook.SheetNames[0];
+  const hoja = workbook.Sheets[hojaNombre];
+
+  if (!hoja) {
+    alert("No se pudo leer la primera hoja del Excel.");
+    return;
+  }
+
+  const filas = XLSX.utils.sheet_to_json(hoja, { header:1, defval:"" });
+
+  const buscarCeldaPorTexto = (textoBuscado) => {
+    const buscado = textoBuscado.toUpperCase();
+
+    for (const ref in hoja) {
+      if (ref.startsWith("!")) continue;
+
+      const valor = String(hoja[ref]?.v || "").toUpperCase().trim();
+
+      if (valor.includes(buscado)) {
+        return ref;
+      }
+    }
+
+    return null;
+  };
+
+  const leerCelda = (ref) => hoja[ref]?.v || "";
+
+  const numeroRef = buscarCeldaPorTexto("N°") || buscarCeldaPorTexto("Nº");
+  const numeroTexto = numeroRef
+    ? String(leerCelda(numeroRef)).replace("N°", "").replace("Nº", "").trim()
+    : "";
+
+  const numero = numeroTexto || String(file.name || "").split(" ")[0];
+  const cliente = String(hoja["C10"]?.v || "").trim() || "(sin cliente)";
+  const fecha = excelDateToISO(hoja["G10"]?.v);
+
+  let totalVenta = 0;
+
+  for (let i = 0; i < filas.length; i++) {
+    const fila = filas[i];
+
+    for (let j = 0; j < fila.length; j++) {
+      const texto = String(fila[j] || "").toUpperCase().trim();
+
+      if (texto === "TOTAL") {
+        const posibleTotal = Number(fila[j + 1]) || 0;
+
+        if (posibleTotal > 0) {
+          totalVenta = Math.round(posibleTotal);
+        }
+      }
+    }
+  }
+
+  if (!numero || !totalVenta) {
+    alert("No se pudo leer el número o total de la cotización de láminas.");
+    event.target.value = "";
+    return;
+  }
+
+  const duplicada = ventasLaminas.some(v => String(v.numero) === String(numero));
+  if (duplicada) {
+    alert("Esta venta de láminas ya existe.");
+    event.target.value = "";
+    return;
+  }
+
+  let filaEncabezado = -1;
+  let colCantidad = -1;
+  let colTipo = -1;
+  let colLargo = -1;
+  let colAncho = -1;
+  let colColor = -1;
+  let colValor = -1;
+  let colTotal = -1;
+
+  for (let i = 0; i < filas.length; i++) {
+    const fila = filas[i].map(c => String(c).trim().toUpperCase());
+
+    const cantidadIndex = fila.findIndex(c => c.includes("STOCK") || c.includes("CANTIDAD"));
+    const tipoIndex = fila.findIndex(c => c.includes("TIPO"));
+    const largoIndex = fila.findIndex(c => c.includes("LARGO"));
+    const anchoIndex = fila.findIndex(c => c.includes("ANCHO"));
+    const colorIndex = fila.findIndex(c => c.includes("COLOR"));
+    const valorIndex = fila.findIndex(c => c.includes("VALOR"));
+    const totalIndex = fila.findIndex(c => c.includes("TOTAL"));
+
+    if (cantidadIndex !== -1 && tipoIndex !== -1 && colorIndex !== -1 && totalIndex !== -1) {
+      filaEncabezado = i;
+      colCantidad = cantidadIndex;
+      colTipo = tipoIndex;
+      colLargo = largoIndex;
+      colAncho = anchoIndex;
+      colColor = colorIndex;
+      colValor = valorIndex;
+      colTotal = totalIndex;
+      break;
+    }
+  }
+
+  if (filaEncabezado === -1) {
+    alert("No se encontró el detalle de láminas en el Excel.");
+    event.target.value = "";
+    return;
+  }
+
+  const detalles = [];
+
+  for (let i = filaEncabezado + 1; i < filas.length; i++) {
+    const fila = filas[i];
+    const textoFila = fila.join(" ").toUpperCase();
+
+    if (textoFila.includes("NETO") || textoFila.includes("I.V.A") || textoFila.includes("IVA") || textoFila.includes("TRANSFERIR")) break;
+
+    const cantidad = Number(fila[colCantidad]) || 0;
+    const tipo = String(fila[colTipo] || "").trim();
+    const color = String(fila[colColor] || "").trim();
+    const total = Math.round(Number(fila[colTotal]) || 0);
+
+    if (!cantidad && !tipo && !color && !total) continue;
+    if (!cantidad || !color) continue;
+
+    detalles.push({
+      cantidad,
+      tipo,
+      largo: Number(fila[colLargo]) || 0,
+      ancho: Number(fila[colAncho]) || 0,
+      color,
+      valor_unitario: Math.round(Number(fila[colValor]) || 0),
+      total,
+      orden: detalles.length + 1
+    });
+  }
+
+  const { data: ventaInsertada, error: errorVenta } = await supabase
+    .from("ventas_laminas")
+    .insert([{
+      numero,
+      cliente,
+      fecha,
+      total_venta: totalVenta,
+      costo_compra_total: 0
+    }])
+    .select();
+
+  if (errorVenta) {
+    console.error(errorVenta);
+    alert("Error al guardar la venta de láminas. Revisa si las tablas están creadas en Supabase.");
+    event.target.value = "";
+    return;
+  }
+
+  const nuevaVenta = ventaInsertada[0];
+
+  if (detalles.length > 0) {
+    const detallesParaGuardar = detalles.map(d => ({
+      venta_lamina_id: nuevaVenta.id,
+      cantidad: d.cantidad,
+      tipo: d.tipo,
+      largo: d.largo,
+      ancho: d.ancho,
+      color: d.color,
+      valor_unitario: d.valor_unitario,
+      total: d.total,
+      orden: d.orden
+    }));
+
+    const { data: detallesInsertados, error: errorDetalles } = await supabase
+      .from("detalles_ventas_laminas")
+      .insert(detallesParaGuardar)
+      .select();
+
+    if (errorDetalles) {
+      console.error(errorDetalles);
+      alert("La venta se guardó, pero hubo un error guardando el detalle.");
+      event.target.value = "";
+      return;
+    }
+
+    setDetallesVentasLaminas(prev => [...prev, ...(detallesInsertados || [])]);
+  }
+
+  setVentasLaminas(prev => [nuevaVenta, ...prev]);
+  setTab("venta_laminas");
+  event.target.value = "";
+  alert("Venta de láminas importada correctamente.");
+};
+
+const guardarCostoVentaLaminas = async (venta, costoCompraTotal) => {
+  const { data, error } = await supabase
+    .from("ventas_laminas")
+    .update({ costo_compra_total: costoCompraTotal })
+    .eq("id", venta.id)
+    .select();
+
+  if (error) {
+    console.error(error);
+    alert("Error al guardar el costo de compra.");
+    return;
+  }
+
+  const actualizada = data[0];
+  setVentasLaminas(prev => prev.map(v => v.id === actualizada.id ? actualizada : v));
+  setModalVentaLaminas(actualizada);
+};
+
+
+const guardarAsientoContable = async (asiento) => {
+  const payload = {
+    fecha: asiento.fecha,
+    detalle: asiento.detalle,
+    desglose: asiento.desglose || "",
+    documento: asiento.documento || "",
+    definicion: asiento.definicion || "",
+    debe: Number(asiento.debe || 0),
+    haber: Number(asiento.haber || 0)
+  };
+
+  if (asiento.id) {
+    const { data, error } = await supabase
+      .from("asientos_contables")
+      .update(payload)
+      .eq("id", asiento.id)
+      .select();
+
+    if (error) {
+      console.error(error);
+      alert("No se pudo actualizar el asiento contable.");
+      return;
+    }
+
+    const actualizado = data[0];
+    setAsientosContables(prev => prev.map(a => a.id === actualizado.id ? actualizado : a));
+  } else {
+    const { data, error } = await supabase
+      .from("asientos_contables")
+      .insert([payload])
+      .select();
+
+    if (error) {
+      console.error(error);
+      alert("No se pudo guardar el asiento contable. Revisa que la tabla exista en Supabase.");
+      return;
+    }
+
+    setAsientosContables(prev => [data[0], ...prev]);
+  }
+
+  setModalContabilidad(null);
+};
+
+
+const guardarGestionContable = async (asientos) => {
+  const payload = asientos.map(a => ({
+    fecha: a.fecha,
+    detalle: a.detalle,
+    desglose: a.desglose || "",
+    documento: a.documento || "",
+    definicion: a.definicion || "",
+    debe: Number(a.debe || 0),
+    haber: Number(a.haber || 0)
+  }));
+
+  const totalDebe = payload.reduce((sum, a) => sum + Number(a.debe || 0), 0);
+  const totalHaber = payload.reduce((sum, a) => sum + Number(a.haber || 0), 0);
+
+  if (Math.abs(totalDebe - totalHaber) !== 0) {
+    alert("Los asientos no cuadran. Revisa los montos antes de guardar.");
+    return;
+  }
+
+  const { data, error } = await supabase
+    .from("asientos_contables")
+    .insert(payload)
+    .select();
+
+  if (error) {
+    console.error(error);
+    alert("No se pudieron guardar los asientos automáticos.");
+    return;
+  }
+
+  setAsientosContables(prev => [...data, ...prev]);
+  setModalGestionContable(null);
+  alert("Gestión contable registrada correctamente.");
+};
+
+const eliminarAsientoContable = async (asiento) => {
+  const confirmar = window.confirm("¿Seguro que quieres eliminar este asiento contable?\n\nEsta acción no se puede deshacer.");
+  if (!confirmar) return;
+
+  const { error } = await supabase
+    .from("asientos_contables")
+    .delete()
+    .eq("id", asiento.id);
+
+  if (error) {
+    console.error(error);
+    alert("No se pudo eliminar el asiento contable.");
+    return;
+  }
+
+  setAsientosContables(prev => prev.filter(a => a.id !== asiento.id));
+};
+
+const asientosContablesFiltrados = asientosContables.filter(a => {
+  const cumpleMesContabilidad = !mesContabilidad || String(a.fecha || "").slice(0, 7) === mesContabilidad;
+  const texto = `${a.detalle || ""} ${a.desglose || ""} ${a.documento || ""} ${a.definicion || ""}`.toLowerCase();
+  const cumpleBusqueda = !busquedaContabilidad || texto.includes(busquedaContabilidad.toLowerCase());
+  return cumpleMesContabilidad && cumpleBusqueda;
+});
+
+const resumenContabilidad = asientosContablesFiltrados.reduce((acc, a) => {
+  const detalle = String(a.detalle || "").toUpperCase().trim();
+  const debe = Number(a.debe || 0);
+  const haber = Number(a.haber || 0);
+
+  acc.debe += debe;
+  acc.haber += haber;
+
+  if (detalle === "IVA CF" || detalle.includes("IVA CREDITO") || detalle.includes("IVA CRÉDITO")) acc.ivaCf += debe - haber;
+  if (detalle === "IVA DF" || detalle.includes("IVA DEBITO") || detalle.includes("IVA DÉBITO")) acc.ivaDf += haber - debe;
+  if (detalle === "BANCO" || detalle.includes("BANCO")) acc.banco += debe - haber;
+  if (detalle === "CAJA" || detalle.includes("CAJA")) acc.caja += debe - haber;
+  if (detalle === "CLIENTE" || detalle.includes("CLIENTE") || detalle.includes("CXC") || detalle.includes("CUENTAS X COBRAR")) acc.cxc += debe - haber;
+
+  return acc;
+}, { debe:0, haber:0, ivaCf:0, ivaDf:0, banco:0, caja:0, cxc:0 });
+
+const diferenciaContabilidad = resumenContabilidad.debe - resumenContabilidad.haber;
+
+const eliminarVentaLaminas = async (venta) => {
+  const confirmar = window.confirm(
+    `¿Seguro que quieres eliminar la venta de láminas #${venta.numero}?
+
+Esta acción no se puede deshacer.`
+  );
+
+  if (!confirmar) return;
+
+  const { error } = await supabase
+    .from("ventas_laminas")
+    .delete()
+    .eq("id", venta.id);
+
+  if (error) {
+    console.error(error);
+    alert("No se pudo eliminar la venta de láminas.");
+    return;
+  }
+
+  setVentasLaminas(prev => prev.filter(v => v.id !== venta.id));
+  setDetallesVentasLaminas(prev => prev.filter(d => d.venta_lamina_id !== venta.id));
+
+  if (modalVentaLaminas?.id === venta.id) {
+    setModalVentaLaminas(null);
+  }
+
+  alert("Venta de láminas eliminada correctamente.");
+};
+
+const ventasLaminasDelMes = ventasLaminas.filter(v => {
+  if (!mesVentaLaminas) return true;
+  return String(v.fecha || "").slice(0, 7) === mesVentaLaminas;
+});
+
+const resumenVentasLaminasMes = ventasLaminasDelMes.reduce((acc, venta) => {
+  const r = calcularResumenVentaLaminas(venta);
+  acc.venta += r.ventaTotal;
+  acc.costo += r.costoTotal;
+  acc.utilidad += r.utilidadNeta;
+  acc.iva += r.ivaProvisionar;
+  return acc;
+}, { venta:0, costo:0, utilidad:0, iva:0 });
+
+const rankingLaminas = Object.values(
+  detallesVentasLaminas
+    .filter(d => ventasLaminasDelMes.some(v => v.id === d.venta_lamina_id))
+    .reduce((acc, d) => {
+      const color = String(d.color || "Sin color").trim().toUpperCase();
+      if (!acc[color]) acc[color] = { color, cantidad:0, total:0 };
+      acc[color].cantidad += Number(d.cantidad || 0);
+      acc[color].total += Number(d.total || 0);
+      return acc;
+    }, {})
+)
+  .sort((a,b) => b.cantidad - a.cantidad)
+  .slice(0, topLaminasCantidad);
+
+const maxRankingCantidad = Math.max(...rankingLaminas.map(r => r.cantidad), 1);
+
   const tabs=[
     {key:"dashboard",label:"📊 Resumen"},
     {key:"quotes",label:`📋 Cotizaciones (${cotizaciones.length})`},
@@ -2830,6 +3814,8 @@ const confirmarImportacionOC = async () => {
     {key:"sinmatch",label:`⚠ Sin cruzar (${sinCotizacion.length})`},
     {key:"produccion",label:`🏭 Producción`},
     {key:"inventario",label:`📦 Inventario`},
+    {key:"venta_laminas",label:`🧾 Venta de Láminas (${ventasLaminas.length})`},
+    {key:"contabilidad",label:`📚 Contabilidad (${asientosContables.length})`},
   ];
 
   return (
@@ -2873,6 +3859,26 @@ const confirmarImportacionOC = async () => {
     type="file"
     accept=".xlsx,.xls"
     onChange={importarCotizacion}
+    style={{ display: "none" }}
+  />
+</label>
+<label
+  style={{
+    padding: "10px 18px",
+    background: COLORS.warning,
+    borderRadius: 8,
+    fontWeight: 700,
+    cursor: "pointer",
+    color: "#111",
+    display: "inline-block",
+    marginLeft: 10
+  }}
+>
+  Importar Venta Láminas
+  <input
+    type="file"
+    accept=".xlsx,.xls"
+    onChange={importarVentaLaminasExcel}
     style={{ display: "none" }}
   />
 </label>
@@ -3950,6 +4956,208 @@ const confirmarImportacionOC = async () => {
     </div>
   </div>
 )}
+
+        {tab==="venta_laminas" && (
+          <div>
+            <div style={{ display:"flex", justifyContent:"space-between", gap:12, alignItems:"flex-end", flexWrap:"wrap", marginBottom:16 }}>
+              <div>
+                <h2 style={{ margin:"0 0 6px", fontFamily:"Georgia,serif", color:COLORS.accent, fontSize:17 }}>🧾 Venta de Láminas</h2>
+                <p style={{ margin:0, fontSize:12, color:COLORS.muted }}>Cotizaciones de láminas revendidas, utilidad neta e IVA a provisionar.</p>
+              </div>
+              <div>
+                <label style={{ display:"block", fontSize:10, color:COLORS.muted, marginBottom:5 }}>Mes</label>
+                <input
+                  type="month"
+                  value={mesVentaLaminas}
+                  onChange={(e) => setMesVentaLaminas(e.target.value)}
+                  style={{ background:COLORS.surface, border:`1px solid ${COLORS.border}`, color:COLORS.text, borderRadius:8, padding:"8px 10px" }}
+                />
+              </div>
+            </div>
+
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))", gap:12, marginBottom:18 }}>
+              <StatCard label="Ventas del mes" value={fmt(resumenVentasLaminasMes.venta)} sub={`${ventasLaminasDelMes.length} registros`} icon="💰" color={COLORS.success}/>
+              <StatCard label="Costos del mes" value={fmt(resumenVentasLaminasMes.costo)} icon="🧾" color={COLORS.warning}/>
+              <StatCard label="Utilidad neta" value={fmt(resumenVentasLaminasMes.utilidad)} icon="📈" color={resumenVentasLaminasMes.utilidad >= 0 ? COLORS.success : COLORS.danger}/>
+              <StatCard label="IVA a provisionar" value={fmt(resumenVentasLaminasMes.iva)} icon="🏛️" color={resumenVentasLaminasMes.iva >= 0 ? COLORS.accent : COLORS.danger}/>
+            </div>
+
+            <div style={{ display:"grid", gridTemplateColumns:"minmax(0,1.2fr) minmax(280px,0.8fr)", gap:16 }}>
+              <div style={{ background:COLORS.card, border:`1px solid ${COLORS.border}`, borderRadius:12, padding:14 }}>
+                <div style={{ fontSize:13, fontWeight:700, color:COLORS.accent, marginBottom:10 }}>Ventas importadas</div>
+                {ventasLaminasDelMes.length === 0 ? (
+                  <div style={{ color:COLORS.muted, fontSize:12 }}>No hay ventas de láminas para este mes.</div>
+                ) : (
+                  <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                    {ventasLaminasDelMes.map(v => {
+                      const r = calcularResumenVentaLaminas(v);
+                      return (
+                        <div
+                          key={v.id}
+                          onClick={() => setModalVentaLaminas(v)}
+                          style={{ background:COLORS.surface, border:`1px solid ${COLORS.border}`, borderLeft:`4px solid ${COLORS.accent}`, borderRadius:10, padding:"11px 12px", cursor:"pointer", display:"flex", justifyContent:"space-between", gap:10, flexWrap:"wrap" }}
+                        >
+                          <div>
+                            <div style={{ fontWeight:700, color:COLORS.text }}>#{v.numero} · {v.cliente}</div>
+                            <div style={{ fontSize:11, color:COLORS.muted }}>{fmtDate(v.fecha)} · Costo: {r.costoTotal > 0 ? fmt(r.costoTotal) : "pendiente"}</div>
+                          </div>
+                          <div style={{ textAlign:"right", display:"flex", flexDirection:"column", alignItems:"flex-end", gap:6 }}>
+                            <div>
+                              <div style={{ fontWeight:700, color:COLORS.success }}>{fmt(r.ventaTotal)}</div>
+                              <div style={{ fontSize:11, color:r.utilidadNeta >= 0 ? COLORS.accent : COLORS.danger }}>Utilidad: {fmt(r.utilidadNeta)}</div>
+                            </div>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                eliminarVentaLaminas(v);
+                              }}
+                              style={{ background: COLORS.danger, border: "none", borderRadius: 6, padding: "5px 9px", color: "#fff", fontSize: 11, fontWeight: 700, cursor: "pointer" }}
+                            >
+                              Eliminar
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              <div style={{ background:COLORS.card, border:`1px solid ${COLORS.border}`, borderRadius:12, padding:14 }}>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:8, marginBottom:12 }}>
+                  <div style={{ fontSize:13, fontWeight:700, color:COLORS.accent }}>Colores más vendidos</div>
+                  <select
+                    value={topLaminasCantidad}
+                    onChange={(e) => setTopLaminasCantidad(Number(e.target.value))}
+                    style={{ background:COLORS.surface, border:`1px solid ${COLORS.border}`, color:COLORS.text, borderRadius:8, padding:"6px 8px", fontSize:12 }}
+                  >
+                    <option value={10}>Top 10</option>
+                    <option value={50}>Top 50</option>
+                  </select>
+                </div>
+
+                {rankingLaminas.length === 0 ? (
+                  <div style={{ color:COLORS.muted, fontSize:12 }}>Todavía no hay detalle para generar ranking.</div>
+                ) : (
+                  <div style={{ display:"flex", flexDirection:"column", gap:9 }}>
+                    {rankingLaminas.map((r, idx) => (
+                      <div key={r.color}>
+                        <div style={{ display:"flex", justifyContent:"space-between", gap:8, fontSize:12, marginBottom:4 }}>
+                          <span style={{ color:COLORS.text, fontWeight:700 }}>{idx + 1}. {r.color}</span>
+                          <span style={{ color:COLORS.accent }}>{r.cantidad} láminas</span>
+                        </div>
+                        <div style={{ height:8, background:COLORS.surface, borderRadius:20, overflow:"hidden", border:`1px solid ${COLORS.border}` }}>
+                          <div style={{ height:"100%", width:`${Math.max(4, (r.cantidad / maxRankingCantidad) * 100)}%`, background:COLORS.accent }} />
+                        </div>
+                        <div style={{ fontSize:10, color:COLORS.muted, marginTop:3 }}>Vendido: {fmt(r.total)}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+
+        {tab==="contabilidad" && (
+          <div>
+            <div style={{ display:"flex", justifyContent:"space-between", gap:12, alignItems:"flex-end", flexWrap:"wrap", marginBottom:16 }}>
+              <div>
+                <h2 style={{ margin:"0 0 6px", fontFamily:"Georgia,serif", color:COLORS.accent, fontSize:17 }}>📚 Contabilidad</h2>
+                <p style={{ margin:0, fontSize:12, color:COLORS.muted }}>Libro diario simple con Debe, Haber, IVA CF/DF, Banco, Caja y CxC Clientes.</p>
+              </div>
+              <div style={{ display:"flex", gap:8, flexWrap:"wrap", alignItems:"flex-end" }}>
+                <div>
+                  <label style={{ display:"block", fontSize:10, color:COLORS.muted, marginBottom:5 }}>Mes</label>
+                  <input
+                    type="month"
+                    value={mesContabilidad}
+                    onChange={(e) => setMesContabilidad(e.target.value)}
+                    style={{ background:COLORS.surface, border:`1px solid ${COLORS.border}`, color:COLORS.text, borderRadius:8, padding:"8px 10px" }}
+                  />
+                </div>
+                <button onClick={() => setModalGestionContable("compra")} style={{ background:COLORS.accent, color:"#111", border:"none", borderRadius:8, padding:"10px 12px", fontWeight:700, cursor:"pointer" }}>+ Compra</button>
+                <button onClick={() => setModalGestionContable("venta")} style={{ background:COLORS.success, color:"#fff", border:"none", borderRadius:8, padding:"10px 12px", fontWeight:700, cursor:"pointer" }}>+ Venta</button>
+                <button onClick={() => setModalGestionContable("pago_cliente")} style={{ background:COLORS.surface, color:COLORS.text, border:`1px solid ${COLORS.border}`, borderRadius:8, padding:"10px 12px", fontWeight:700, cursor:"pointer" }}>+ Pago cliente</button>
+                <button onClick={() => setModalGestionContable("pago_proveedor")} style={{ background:COLORS.surface, color:COLORS.text, border:`1px solid ${COLORS.border}`, borderRadius:8, padding:"10px 12px", fontWeight:700, cursor:"pointer" }}>+ Pago proveedor</button>
+                <button onClick={() => setModalGestionContable("movimiento")} style={{ background:COLORS.surface, color:COLORS.text, border:`1px solid ${COLORS.border}`, borderRadius:8, padding:"10px 12px", fontWeight:700, cursor:"pointer" }}>+ Caja/Banco</button>
+                <button
+                  onClick={() => setModalContabilidad({})}
+                  style={{ background:"transparent", color:COLORS.muted, border:`1px solid ${COLORS.border}`, borderRadius:8, padding:"10px 12px", fontWeight:700, cursor:"pointer" }}
+                >
+                  + Asiento manual
+                </button>
+              </div>
+            </div>
+
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))", gap:12, marginBottom:14 }}>
+              <StatCard label="Debe total" value={fmt(resumenContabilidad.debe)} icon="⬅️" color={COLORS.success}/>
+              <StatCard label="Haber total" value={fmt(resumenContabilidad.haber)} icon="➡️" color={COLORS.warning}/>
+              <StatCard label="Diferencia" value={fmt(diferenciaContabilidad)} sub={Math.abs(diferenciaContabilidad) === 0 ? "Cuadrado" : "No cuadrado"} icon="⚖️" color={Math.abs(diferenciaContabilidad) === 0 ? COLORS.success : COLORS.danger}/>
+              <StatCard label="IVA CF" value={fmt(resumenContabilidad.ivaCf)} icon="🧾" color={COLORS.accent}/>
+              <StatCard label="IVA DF" value={fmt(resumenContabilidad.ivaDf)} icon="🏛️" color={COLORS.accent}/>
+              <StatCard label="IVA a pagar" value={fmt(resumenContabilidad.ivaDf - resumenContabilidad.ivaCf)} icon="📌" color={(resumenContabilidad.ivaDf - resumenContabilidad.ivaCf) >= 0 ? COLORS.warning : COLORS.success}/>
+            </div>
+
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(170px,1fr))", gap:12, marginBottom:18 }}>
+              <StatCard label="Banco" value={fmt(resumenContabilidad.banco)} icon="🏦" color={COLORS.success}/>
+              <StatCard label="Caja" value={fmt(resumenContabilidad.caja)} icon="💵" color={COLORS.success}/>
+              <StatCard label="CxC Clientes" value={fmt(resumenContabilidad.cxc)} icon="👥" color={COLORS.warning}/>
+            </div>
+
+            <div style={{ background:COLORS.card, border:`1px solid ${COLORS.border}`, borderRadius:12, padding:14 }}>
+              <div style={{ display:"flex", justifyContent:"space-between", gap:10, flexWrap:"wrap", alignItems:"center", marginBottom:12 }}>
+                <div style={{ fontSize:13, fontWeight:700, color:COLORS.accent }}>Asientos del mes</div>
+                <input
+                  value={busquedaContabilidad}
+                  onChange={(e) => setBusquedaContabilidad(e.target.value)}
+                  placeholder="Buscar detalle, desglose, factura..."
+                  style={{ minWidth:220, flex:"0 1 320px", background:COLORS.surface, border:`1px solid ${COLORS.border}`, color:COLORS.text, borderRadius:8, padding:"8px 10px" }}
+                />
+              </div>
+
+              {asientosContablesFiltrados.length === 0 ? (
+                <div style={{ color:COLORS.muted, fontSize:12 }}>No hay asientos contables para este mes.</div>
+              ) : (
+                <div style={{ overflowX:"auto" }}>
+                  <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12, minWidth:780 }}>
+                    <thead>
+                      <tr style={{ color:COLORS.muted, textAlign:"left" }}>
+                        <th style={{ padding:"8px", borderBottom:`1px solid ${COLORS.border}` }}>Fecha</th>
+                        <th style={{ padding:"8px", borderBottom:`1px solid ${COLORS.border}` }}>Detalle</th>
+                        <th style={{ padding:"8px", borderBottom:`1px solid ${COLORS.border}` }}>Desglose</th>
+                        <th style={{ padding:"8px", borderBottom:`1px solid ${COLORS.border}` }}>NV/Factura</th>
+                        <th style={{ padding:"8px", borderBottom:`1px solid ${COLORS.border}` }}>Definición</th>
+                        <th style={{ padding:"8px", borderBottom:`1px solid ${COLORS.border}`, textAlign:"right" }}>Debe</th>
+                        <th style={{ padding:"8px", borderBottom:`1px solid ${COLORS.border}`, textAlign:"right" }}>Haber</th>
+                        <th style={{ padding:"8px", borderBottom:`1px solid ${COLORS.border}`, textAlign:"right" }}>Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {asientosContablesFiltrados.map(a => (
+                        <tr key={a.id}>
+                          <td style={{ padding:"8px", borderBottom:`1px solid ${COLORS.border}` }}>{fmtDate(a.fecha)}</td>
+                          <td style={{ padding:"8px", borderBottom:`1px solid ${COLORS.border}`, fontWeight:700, color:COLORS.accent }}>{a.detalle}</td>
+                          <td style={{ padding:"8px", borderBottom:`1px solid ${COLORS.border}` }}>{a.desglose}</td>
+                          <td style={{ padding:"8px", borderBottom:`1px solid ${COLORS.border}` }}>{a.documento}</td>
+                          <td style={{ padding:"8px", borderBottom:`1px solid ${COLORS.border}` }}>{a.definicion}</td>
+                          <td style={{ padding:"8px", borderBottom:`1px solid ${COLORS.border}`, textAlign:"right", color:COLORS.success, fontWeight:700 }}>{Number(a.debe || 0) > 0 ? fmt(a.debe) : "-"}</td>
+                          <td style={{ padding:"8px", borderBottom:`1px solid ${COLORS.border}`, textAlign:"right", color:COLORS.warning, fontWeight:700 }}>{Number(a.haber || 0) > 0 ? fmt(a.haber) : "-"}</td>
+                          <td style={{ padding:"8px", borderBottom:`1px solid ${COLORS.border}`, textAlign:"right" }}>
+                            <button onClick={() => setModalContabilidad(a)} style={{ marginRight:6, background:COLORS.surface, color:COLORS.text, border:`1px solid ${COLORS.border}`, borderRadius:7, padding:"5px 8px", cursor:"pointer" }}>Editar</button>
+                            <button onClick={() => eliminarAsientoContable(a)} style={{ background:COLORS.danger, color:"#fff", border:"none", borderRadius:7, padding:"5px 8px", cursor:"pointer" }}>Eliminar</button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {tab==="sinmatch" && (
           <div>
             <h2 style={{ margin:"0 0 6px", fontFamily:"Georgia,serif", color:COLORS.warning, fontSize:17 }}>⚠ Ventas sin cotización cruzada</h2>
@@ -4027,6 +5235,29 @@ const confirmarImportacionOC = async () => {
     productos={previewOC}
     onClose={() => setModalPreviewOC(false)}
     onConfirm={confirmarImportacionOC}
+  />
+)}
+{modalVentaLaminas && (
+  <VentaLaminasModal
+    venta={modalVentaLaminas}
+    detalles={detallesVentasLaminas.filter(d => d.venta_lamina_id === modalVentaLaminas.id)}
+    onClose={() => setModalVentaLaminas(null)}
+    onSaveCosto={guardarCostoVentaLaminas}
+  />
+)}
+
+{modalGestionContable && (
+  <GestionRapidaContabilidadModal
+    tipo={modalGestionContable}
+    onClose={() => setModalGestionContable(null)}
+    onSave={guardarGestionContable}
+  />
+)}
+{modalContabilidad && (
+  <ContabilidadModal
+    asiento={modalContabilidad?.id ? modalContabilidad : null}
+    onClose={() => setModalContabilidad(null)}
+    onSave={guardarAsientoContable}
   />
 )}
 {modalProduccion && (
