@@ -148,6 +148,17 @@ function NotasModal({ cotizacion, detalles = [], seguimiento, onSave, onClose })
   const totalCotizacion = Number(cotizacion.total) || 0;
   const netoCotizacion = Math.round(totalCotizacion / 1.19);
   const ivaCotizacion = totalCotizacion - netoCotizacion;
+  useEffect(() => {
+  const cerrarConEsc = (e) => {
+    if (e.key === "Escape") onClose();
+  };
+
+  window.addEventListener("keydown", cerrarConEsc);
+
+  return () => {
+    window.removeEventListener("keydown", cerrarConEsc);
+  };
+}, [onClose]);
 
   const handleAdd = () => {
     if (!texto.trim()) return;
@@ -161,9 +172,37 @@ function NotasModal({ cotizacion, detalles = [], seguimiento, onSave, onClose })
   };
 
   return (
-    <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.75)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:100 }} onClick={onClose}>
-      <div style={{ background:COLORS.card, border:`1px solid ${COLORS.border}`, borderRadius:16, padding:28, width:440, maxWidth:"95vw", maxHeight:"80vh", display:"flex", flexDirection:"column" }} onClick={e=>e.stopPropagation()}>
-        <div style={{ marginBottom:16 }}>
+    <div
+  onClick={onClose}
+  style={{
+    position:"fixed",
+    inset:0,
+    background:"rgba(0,0,0,0.75)",
+    display:"flex",
+    alignItems:"flex-start",
+    justifyContent:"center",
+    zIndex:100,
+    overflowY:"auto",
+    padding:"20px 10px"
+  }}
+>
+      <div
+  onClick={(e) => e.stopPropagation()}
+  style={{
+    background:COLORS.card,
+    border:`1px solid ${COLORS.border}`,
+    borderRadius:16,
+    padding:28,
+    width:440,
+    maxWidth:"95vw",
+    maxHeight:"90vh",
+    overflowY:"auto",
+    display:"flex",
+    flexDirection:"column",
+    boxSizing:"border-box"
+  }}
+>
+              <div style={{ marginBottom:16 }}>
           <h3 style={{ margin:"0 0 4px", color:COLORS.accent, fontFamily:"Georgia,serif", fontSize:17 }}>Seguimiento</h3>
           <span style={{ fontSize:12, color:COLORS.muted }}>#{cotizacion.numero} · {cotizacion.cliente}</span>
         <div style={{
@@ -234,13 +273,16 @@ function NotasModal({ cotizacion, detalles = [], seguimiento, onSave, onClose })
           {existing.map((n, i) => (
             <div key={i} style={{ background:COLORS.surface, border:`1px solid ${COLORS.border}`, borderRadius:8, padding:"10px 12px", marginBottom:8, position:"relative" }}>
               <div style={{ fontSize:10, color:COLORS.muted, marginBottom:4 }}>📅 {fmtDate(n.fecha)}</div>
-              <div style={{ fontSize:13, color:COLORS.text }}>{n.texto}</div>
+              <div style={{ fontSize:16, color:COLORS.text }}>{n.texto}</div>
               <button onClick={() => handleDelete(i)} style={{ position:"absolute", top:8, right:8, background:"none", border:"none", color:COLORS.danger, cursor:"pointer", fontSize:14 }}>✕</button>
             </div>
           ))}
         </div>
         <div style={{ display:"flex", gap:8 }}>
-          <textarea placeholder="Ej: Llamé, no contestó. / Dijo que lo ve esta semana." value={texto} onChange={e=>setTexto(e.target.value)}
+          <textarea
+  placeholder="Ej: Llamé, no contestó. / Dijo que lo ve esta semana."
+  value={texto}
+  onChange={e=>setTexto(e.target.value)}
             onKeyDown={e=>{ if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();handleAdd();}}}
             rows={2} style={{ flex:1, background:COLORS.surface, border:`1px solid ${COLORS.border}`, borderRadius:8, padding:"9px 12px", color:COLORS.text, fontSize:13, outline:"none", resize:"none", fontFamily:"inherit" }}/>
           <button onClick={handleAdd} style={{ background:COLORS.accent, border:"none", borderRadius:8, padding:"0 16px", color:"#0f0e0c", fontWeight:700, cursor:"pointer", fontSize:20 }}>+</button>
@@ -250,9 +292,29 @@ function NotasModal({ cotizacion, detalles = [], seguimiento, onSave, onClose })
     </div>
   );
 }
-function ProduccionModal({ nota, onClose, onSave }) {
+function ProduccionModal({ nota, detalles = [], onClose, onSave }) {
   const [fechaEntrega, setFechaEntrega] = useState(nota.fecha_entrega_estimada || "");
   const [observaciones, setObservaciones] = useState(nota.produccion_observaciones || "");
+  useEffect(() => {
+  const cerrarConEsc = (e) => {
+    if (e.key === "Escape") onClose();
+  };
+
+  window.addEventListener("keydown", cerrarConEsc);
+
+  return () => {
+    window.removeEventListener("keydown", cerrarConEsc);
+  };
+}, [onClose]);
+
+const guardarProduccionModal = () => {
+  onSave({
+    ...nota,
+    fecha_entrega_estimada: fechaEntrega,
+    produccion_observaciones: observaciones,
+    ...procesos
+  });
+};
 
   const [procesos, setProcesos] = useState({
     mdf_cortado: nota.mdf_cortado || false,
@@ -301,30 +363,84 @@ function ProduccionModal({ nota, onClose, onSave }) {
   };
 
   return (
-    <div style={{
-      position:"fixed",
-      inset:0,
-      background:"rgba(0,0,0,0.65)",
-      display:"flex",
-      alignItems:"center",
-      justifyContent:"center",
-      zIndex:9999
-    }}>
-      <div style={{
-        background:COLORS.card,
-        border:`1px solid ${COLORS.border}`,
-        borderRadius:14,
-        padding:22,
-        width:"460px",
-        maxWidth:"92%",
-        color:COLORS.text
-      }}>
+    <div
+  onClick={onClose}
+  style={{
+    position:"fixed",
+    inset:0,
+    background:"rgba(0,0,0,0.65)",
+    display:"flex",
+    alignItems:"flex-start",
+    justifyContent:"center",
+    zIndex:9999,
+    overflowY:"auto",
+    padding:"20px 10px"
+  }}
+>
+      <div
+  onClick={(e) => e.stopPropagation()}
+  style={{
+    background:COLORS.card,
+    border:`1px solid ${COLORS.border}`,
+    borderRadius:14,
+    padding:22,
+    width:"460px",
+    maxWidth:"92%",
+    maxHeight:"90vh",
+    overflowY:"auto",
+    color:COLORS.text,
+    boxSizing:"border-box"
+  }}
+>
         <h2 style={{ marginTop:0, color:COLORS.accent }}>
           Producción NV#{nota.numero}
         </h2>
 
         <p><b>Cliente:</b> {nota.cliente}</p>
+        <div style={{
+  background:COLORS.surface,
+  border:`1px solid ${COLORS.border}`,
+  borderRadius:10,
+  padding:12,
+  margin:"10px 0 14px"
+}}>
+  <h3 style={{ margin:"0 0 10px", color:COLORS.accent, fontSize:15 }}>
+    Detalle de producción
+  </h3>
 
+  {detalles.length === 0 ? (
+    <p style={{ margin:0, color:COLORS.muted, fontSize:13 }}>
+      Esta nota de venta no tiene detalle de producción importado.
+    </p>
+  ) : (
+    <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+      {detalles.map((d) => (
+        <div key={d.id || d.orden} style={{
+          border:`1px solid ${COLORS.border}`,
+          borderRadius:8,
+          padding:10,
+          background:COLORS.card
+        }}>
+          <div style={{ fontWeight:700, color:COLORS.text }}>
+            {d.cantidad || 0} x {d.descripcion || "Sin descripción"}
+          </div>
+
+          <div style={{ fontSize:13, color:COLORS.muted, marginTop:4 }}>
+            Material: <b style={{ color:COLORS.text }}>{d.material || "-"}</b>
+          </div>
+
+          <div style={{ fontSize:13, color:COLORS.muted, marginTop:4 }}>
+            Medida: <b style={{ color:COLORS.text }}>{d.alto || 0} x {d.ancho || 0}</b>
+          </div>
+
+          <div style={{ fontSize:13, color:COLORS.muted, marginTop:4 }}>
+            Color: <b style={{ color:COLORS.text }}>{d.color || "-"}</b>
+          </div>
+        </div>
+      ))}
+    </div>
+  )}
+</div>
         <label>Fecha estimada de entrega</label>
         <input
           type="date"
@@ -365,8 +481,14 @@ function ProduccionModal({ nota, onClose, onSave }) {
 
         <label>Observaciones producción</label>
         <textarea
-          value={observaciones}
-          onChange={(e) => setObservaciones(e.target.value)}
+  value={observaciones}
+  onChange={(e) => setObservaciones(e.target.value)}
+  onKeyDown={(e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      guardarProduccionModal();
+    }
+  }}
           placeholder="Ej: pedido urgente, falta lámina, cliente pidió cambio..."
           style={{
             width:"100%",
@@ -376,7 +498,10 @@ function ProduccionModal({ nota, onClose, onSave }) {
             borderRadius:8,
             background:COLORS.surface,
             color:COLORS.text,
-            border:`1px solid ${COLORS.border}`
+            border:`1px solid ${COLORS.border}`,
+fontSize:16,
+resize:"none",
+boxSizing:"border-box"
           }}
         />
 
@@ -384,12 +509,7 @@ function ProduccionModal({ nota, onClose, onSave }) {
           <button onClick={onClose}>Cancelar</button>
 
           <button
-            onClick={() => onSave({
-              ...nota,
-              fecha_entrega_estimada: fechaEntrega,
-              produccion_observaciones: observaciones,
-              ...procesos
-            })}
+            onClick={guardarProduccionModal}
             style={{
               background:COLORS.success,
               color:"#fff",
@@ -410,6 +530,28 @@ function ProduccionModal({ nota, onClose, onSave }) {
 function GestionNVModal({ nota, abonos = [], onClose, onSave }) {
   const [nuevoAbono, setNuevoAbono] = useState("");
   const [observacionAbono, setObservacionAbono] = useState("");
+  useEffect(() => {
+  const cerrarConEsc = (e) => {
+    if (e.key === "Escape") onClose();
+  };
+
+  window.addEventListener("keydown", cerrarConEsc);
+
+  return () => {
+    window.removeEventListener("keydown", cerrarConEsc);
+  };
+}, [onClose]);
+
+const guardarGestionNV = () => {
+  onSave({
+    ...nota,
+    nuevoAbono,
+    observacionAbono,
+    materiales,
+    proceso,
+    observaciones
+  });
+};
   const [materiales, setMateriales] = useState(nota.materiales || "falta");
   const [proceso, setProceso] = useState(nota.proceso || "en espera");
   const [observaciones, setObservaciones] = useState(nota.observaciones || "");
@@ -419,24 +561,35 @@ function GestionNVModal({ nota, abonos = [], onClose, onSave }) {
   const saldo = Math.max(total - totalAbonado, 0);
 
   return (
-    <div style={{
-      position:"fixed",
-      inset:0,
-      background:"rgba(0,0,0,0.65)",
-      display:"flex",
-      alignItems:"center",
-      justifyContent:"center",
-      zIndex:9999
-    }}>
-      <div style={{
-        background:COLORS.card,
-        border:`1px solid ${COLORS.border}`,
-        borderRadius:14,
-        padding:22,
-        width:"420px",
-        maxWidth:"92%",
-        color:COLORS.text
-      }}>
+    <div
+  onClick={onClose}
+  style={{
+    position:"fixed",
+    inset:0,
+    background:"rgba(0,0,0,0.65)",
+    display:"flex",
+    alignItems:"flex-start",
+    justifyContent:"center",
+    zIndex:9999,
+    overflowY:"auto",
+    padding:"20px 10px"
+  }}
+>
+      <div
+  onClick={(e) => e.stopPropagation()}
+  style={{
+    background:COLORS.card,
+    border:`1px solid ${COLORS.border}`,
+    borderRadius:14,
+    padding:22,
+    width:"420px",
+    maxWidth:"92%",
+    maxHeight:"90vh",
+    overflowY:"auto",
+    color:COLORS.text,
+    boxSizing:"border-box"
+  }}
+>
         <h2 style={{ marginTop:0, color:COLORS.accent }}>
           Gestión NV #{nota.numero}
         </h2>
@@ -560,8 +713,14 @@ function GestionNVModal({ nota, abonos = [], onClose, onSave }) {
 
         <label>Observaciones</label>
         <textarea
-          value={observaciones}
-          onChange={(e) => setObservaciones(e.target.value)}
+  value={observaciones}
+  onChange={(e) => setObservaciones(e.target.value)}
+  onKeyDown={(e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      guardarGestionNV();
+    }
+  }}
           placeholder="Escribe una observación..."
           style={{
             width:"100%",
@@ -571,7 +730,10 @@ function GestionNVModal({ nota, abonos = [], onClose, onSave }) {
             borderRadius:8,
             background:COLORS.surface,
             color:COLORS.text,
-            border:`1px solid ${COLORS.border}`
+            border:`1px solid ${COLORS.border}`,
+fontSize:16,
+resize:"none",
+boxSizing:"border-box"
           }}
         />
 
@@ -581,14 +743,7 @@ function GestionNVModal({ nota, abonos = [], onClose, onSave }) {
           </button>
 
           <button
-            onClick={() => onSave({
-              ...nota,
-              nuevoAbono,
-              observacionAbono,
-              materiales,
-              proceso,
-              observaciones
-            })}
+            onClick={guardarGestionNV}
             style={{
               background:COLORS.success,
               color:"#fff",
@@ -607,6 +762,69 @@ function GestionNVModal({ nota, abonos = [], onClose, onSave }) {
   );
 }
 export default function App() {
+  const obtenerDetalleProduccionDesdeExcel = (workbook) => {
+  const hoja = workbook.Sheets["CUBIERTA"];
+
+  if (!hoja) return [];
+
+  const filas = XLSX.utils.sheet_to_json(hoja, {
+    header: 1,
+    defval: ""
+  });
+
+  let inicioDetalle = -1;
+
+  for (let i = 0; i < filas.length; i++) {
+    const textoFila = filas[i].join(" ").toUpperCase();
+
+    if (
+      textoFila.includes("MATERIAL") &&
+      textoFila.includes("CANTIDAD") &&
+      textoFila.includes("DESCRIPCIÓN") &&
+      textoFila.includes("COLOR")
+    ) {
+      inicioDetalle = i + 1;
+      break;
+    }
+  }
+
+  if (inicioDetalle === -1) return [];
+
+  const detalles = [];
+
+  for (let i = inicioDetalle; i < filas.length; i++) {
+    const fila = filas[i];
+
+    const material = String(fila[0] || "").trim();
+    const cantidad = fila[1];
+    const descripcion = String(fila[2] || "").trim();
+    const alto = fila[3];
+    const ancho = fila[4];
+    const color = String(fila[5] || "").trim();
+
+    const filaVacia =
+      !material &&
+      !cantidad &&
+      !descripcion &&
+      !alto &&
+      !ancho &&
+      !color;
+
+    if (filaVacia) break;
+
+    detalles.push({
+      material,
+      cantidad: Number(cantidad) || 0,
+      descripcion,
+      alto: Number(alto) || 0,
+      ancho: Number(ancho) || 0,
+      color,
+      orden: detalles.length + 1
+    });
+  }
+
+  return detalles;
+};
   const importarCotizacion = async (event) => {
   const file = event.target.files[0];
 
@@ -728,7 +946,9 @@ if (inicioDetalle !== -1) {
       total
     })
     
-    const ok = await importarNotaVentaExcel({
+    const detallesProduccion = obtenerDetalleProduccionDesdeExcel(workbook);
+
+const ok = await importarNotaVentaExcel({
   cotizacion,
   notaVenta,
   cliente,
@@ -737,6 +957,36 @@ if (inicioDetalle !== -1) {
 });
 
 if (ok) {
+  await supabase
+    .from("detalles_notas_venta_produccion")
+    .delete()
+    .eq("nota_venta_numero", String(notaVenta));
+
+  if (detallesProduccion.length > 0) {
+    const detallesParaGuardar = detallesProduccion.map((d) => ({
+      nota_venta_numero: String(notaVenta),
+      cotizacion_numero: String(cotizacion || ""),
+      cliente: String(cliente || ""),
+      material: d.material,
+      cantidad: d.cantidad,
+      descripcion: d.descripcion,
+      alto: d.alto,
+      ancho: d.ancho,
+      color: d.color,
+      orden: d.orden
+    }));
+
+    const { error: errorDetalles } = await supabase
+      .from("detalles_notas_venta_produccion")
+      .insert(detallesParaGuardar);
+
+    if (errorDetalles) {
+      console.error(errorDetalles);
+      alert("La nota se importó, pero hubo un error guardando el detalle de producción.");
+      return;
+    }
+  }
+
   window.location.reload();
 }
   }
@@ -789,6 +1039,14 @@ if (ok) {
 if (!errorAbonos) {
   setAbonosNV(dataAbonos || []);
 }
+const { data: dataDetallesNV, error: errorDetallesNV } = await supabase
+  .from("detalles_notas_venta_produccion")
+  .select("*")
+  .order("orden", { ascending: true });
+
+if (!errorDetallesNV) {
+  setDetallesNotasVenta(dataDetallesNV || []);
+}
   }
 
   cargarDatos();
@@ -802,11 +1060,13 @@ if (!errorAbonos) {
   const [seguimiento, setSeguimiento] = useState({});
   const [cotizaciones, setCotizaciones] = useState([]);
   const [detallesCotizaciones, setDetallesCotizaciones] = useState([]);
+  const [detallesNotasVenta, setDetallesNotasVenta] = useState([]);
   const [notas, setNotas] = useState([]);
   const [abonosNV, setAbonosNV] = useState([]);
   const [modalCot, setModalCot] = useState(null);
   const [modalNV, setModalNV] = useState(null);
   const [modalProduccion, setModalProduccion] = useState(null);
+  const [filtroProduccion, setFiltroProduccion] = useState("todos");
   const [busquedaCliente, setBusquedaCliente] = useState("")
   
 
@@ -1051,6 +1311,63 @@ const venceManana = (fecha) => {
   entrega.setHours(0, 0, 0, 0);
 
   return entrega.getTime() === manana.getTime();
+};
+const estadoProduccion = (n) => {
+  if (estaAtrasada(n.fecha_entrega_estimada) && !n.postformado) {
+    return {
+      texto: "🔴 Atrasada",
+      color: COLORS.danger
+    };
+  }
+
+  if (n.postformado) {
+    return {
+      texto: "🟢 Lista para entregar",
+      color: COLORS.success
+    };
+  }
+
+  if (
+    n.mdf_cortado ||
+    n.lamina_cortada ||
+    n.tupizado ||
+    n.armado ||
+    n.pegado
+  ) {
+    return {
+      texto: "🔵 En proceso",
+      color: "#60a5fa"
+    };
+  }
+
+  return {
+    texto: "🟡 Sin iniciar",
+    color: COLORS.warning
+  };
+};
+const coincideFiltroProduccion = (n, filtro) => {
+  const estado = estadoProduccion(n).texto;
+
+  if (filtro === "todos") return true;
+  if (filtro === "atrasadas") return estado.includes("Atrasada");
+  if (filtro === "hoy") return venceHoy(n.fecha_entrega_estimada) && !n.postformado;
+  if (filtro === "manana") return venceManana(n.fecha_entrega_estimada) && !n.postformado;
+  if (filtro === "proceso") return estado.includes("En proceso");
+  if (filtro === "sin_iniciar") return estado.includes("Sin iniciar");
+  if (filtro === "listas") return estado.includes("Lista");
+
+  return true;
+};
+
+const prioridadProduccion = (n) => {
+  if (estaAtrasada(n.fecha_entrega_estimada) && !n.postformado) return 1;
+  if (venceHoy(n.fecha_entrega_estimada) && !n.postformado) return 2;
+  if (venceManana(n.fecha_entrega_estimada) && !n.postformado) return 3;
+  if (estadoProduccion(n).texto.includes("En proceso")) return 4;
+  if (estadoProduccion(n).texto.includes("Sin iniciar")) return 5;
+  if (estadoProduccion(n).texto.includes("Lista")) return 6;
+
+  return 7;
 };
   const tabs=[
     {key:"dashboard",label:"📊 Resumen"},
@@ -1553,13 +1870,49 @@ const venceManana = (fecha) => {
     <h2 style={{ margin:"0 0 14px", fontFamily:"Georgia,serif", color:COLORS.accent, fontSize:17 }}>
       🏭 Producción
     </h2>
-
+<div style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:14 }}>
+  {[
+    ["todos", "Todos"],
+    ["atrasadas", "Atrasadas"],
+    ["hoy", "Para hoy"],
+    ["manana", "Para mañana"],
+    ["proceso", "En proceso"],
+    ["sin_iniciar", "Sin iniciar"],
+    ["listas", "Listas"]
+  ].map(([valor, texto]) => (
+    <button
+      key={valor}
+      onClick={() => setFiltroProduccion(valor)}
+      style={{
+        border:`1px solid ${filtroProduccion === valor ? COLORS.accent : COLORS.border}`,
+        background:filtroProduccion === valor ? COLORS.accent : COLORS.card,
+        color:filtroProduccion === valor ? "#111" : COLORS.text,
+        borderRadius:999,
+        padding:"6px 10px",
+        cursor:"pointer",
+        fontSize:12,
+        fontWeight:700
+      }}
+    >
+      {texto}
+    </button>
+  ))}
+</div>
     <div style={{ display:"grid", gap:12 }}>
       {notas
   .filter(n => n.proceso !== "entregado")
+  .filter(n => coincideFiltroProduccion(n, filtroProduccion))
   .sort((a,b) => {
+    const prioridadA = prioridadProduccion(a);
+    const prioridadB = prioridadProduccion(b);
+
+    if (prioridadA !== prioridadB) {
+      return prioridadA - prioridadB;
+    }
+
     if (!a.fecha_entrega_estimada) return 1;
     if (!b.fecha_entrega_estimada) return -1;
+
     return new Date(a.fecha_entrega_estimada) - new Date(b.fecha_entrega_estimada);
   })
   .map(n => (
@@ -1580,9 +1933,22 @@ const venceManana = (fecha) => {
           >
             <div style={{ display:"flex", justifyContent:"space-between", gap:12, flexWrap:"wrap" }}>
               <div>
-                <b style={{ color:COLORS.success }}>NV#{n.numero}</b>
-                <span style={{ marginLeft:8 }}>{n.cliente}</span>
-              </div>
+  <b style={{ color:COLORS.success }}>NV#{n.numero}</b>
+  <span style={{ marginLeft:8 }}>{n.cliente}</span>
+
+  <span style={{
+    marginLeft:10,
+    padding:"3px 8px",
+    borderRadius:999,
+    fontSize:11,
+    fontWeight:700,
+    background:estadoProduccion(n).color + "22",
+    color:estadoProduccion(n).color,
+    border:`1px solid ${estadoProduccion(n).color}`
+  }}>
+    {estadoProduccion(n).texto}
+  </span>
+</div>
 
               <span style={{ color:COLORS.muted }}>
                 Entrega estimada: {n.fecha_entrega_estimada || "Sin fecha"}
@@ -1659,10 +2025,13 @@ const venceManana = (fecha) => {
 )}
 {modalProduccion && (
   <ProduccionModal
-    nota={modalProduccion}
-    onClose={() => setModalProduccion(null)}
-    onSave={guardarProduccion}
-  />
+  nota={modalProduccion}
+  detalles={detallesNotasVenta.filter(d =>
+    String(d.nota_venta_numero) === String(modalProduccion.numero)
+  )}
+  onClose={() => setModalProduccion(null)}
+  onSave={guardarProduccion}
+/>
 )}
     {modalNV && (
   <GestionNVModal
