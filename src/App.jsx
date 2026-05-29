@@ -761,6 +761,1014 @@ boxSizing:"border-box"
     </div>
   );
 }
+function SobrantesLaminadoModal({ producto, sobrantes, onClose, onSave, onUsar }) {
+  const [filas, setFilas] = useState([{ largo:"", ancho:"" }]);
+  const [largoBuscado, setLargoBuscado] = useState("");
+  const [anchoBuscado, setAnchoBuscado] = useState("");
+  const [buscarTodos, setBuscarTodos] = useState(false);
+  useEffect(() => {
+    const cerrarConEsc = (e) => {
+      if (e.key === "Escape") onClose();
+    };
+
+    window.addEventListener("keydown", cerrarConEsc);
+
+    return () => {
+      window.removeEventListener("keydown", cerrarConEsc);
+    };
+  }, [onClose]);
+
+  const cambiarFila = (index, campo, valor) => {
+    setFilas(prev =>
+      prev.map((fila, i) =>
+        i === index ? { ...fila, [campo]: valor } : fila
+      )
+    );
+  };
+
+  const agregarFila = () => {
+    setFilas(prev => [...prev, { largo:"", ancho:"" }]);
+  };
+
+  const sobrantesDisponibles = sobrantes.filter(s => !s.usado);
+  const sobrantesCompatibles = sobrantesDisponibles.filter((s) => {
+  const largoNecesario = Number(largoBuscado) || 0;
+  const anchoNecesario = Number(anchoBuscado) || 0;
+
+  if (largoNecesario <= 0 || anchoNecesario <= 0) return false;
+
+  return Number(s.largo) >= largoNecesario && Number(s.ancho) >= anchoNecesario;
+});
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position:"fixed",
+        inset:0,
+        background:"rgba(0,0,0,0.65)",
+        display:"flex",
+        alignItems:"flex-start",
+        justifyContent:"center",
+        zIndex:9999,
+        overflowY:"auto",
+        padding:"20px 10px"
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background:COLORS.card,
+          border:`1px solid ${COLORS.border}`,
+          borderRadius:14,
+          padding:22,
+          width:"560px",
+          maxWidth:"92%",
+          maxHeight:"90vh",
+          overflowY:"auto",
+          color:COLORS.text,
+          boxSizing:"border-box"
+        }}
+      >
+        <h2 style={{ margin:"0 0 8px", color:COLORS.accent }}>
+          Sobrantes
+        </h2>
+
+        <p style={{ margin:"0 0 14px" }}>
+          <b>{producto.nombre}</b>
+        </p>
+        
+        <div style={{
+  border:`1px solid ${COLORS.border}`,
+  borderRadius:10,
+  padding:12,
+  background:COLORS.surface,
+  marginBottom:16
+}}>
+  <h3 style={{ fontSize:14, margin:"0 0 10px", color:COLORS.accent }}>
+    Buscar sobrante compatible
+  </h3>
+
+  <div style={{
+    display:"grid",
+    gridTemplateColumns:"1fr 1fr",
+    gap:8,
+    marginBottom:10
+  }}>
+    <input
+      type="number"
+      placeholder="Largo necesario"
+      value={largoBuscado}
+      onChange={(e) => setLargoBuscado(e.target.value)}
+      style={{
+        padding:"9px",
+        borderRadius:8,
+        border:`1px solid ${COLORS.border}`,
+        background:COLORS.card,
+        color:COLORS.text,
+        fontSize:16,
+        boxSizing:"border-box",
+        width:"100%"
+      }}
+    />
+
+    <input
+      type="number"
+      placeholder="Ancho necesario"
+      value={anchoBuscado}
+      onChange={(e) => setAnchoBuscado(e.target.value)}
+      style={{
+        padding:"9px",
+        borderRadius:8,
+        border:`1px solid ${COLORS.border}`,
+        background:COLORS.card,
+        color:COLORS.text,
+        fontSize:16,
+        boxSizing:"border-box",
+        width:"100%"
+      }}
+    />
+  </div>
+
+  {Number(largoBuscado) > 0 && Number(anchoBuscado) > 0 && (
+    <div>
+      <p style={{ margin:"0 0 8px", fontSize:13, color:COLORS.muted }}>
+        Resultado:
+      </p>
+
+      {sobrantesCompatibles.length === 0 ? (
+        <p style={{ margin:0, color:COLORS.danger, fontSize:13, fontWeight:700 }}>
+          No hay sobrantes compatibles.
+        </p>
+      ) : (
+        <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+          {sobrantesCompatibles.map((s) => (
+            <div
+              key={s.id}
+              style={{
+                border:`1px solid ${COLORS.border}`,
+                borderRadius:8,
+                padding:8,
+                background:COLORS.card,
+                display:"flex",
+                justifyContent:"space-between",
+                gap:10
+              }}
+            >
+              <span>
+                {Number(s.largo)} x {Number(s.ancho)}
+              </span>
+
+              <b style={{ color:COLORS.success }}>
+                Sirve
+              </b>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )}
+</div>
+        <h3 style={{ fontSize:14, margin:"0 0 8px", color:COLORS.success }}>
+          Sobrantes disponibles
+        </h3>
+
+        {sobrantesDisponibles.length === 0 ? (
+          <p style={{ color:COLORS.muted, fontSize:13 }}>
+            No hay sobrantes registrados.
+          </p>
+        ) : (
+          <div style={{ display:"flex", flexDirection:"column", gap:8, marginBottom:18 }}>
+            {sobrantesDisponibles.map((s) => (
+              <div
+                key={s.id}
+                style={{
+                  border:`1px solid ${COLORS.border}`,
+                  borderRadius:8,
+                  padding:10,
+                  background:COLORS.surface,
+                  display:"flex",
+                  justifyContent:"space-between",
+                  alignItems:"center",
+                  gap:10
+                }}
+              >
+                <span>
+                  {Number(s.largo)} x {Number(s.ancho)}
+                </span>
+
+                <button
+                  onClick={() => onUsar(s)}
+                  style={{
+                    padding:"6px 8px",
+                    borderRadius:8,
+                    border:"none",
+                    background:COLORS.danger,
+                    color:"#fff",
+                    fontWeight:700,
+                    cursor:"pointer"
+                  }}
+                >
+                  Usado
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <h3 style={{ fontSize:14, margin:"12px 0 8px", color:COLORS.accent }}>
+          Añadir sobrantes
+        </h3>
+
+        {filas.map((fila, index) => (
+          <div
+            key={index}
+            style={{
+              display:"grid",
+              gridTemplateColumns:"1fr 1fr",
+              gap:8,
+              marginBottom:8
+            }}
+          >
+            <input
+              type="number"
+              placeholder="Largo"
+              value={fila.largo}
+              onChange={(e) => cambiarFila(index, "largo", e.target.value)}
+              style={{
+                padding:"9px",
+                borderRadius:8,
+                border:`1px solid ${COLORS.border}`,
+                background:COLORS.surface,
+                color:COLORS.text,
+                fontSize:16,
+                boxSizing:"border-box",
+                width:"100%"
+              }}
+            />
+
+            <input
+              type="number"
+              placeholder="Ancho"
+              value={fila.ancho}
+              onChange={(e) => cambiarFila(index, "ancho", e.target.value)}
+              style={{
+                padding:"9px",
+                borderRadius:8,
+                border:`1px solid ${COLORS.border}`,
+                background:COLORS.surface,
+                color:COLORS.text,
+                fontSize:16,
+                boxSizing:"border-box",
+                width:"100%"
+              }}
+            />
+          </div>
+        ))}
+
+        <button
+          onClick={agregarFila}
+          style={{
+            width:"100%",
+            padding:"8px",
+            borderRadius:8,
+            border:`1px solid ${COLORS.border}`,
+            background:COLORS.surface,
+            color:COLORS.text,
+            fontWeight:700,
+            cursor:"pointer",
+            marginBottom:12
+          }}
+        >
+          + Agregar otra fila
+        </button>
+
+        <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
+          <button onClick={onClose} style={{ padding:"9px 12px", borderRadius:8 }}>
+            Cancelar
+          </button>
+
+          <button
+            onClick={() => onSave({ producto, sobrantes:filas })}
+            style={{
+              padding:"9px 14px",
+              borderRadius:8,
+              border:"none",
+              background:COLORS.success,
+              color:"#fff",
+              fontWeight:700,
+              cursor:"pointer"
+            }}
+          >
+            Guardar sobrantes
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+function PreviewOCModal({ productos, onClose, onConfirm }) {
+  useEffect(() => {
+    const cerrarConEsc = (e) => {
+      if (e.key === "Escape") onClose();
+    };
+
+    window.addEventListener("keydown", cerrarConEsc);
+
+    return () => {
+      window.removeEventListener("keydown", cerrarConEsc);
+    };
+  }, [onClose]);
+
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position:"fixed",
+        inset:0,
+        background:"rgba(0,0,0,0.65)",
+        display:"flex",
+        alignItems:"flex-start",
+        justifyContent:"center",
+        zIndex:9999,
+        overflowY:"auto",
+        padding:"20px 10px"
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background:COLORS.card,
+          border:`1px solid ${COLORS.border}`,
+          borderRadius:14,
+          padding:22,
+          width:"520px",
+          maxWidth:"92%",
+          maxHeight:"90vh",
+          overflowY:"auto",
+          color:COLORS.text,
+          boxSizing:"border-box"
+        }}
+      >
+        <h2 style={{ margin:"0 0 10px", color:COLORS.accent }}>
+          Vista previa OC
+        </h2>
+
+        <p style={{ color:COLORS.muted, fontSize:13 }}>
+          Revisa los productos antes de ingresarlos al inventario.
+        </p>
+
+        <div style={{ display:"flex", flexDirection:"column", gap:8, marginTop:12 }}>
+          {productos.map((p, index) => (
+            <div
+              key={index}
+              style={{
+                border:`1px solid ${COLORS.border}`,
+                borderRadius:8,
+                padding:10,
+                background:COLORS.surface,
+                display:"flex",
+                justifyContent:"space-between",
+                gap:10
+              }}
+            >
+              <span>{p.nombre}</span>
+              <b style={{ color:COLORS.accent }}>{p.cantidad}</b>
+            </div>
+          ))}
+        </div>
+
+        <div style={{ display:"flex", gap:10, justifyContent:"flex-end", marginTop:16 }}>
+          <button onClick={onClose} style={{ padding:"9px 12px", borderRadius:8 }}>
+            Cancelar
+          </button>
+
+          <button
+            onClick={onConfirm}
+            style={{
+              padding:"9px 14px",
+              borderRadius:8,
+              border:"none",
+              background:COLORS.success,
+              color:"#fff",
+              fontWeight:700,
+              cursor:"pointer"
+            }}
+          >
+            Confirmar ingreso
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+function EditarProductoModal({ producto, onClose, onSave }) {
+  const [nombre, setNombre] = useState(producto.nombre || "");
+  const [categoria, setCategoria] = useState(producto.categoria || "Tableros");
+  const [unidad, setUnidad] = useState(producto.unidad || "unidades");
+  const [stockMinimo, setStockMinimo] = useState(producto.stock_minimo || "");
+  const [proveedor, setProveedor] = useState(producto.proveedor || "");
+  const [esLaminado, setEsLaminado] = useState(producto.es_laminado || false);
+  const [observaciones, setObservaciones] = useState(producto.observaciones || "");
+
+  useEffect(() => {
+    const cerrarConEsc = (e) => {
+      if (e.key === "Escape") onClose();
+    };
+
+    window.addEventListener("keydown", cerrarConEsc);
+
+    return () => {
+      window.removeEventListener("keydown", cerrarConEsc);
+    };
+  }, [onClose]);
+
+  const estiloInput = {
+    width:"100%",
+    padding:"9px 10px",
+    borderRadius:8,
+    border:`1px solid ${COLORS.border}`,
+    background:COLORS.surface,
+    color:COLORS.text,
+    fontSize:16,
+    boxSizing:"border-box"
+  };
+
+  const guardar = () => {
+    if (!nombre.trim()) {
+      alert("Debes ingresar el nombre del producto.");
+      return;
+    }
+
+    onSave({
+      ...producto,
+      nombre: nombre.trim().toUpperCase(),
+      categoria,
+      unidad,
+      stock_minimo: Number(stockMinimo) || 0,
+      proveedor: proveedor.trim(),
+      es_laminado: esLaminado,
+      observaciones: observaciones.trim()
+    });
+  };
+
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position:"fixed",
+        inset:0,
+        background:"rgba(0,0,0,0.65)",
+        display:"flex",
+        alignItems:"flex-start",
+        justifyContent:"center",
+        zIndex:9999,
+        overflowY:"auto",
+        padding:"20px 10px"
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background:COLORS.card,
+          border:`1px solid ${COLORS.border}`,
+          borderRadius:14,
+          padding:22,
+          width:"460px",
+          maxWidth:"92%",
+          maxHeight:"90vh",
+          overflowY:"auto",
+          color:COLORS.text,
+          boxSizing:"border-box"
+        }}
+      >
+        <h2 style={{ margin:"0 0 14px", color:COLORS.accent }}>
+          Editar producto
+        </h2>
+
+        <label>Nombre del producto</label>
+        <input
+          value={nombre}
+          onChange={(e) => setNombre(e.target.value)}
+          style={{ ...estiloInput, margin:"6px 0 12px" }}
+        />
+
+        <label>Categoría</label>
+        <select
+          value={categoria}
+          onChange={(e) => setCategoria(e.target.value)}
+          style={{ ...estiloInput, margin:"6px 0 12px" }}
+        >
+          <option>Tableros</option>
+          <option>Laminados</option>
+          <option>Pegamentos</option>
+          <option>Embalaje</option>
+          <option>Tornillos</option>
+          <option>Herrajes</option>
+          <option>Insumos generales</option>
+        </select>
+
+        <label>Unidad</label>
+        <select
+          value={unidad}
+          onChange={(e) => setUnidad(e.target.value)}
+          style={{ ...estiloInput, margin:"6px 0 12px" }}
+        >
+          <option>planchas</option>
+          <option>láminas</option>
+          <option>tarros</option>
+          <option>bolsas</option>
+          <option>unidades</option>
+          <option>rollos</option>
+          <option>metros</option>
+          <option>kilos</option>
+          <option>litros</option>
+        </select>
+
+        <label>Stock mínimo</label>
+        <input
+          type="number"
+          value={stockMinimo}
+          onChange={(e) => setStockMinimo(e.target.value)}
+          style={{ ...estiloInput, margin:"6px 0 12px" }}
+        />
+
+        <label>Proveedor habitual</label>
+        <input
+          value={proveedor}
+          onChange={(e) => setProveedor(e.target.value)}
+          placeholder="Ej: Imperial, Merino, Latam"
+          style={{ ...estiloInput, margin:"6px 0 12px" }}
+        />
+
+        <label style={{ display:"flex", gap:8, alignItems:"center", margin:"8px 0 12px" }}>
+          <input
+            type="checkbox"
+            checked={esLaminado}
+            onChange={(e) => {
+              setEsLaminado(e.target.checked);
+              if (e.target.checked) {
+                setCategoria("Laminados");
+                setUnidad("láminas");
+              }
+            }}
+          />
+          Es laminado
+        </label>
+
+        <label>Observaciones</label>
+        <textarea
+          value={observaciones}
+          onChange={(e) => setObservaciones(e.target.value)}
+          style={{
+            ...estiloInput,
+            minHeight:70,
+            resize:"none",
+            margin:"6px 0 16px"
+          }}
+        />
+
+        <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
+          <button onClick={onClose} style={{ padding:"9px 12px", borderRadius:8 }}>
+            Cancelar
+          </button>
+
+          <button
+            onClick={guardar}
+            style={{
+              padding:"9px 14px",
+              borderRadius:8,
+              border:"none",
+              background:COLORS.accent,
+              color:"#111",
+              fontWeight:700,
+              cursor:"pointer"
+            }}
+          >
+            Guardar cambios
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+function MovimientoInventarioModal({ data, onClose, onSave }) {
+  const [cantidad, setCantidad] = useState("");
+
+  const producto = data.producto;
+  const tipo = data.tipo;
+
+  useEffect(() => {
+    const cerrarConEsc = (e) => {
+      if (e.key === "Escape") onClose();
+    };
+
+    window.addEventListener("keydown", cerrarConEsc);
+
+    return () => {
+      window.removeEventListener("keydown", cerrarConEsc);
+    };
+  }, [onClose]);
+
+  const titulo = tipo === "entrada" ? "Entrada de stock" : "Salida de stock";
+
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position:"fixed",
+        inset:0,
+        background:"rgba(0,0,0,0.65)",
+        display:"flex",
+        alignItems:"flex-start",
+        justifyContent:"center",
+        zIndex:9999,
+        overflowY:"auto",
+        padding:"20px 10px"
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background:COLORS.card,
+          border:`1px solid ${COLORS.border}`,
+          borderRadius:14,
+          padding:22,
+          width:"420px",
+          maxWidth:"92%",
+          color:COLORS.text,
+          boxSizing:"border-box"
+        }}
+      >
+        <h2 style={{ margin:"0 0 14px", color:COLORS.accent }}>
+          {titulo}
+        </h2>
+
+        <p style={{ margin:"0 0 12px" }}>
+          <b>Producto:</b> {producto.nombre}
+        </p>
+
+        <p style={{ margin:"0 0 12px", color:COLORS.muted }}>
+          Stock actual: <b style={{ color:COLORS.text }}>{Number(producto.stock_actual || 0)}</b>
+        </p>
+
+        <label>Cantidad</label>
+        <input
+          type="number"
+          value={cantidad}
+          onChange={(e) => setCantidad(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              onSave({ producto, tipo, cantidad });
+            }
+          }}
+          style={{
+            width:"100%",
+            padding:"10px",
+            borderRadius:8,
+            border:`1px solid ${COLORS.border}`,
+            background:COLORS.surface,
+            color:COLORS.text,
+            fontSize:16,
+            boxSizing:"border-box",
+            margin:"6px 0 16px"
+          }}
+        />
+
+        <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
+          <button onClick={onClose} style={{ padding:"9px 12px", borderRadius:8 }}>
+            Cancelar
+          </button>
+
+          <button
+            onClick={() => onSave({ producto, tipo, cantidad })}
+            style={{
+              padding:"9px 14px",
+              borderRadius:8,
+              border:"none",
+              background: tipo === "entrada" ? COLORS.success : COLORS.danger,
+              color:"#fff",
+              fontWeight:700,
+              cursor:"pointer"
+            }}
+          >
+            Guardar {tipo}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function HistorialInventarioModal({ producto, movimientos, onClose }) {
+  useEffect(() => {
+    const cerrarConEsc = (e) => {
+      if (e.key === "Escape") onClose();
+    };
+
+    window.addEventListener("keydown", cerrarConEsc);
+
+    return () => {
+      window.removeEventListener("keydown", cerrarConEsc);
+    };
+  }, [onClose]);
+
+  const historial = movimientos.filter(m => m.producto_id === producto.id);
+
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position:"fixed",
+        inset:0,
+        background:"rgba(0,0,0,0.65)",
+        display:"flex",
+        alignItems:"flex-start",
+        justifyContent:"center",
+        zIndex:9999,
+        overflowY:"auto",
+        padding:"20px 10px"
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background:COLORS.card,
+          border:`1px solid ${COLORS.border}`,
+          borderRadius:14,
+          padding:22,
+          width:"520px",
+          maxWidth:"92%",
+          maxHeight:"90vh",
+          overflowY:"auto",
+          color:COLORS.text,
+          boxSizing:"border-box"
+        }}
+      >
+        <h2 style={{ margin:"0 0 8px", color:COLORS.accent }}>
+          Historial
+        </h2>
+
+        <p style={{ margin:"0 0 14px" }}>
+          <b>{producto.nombre}</b>
+        </p>
+
+        {historial.length === 0 ? (
+          <p style={{ color:COLORS.muted }}>
+            Este producto todavía no tiene movimientos.
+          </p>
+        ) : (
+          <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+            {historial.map((m) => (
+              <div
+                key={m.id}
+                style={{
+                  border:`1px solid ${COLORS.border}`,
+                  borderRadius:10,
+                  padding:10,
+                  background:COLORS.surface
+                }}
+              >
+                <div style={{ display:"flex", justifyContent:"space-between", gap:10 }}>
+                  <b style={{
+                    color: m.tipo === "entrada" ? COLORS.success : COLORS.danger
+                  }}>
+                    {m.tipo === "entrada" ? "Entrada" : "Salida"} {m.tipo === "entrada" ? "+" : "-"}{Number(m.cantidad || 0)}
+                  </b>
+
+                  <span style={{ color:COLORS.muted, fontSize:12 }}>
+                    {new Date(m.created_at).toLocaleString("es-CL")}
+                  </span>
+                </div>
+
+                <div style={{ color:COLORS.muted, fontSize:12, marginTop:5 }}>
+                  Stock: {Number(m.stock_anterior || 0)} → {Number(m.stock_nuevo || 0)}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <button
+          onClick={onClose}
+          style={{
+            marginTop:16,
+            width:"100%",
+            padding:"9px 12px",
+            borderRadius:8,
+            border:"none",
+            background:COLORS.accent,
+            color:"#111",
+            fontWeight:700,
+            cursor:"pointer"
+          }}
+        >
+          Cerrar
+        </button>
+      </div>
+    </div>
+  );
+}
+function NuevoProductoModal({ onClose, onSave }) {
+  const [nombre, setNombre] = useState("");
+  const [categoria, setCategoria] = useState("Tableros");
+  const [unidad, setUnidad] = useState("planchas");
+  const [stockActual, setStockActual] = useState("");
+  const [stockMinimo, setStockMinimo] = useState("");
+  const [proveedor, setProveedor] = useState("");
+  const [esLaminado, setEsLaminado] = useState(false);
+  const [observaciones, setObservaciones] = useState("");
+
+  useEffect(() => {
+    const cerrarConEsc = (e) => {
+      if (e.key === "Escape") onClose();
+    };
+
+    window.addEventListener("keydown", cerrarConEsc);
+
+    return () => {
+      window.removeEventListener("keydown", cerrarConEsc);
+    };
+  }, [onClose]);
+
+  const guardar = () => {
+    if (!nombre.trim()) {
+      alert("Debes ingresar el nombre del producto.");
+      return;
+    }
+
+    onSave({
+      nombre: nombre.trim().toUpperCase(),
+      categoria,
+      unidad,
+      stock_actual: Number(stockActual) || 0,
+      stock_minimo: Number(stockMinimo) || 0,
+      proveedor: proveedor.trim(),
+      es_laminado: esLaminado,
+      activo: true,
+      observaciones: observaciones.trim()
+    });
+  };
+
+  const estiloInput = {
+    width:"100%",
+    padding:"9px 10px",
+    borderRadius:8,
+    border:`1px solid ${COLORS.border}`,
+    background:COLORS.surface,
+    color:COLORS.text,
+    fontSize:16,
+    boxSizing:"border-box"
+  };
+
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position:"fixed",
+        inset:0,
+        background:"rgba(0,0,0,0.65)",
+        display:"flex",
+        alignItems:"flex-start",
+        justifyContent:"center",
+        zIndex:9999,
+        overflowY:"auto",
+        padding:"20px 10px"
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background:COLORS.card,
+          border:`1px solid ${COLORS.border}`,
+          borderRadius:14,
+          padding:22,
+          width:"460px",
+          maxWidth:"92%",
+          maxHeight:"90vh",
+          overflowY:"auto",
+          color:COLORS.text,
+          boxSizing:"border-box"
+        }}
+      >
+        <h2 style={{ margin:"0 0 14px", color:COLORS.accent }}>
+          Agregar producto
+        </h2>
+
+        <label>Nombre del producto</label>
+        <input
+          value={nombre}
+          onChange={(e) => setNombre(e.target.value)}
+          placeholder="Ej: MDF 18MM 122X244"
+          style={{ ...estiloInput, margin:"6px 0 12px" }}
+        />
+
+        <label>Categoría</label>
+        <select
+          value={categoria}
+          onChange={(e) => setCategoria(e.target.value)}
+          style={{ ...estiloInput, margin:"6px 0 12px" }}
+        >
+          <option>Tableros</option>
+          <option>Laminados</option>
+          <option>Pegamentos</option>
+          <option>Embalaje</option>
+          <option>Tornillos</option>
+          <option>Herrajes</option>
+          <option>Insumos generales</option>
+        </select>
+
+        <label>Unidad</label>
+        <select
+          value={unidad}
+          onChange={(e) => setUnidad(e.target.value)}
+          style={{ ...estiloInput, margin:"6px 0 12px" }}
+        >
+          <option>planchas</option>
+          <option>láminas</option>
+          <option>tarros</option>
+          <option>bolsas</option>
+          <option>unidades</option>
+          <option>rollos</option>
+          <option>metros</option>
+          <option>kilos</option>
+          <option>litros</option>
+        </select>
+
+        <label>Stock actual</label>
+        <input
+          type="number"
+          value={stockActual}
+          onChange={(e) => setStockActual(e.target.value)}
+          style={{ ...estiloInput, margin:"6px 0 12px" }}
+        />
+
+        <label>Stock mínimo</label>
+        <input
+          type="number"
+          value={stockMinimo}
+          onChange={(e) => setStockMinimo(e.target.value)}
+          style={{ ...estiloInput, margin:"6px 0 12px" }}
+        />
+
+        <label>Proveedor habitual</label>
+        <input
+          value={proveedor}
+          onChange={(e) => setProveedor(e.target.value)}
+          placeholder="Ej: Imperial, Merino, Latam"
+          style={{ ...estiloInput, margin:"6px 0 12px" }}
+        />
+
+        <label style={{ display:"flex", gap:8, alignItems:"center", margin:"8px 0 12px" }}>
+          <input
+            type="checkbox"
+            checked={esLaminado}
+            onChange={(e) => {
+              setEsLaminado(e.target.checked);
+              if (e.target.checked) {
+                setCategoria("Laminados");
+                setUnidad("láminas");
+              }
+            }}
+          />
+          Es laminado
+        </label>
+
+        <label>Observaciones</label>
+        <textarea
+          value={observaciones}
+          onChange={(e) => setObservaciones(e.target.value)}
+          style={{
+            ...estiloInput,
+            minHeight:70,
+            resize:"none",
+            margin:"6px 0 16px"
+          }}
+        />
+
+        <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
+          <button onClick={onClose} style={{ padding:"9px 12px", borderRadius:8 }}>
+            Cancelar
+          </button>
+
+          <button
+            onClick={guardar}
+            style={{
+              padding:"9px 14px",
+              borderRadius:8,
+              border:"none",
+              background:COLORS.accent,
+              color:"#111",
+              fontWeight:700,
+              cursor:"pointer"
+            }}
+          >
+            Guardar producto
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 export default function App() {
   const obtenerDetalleProduccionDesdeExcel = (workbook) => {
   const hoja = workbook.Sheets["CUBIERTA"];
@@ -1047,6 +2055,30 @@ const { data: dataDetallesNV, error: errorDetallesNV } = await supabase
 if (!errorDetallesNV) {
   setDetallesNotasVenta(dataDetallesNV || []);
 }
+const { data: dataInventario, error: errorInventario } = await supabase
+  .from("inventario_productos")
+  .select("*")
+  .order("nombre", { ascending: true });
+
+if (!errorInventario) {
+  setProductosInventario(dataInventario || []);
+}
+const { data: dataMovimientosInventario, error: errorMovimientosInventario } = await supabase
+  .from("inventario_movimientos")
+  .select("*")
+  .order("created_at", { ascending: false });
+
+if (!errorMovimientosInventario) {
+  setMovimientosInventario(dataMovimientosInventario || []);
+}
+const { data: dataSobrantesLaminados, error: errorSobrantesLaminados } = await supabase
+  .from("inventario_laminado_sobrantes")
+  .select("*")
+  .order("created_at", { ascending: false });
+
+if (!errorSobrantesLaminados) {
+  setSobrantesLaminados(dataSobrantesLaminados || []);
+}
   }
 
   cargarDatos();
@@ -1061,6 +2093,21 @@ if (!errorDetallesNV) {
   const [cotizaciones, setCotizaciones] = useState([]);
   const [detallesCotizaciones, setDetallesCotizaciones] = useState([]);
   const [detallesNotasVenta, setDetallesNotasVenta] = useState([]);
+  const [productosInventario, setProductosInventario] = useState([]);
+  const [sobrantesLaminados, setSobrantesLaminados] = useState([]);
+  const [modalNuevoProducto, setModalNuevoProducto] = useState(false);
+  const [movimientosInventario, setMovimientosInventario] = useState([]);
+  const [modalMovimientoInventario, setModalMovimientoInventario] = useState(null);
+  const [modalHistorialProducto, setModalHistorialProducto] = useState(null);
+  const [modalEditarProducto, setModalEditarProducto] = useState(null);
+  const [busquedaInventario, setBusquedaInventario] = useState("");
+  const [filtroCategoriaInventario, setFiltroCategoriaInventario] = useState("todos");
+  const [previewOC, setPreviewOC] = useState([]);
+  const [modalPreviewOC, setModalPreviewOC] = useState(false);
+  const [modalSobrantesLaminado, setModalSobrantesLaminado] = useState(null);
+  const [busquedaLaminadoNombre, setBusquedaLaminadoNombre] = useState("");
+  const [busquedaSobranteLargo, setBusquedaSobranteLargo] = useState("");
+  const [busquedaSobranteAncho, setBusquedaSobranteAncho] = useState("");
   const [notas, setNotas] = useState([]);
   const [abonosNV, setAbonosNV] = useState([]);
   const [modalCot, setModalCot] = useState(null);
@@ -1369,12 +2416,420 @@ const prioridadProduccion = (n) => {
 
   return 7;
 };
+const estadoStockInventario = (producto) => {
+  const stock = Number(producto.stock_actual || 0);
+  const minimo = Number(producto.stock_minimo || 0);
+
+  if (stock <= 0) {
+    return {
+      texto: "🔴 Sin stock",
+      color: COLORS.danger
+    };
+  }
+
+  if (minimo > 0 && stock <= minimo) {
+    return {
+      texto: "🟡 Bajo stock",
+      color: COLORS.warning
+    };
+  }
+
+  return {
+    texto: "🟢 OK",
+    color: COLORS.success
+  };
+};
+const productosInventarioFiltrados = productosInventario.filter((p) => {
+  const textoBusqueda = busquedaInventario.trim().toLowerCase();
+
+  const coincideBusqueda =
+    !textoBusqueda ||
+    String(p.nombre || "").toLowerCase().includes(textoBusqueda);
+
+  const coincideCategoria =
+    filtroCategoriaInventario === "todos" ||
+    String(p.categoria || "").toLowerCase() === filtroCategoriaInventario;
+
+  return p.activo !== false && coincideBusqueda && coincideCategoria;
+});
+const sobrantesGlobalesCompatibles = sobrantesLaminados
+  .filter(s => !s.usado)
+  .map(s => {
+    const producto = productosInventario.find(p => p.id === s.producto_id);
+    return {
+      ...s,
+      producto_nombre: producto?.nombre || "Laminado sin nombre"
+    };
+  })
+  .filter(s => {
+    const nombreBuscado = busquedaLaminadoNombre.trim().toLowerCase();
+    const largoNecesario = Number(busquedaSobranteLargo) || 0;
+    const anchoNecesario = Number(busquedaSobranteAncho) || 0;
+
+    const coincideNombre =
+      !nombreBuscado ||
+      String(s.producto_nombre || "").toLowerCase().includes(nombreBuscado);
+
+    const coincideMedida =
+      largoNecesario > 0 &&
+      anchoNecesario > 0 &&
+      Number(s.largo) >= largoNecesario &&
+      Number(s.ancho) >= anchoNecesario;
+
+    return coincideNombre && coincideMedida;
+  });
+const guardarNuevoProducto = async (producto) => {
+  const { data, error } = await supabase
+    .from("inventario_productos")
+    .insert([producto])
+    .select();
+
+  if (error) {
+    console.error(error);
+    alert("Error al guardar el producto.");
+    return;
+  }
+
+  setProductosInventario(prev => [...prev, data[0]].sort((a,b) => a.nombre.localeCompare(b.nombre)));
+  setModalNuevoProducto(false);
+};
+const guardarMovimientoInventario = async ({ producto, tipo, cantidad }) => {
+  const cantidadNumero = Number(cantidad);
+
+  if (!cantidadNumero || cantidadNumero <= 0) {
+    alert("Debes ingresar una cantidad válida.");
+    return;
+  }
+
+  const stockAnterior = Number(producto.stock_actual || 0);
+
+  if (tipo === "salida" && cantidadNumero > stockAnterior) {
+    alert("No puedes descontar más stock del disponible.");
+    return;
+  }
+
+  const stockNuevo = tipo === "entrada"
+    ? stockAnterior + cantidadNumero
+    : stockAnterior - cantidadNumero;
+
+  const { error: errorUpdate } = await supabase
+    .from("inventario_productos")
+    .update({ stock_actual: stockNuevo })
+    .eq("id", producto.id);
+
+  if (errorUpdate) {
+    console.error(errorUpdate);
+    alert("Error al actualizar el stock.");
+    return;
+  }
+
+  const movimiento = {
+    producto_id: producto.id,
+    tipo,
+    cantidad: cantidadNumero,
+    stock_anterior: stockAnterior,
+    stock_nuevo: stockNuevo,
+    origen: "manual"
+  };
+
+  const { data, error: errorMovimiento } = await supabase
+    .from("inventario_movimientos")
+    .insert([movimiento])
+    .select();
+
+  if (errorMovimiento) {
+    console.error(errorMovimiento);
+    alert("El stock cambió, pero hubo un error guardando el historial.");
+    return;
+  }
+
+  setProductosInventario(prev =>
+    prev.map(p =>
+      p.id === producto.id ? { ...p, stock_actual: stockNuevo } : p
+    )
+  );
+
+  setMovimientosInventario(prev => [data[0], ...prev]);
+  setModalMovimientoInventario(null);
+};
+const guardarSobrantesLaminado = async ({ producto, sobrantes }) => {
+  const sobrantesValidos = sobrantes
+    .filter(s => Number(s.largo) > 0 && Number(s.ancho) > 0)
+    .map(s => ({
+      producto_id: producto.id,
+      largo: Number(s.largo),
+      ancho: Number(s.ancho),
+      observaciones: "",
+      usado: false
+    }));
+
+  if (sobrantesValidos.length === 0) {
+    alert("Debes ingresar al menos un sobrante válido.");
+    return;
+  }
+
+  const { data, error } = await supabase
+    .from("inventario_laminado_sobrantes")
+    .insert(sobrantesValidos)
+    .select();
+
+  if (error) {
+    console.error(error);
+    alert("Error al guardar los sobrantes.");
+    return;
+  }
+
+  setSobrantesLaminados(prev => [...(data || []), ...prev]);
+  setModalSobrantesLaminado(null);
+};
+
+const marcarSobranteUsado = async (sobrante) => {
+  const { data, error } = await supabase
+    .from("inventario_laminado_sobrantes")
+    .update({ usado: true })
+    .eq("id", sobrante.id)
+    .select();
+
+  if (error) {
+    console.error(error);
+    alert("Error al marcar el sobrante como usado.");
+    return;
+  }
+
+  setSobrantesLaminados(prev =>
+    prev.map(s => s.id === sobrante.id ? data[0] : s)
+  );
+};
+const guardarEdicionProducto = async (productoEditado) => {
+  const { data, error } = await supabase
+    .from("inventario_productos")
+    .update({
+      nombre: productoEditado.nombre,
+      categoria: productoEditado.categoria,
+      unidad: productoEditado.unidad,
+      stock_minimo: productoEditado.stock_minimo,
+      proveedor: productoEditado.proveedor,
+      observaciones: productoEditado.observaciones,
+      es_laminado: productoEditado.es_laminado
+    })
+    .eq("id", productoEditado.id)
+    .select();
+
+  if (error) {
+    console.error(error);
+    alert("Error al editar el producto.");
+    return;
+  }
+
+  setProductosInventario(prev =>
+    prev
+      .map(p => p.id === productoEditado.id ? data[0] : p)
+      .sort((a,b) => a.nombre.localeCompare(b.nombre))
+  );
+
+  setModalEditarProducto(null);
+};
+const importarOrdenCompraExcel = async (e) => {
+  const file = e.target.files?.[0];
+  if (!file) return;
+
+  const buffer = await file.arrayBuffer();
+  const workbook = XLSX.read(buffer, { type: "array" });
+
+  const hojaNombre = workbook.SheetNames[0];
+  const hoja = workbook.Sheets[hojaNombre];
+
+  const filas = XLSX.utils.sheet_to_json(hoja, {
+    header: 1,
+    defval: ""
+  });
+
+  let filaEncabezado = -1;
+  let colCantidad = -1;
+  let colProducto = -1;
+
+  for (let i = 0; i < filas.length; i++) {
+    const fila = filas[i].map(c => String(c).trim().toUpperCase());
+
+    const cantidadIndex = fila.findIndex(c => c.includes("CANTIDAD"));
+    const productoIndex = fila.findIndex(c => c.includes("PRODUCTO"));
+
+    if (cantidadIndex !== -1 && productoIndex !== -1) {
+      filaEncabezado = i;
+      colCantidad = cantidadIndex;
+      colProducto = productoIndex;
+      break;
+    }
+  }
+
+  if (filaEncabezado === -1) {
+    alert("No se encontró la tabla de productos en la orden de compra.");
+    return;
+  }
+
+  const productosEncontrados = [];
+
+  for (let i = filaEncabezado + 1; i < filas.length; i++) {
+    const fila = filas[i];
+
+    const cantidad = Number(fila[colCantidad]) || 0;
+    const nombre = String(fila[colProducto] || "").trim().toUpperCase();
+
+    if (!nombre && !cantidad) break;
+
+    if (!nombre || cantidad <= 0) continue;
+
+    productosEncontrados.push({
+      nombre,
+      cantidad
+    });
+  }
+
+  if (productosEncontrados.length === 0) {
+    alert("No se encontraron productos válidos en la orden de compra.");
+    return;
+  }
+
+  const agrupados = productosEncontrados.reduce((acc, item) => {
+    const existente = acc.find(p => p.nombre === item.nombre);
+
+    if (existente) {
+      existente.cantidad += item.cantidad;
+    } else {
+      acc.push({ ...item });
+    }
+
+    return acc;
+  }, []);
+
+  setPreviewOC(agrupados);
+  setModalPreviewOC(true);
+
+  e.target.value = "";
+};
+const detectarCategoriaProducto = (nombre) => {
+  const n = nombre.toUpperCase();
+
+  if (n.includes("MDF") || n.includes("MELAMIL")) return "Tableros";
+  if (n.includes("LAM") || n.includes("LAMINADO")) return "Laminados";
+  if (n.includes("AGOREX") || n.includes("COLA")) return "Pegamentos";
+  if (n.includes("FILM") || n.includes("CARTON") || n.includes("CARTÓN")) return "Embalaje";
+  if (n.includes("TORNILLO")) return "Tornillos";
+  if (n.includes("RIEL") || n.includes("TIRADOR") || n.includes("BISAGRA")) return "Herrajes";
+
+  return "Insumos generales";
+};
+
+const detectarUnidadProducto = (nombre) => {
+  const n = nombre.toUpperCase();
+
+  if (n.includes("MDF") || n.includes("MELAMIL")) return "planchas";
+  if (n.includes("LAM") || n.includes("LAMINADO")) return "láminas";
+  if (n.includes("AGOREX")) return "tarros";
+  if (n.includes("COLA")) return "bolsas";
+  if (n.includes("FILM")) return "rollos";
+  if (n.includes("CARTON") || n.includes("CARTÓN")) return "rollos";
+
+  return "unidades";
+};
+
+const confirmarImportacionOC = async () => {
+  if (previewOC.length === 0) return;
+
+  for (const item of previewOC) {
+    const nombre = item.nombre.trim().toUpperCase();
+    const cantidad = Number(item.cantidad) || 0;
+
+    const productoExistente = productosInventario.find(
+      p => String(p.nombre || "").trim().toUpperCase() === nombre
+    );
+
+    if (productoExistente) {
+      const stockAnterior = Number(productoExistente.stock_actual || 0);
+      const stockNuevo = stockAnterior + cantidad;
+
+      const { data, error } = await supabase
+        .from("inventario_productos")
+        .update({ stock_actual: stockNuevo })
+        .eq("id", productoExistente.id)
+        .select();
+
+      if (error) {
+        console.error(error);
+        alert(`Error actualizando ${nombre}`);
+        return;
+      }
+
+      await supabase
+        .from("inventario_movimientos")
+        .insert([{
+          producto_id: productoExistente.id,
+          tipo: "entrada",
+          cantidad,
+          stock_anterior: stockAnterior,
+          stock_nuevo: stockNuevo,
+          origen: "orden_compra"
+        }]);
+
+      setProductosInventario(prev =>
+        prev.map(p => p.id === productoExistente.id ? data[0] : p)
+      );
+
+    } else {
+      const categoria = detectarCategoriaProducto(nombre);
+      const unidad = detectarUnidadProducto(nombre);
+      const esLaminado = categoria === "Laminados";
+
+      const { data, error } = await supabase
+        .from("inventario_productos")
+        .insert([{
+          nombre,
+          categoria,
+          unidad,
+          stock_actual: cantidad,
+          stock_minimo: 0,
+          proveedor: "",
+          es_laminado: esLaminado,
+          activo: true
+        }])
+        .select();
+
+      if (error) {
+        console.error(error);
+        alert(`Error creando ${nombre}`);
+        return;
+      }
+
+      const nuevoProducto = data[0];
+
+      await supabase
+        .from("inventario_movimientos")
+        .insert([{
+          producto_id: nuevoProducto.id,
+          tipo: "entrada",
+          cantidad,
+          stock_anterior: 0,
+          stock_nuevo: cantidad,
+          origen: "orden_compra"
+        }]);
+
+      setProductosInventario(prev =>
+        [...prev, nuevoProducto].sort((a,b) => a.nombre.localeCompare(b.nombre))
+      );
+    }
+  }
+
+  setPreviewOC([]);
+  setModalPreviewOC(false);
+  alert("Orden de compra importada correctamente.");
+};
   const tabs=[
     {key:"dashboard",label:"📊 Resumen"},
     {key:"quotes",label:`📋 Cotizaciones (${cotizaciones.length})`},
     {key:"sales",label:`✅ Notas de Venta (${notas.length})`},
     {key:"sinmatch",label:`⚠ Sin cruzar (${sinCotizacion.length})`},
     {key:"produccion",label:`🏭 Producción`},
+    {key:"inventario",label:`📦 Inventario`},
   ];
 
   return (
@@ -1988,6 +3443,513 @@ const prioridadProduccion = (n) => {
     </div>
   </div>
 )}
+{tab==="inventario" && (
+  <div>
+    <h2 style={{ margin:"0 0 14px", fontFamily:"Georgia,serif", color:COLORS.accent, fontSize:17 }}>
+      📦 Inventario
+    </h2>
+    <button
+  onClick={() => setModalNuevoProducto(true)}
+  style={{
+    marginBottom:14,
+    padding:"9px 12px",
+    borderRadius:8,
+    border:"none",
+    background:COLORS.accent,
+    color:"#111",
+    fontWeight:700,
+    cursor:"pointer"
+  }}
+>
+  + Agregar producto
+</button>
+<label
+  style={{
+    display:"inline-block",
+    marginLeft:8,
+    marginBottom:14,
+    padding:"9px 12px",
+    borderRadius:8,
+    border:`1px solid ${COLORS.border}`,
+    background:COLORS.surface,
+    color:COLORS.text,
+    fontWeight:700,
+    cursor:"pointer"
+  }}
+>
+  📥 Importar OC
+  <input
+    type="file"
+    accept=".xls,.xlsx"
+    onChange={importarOrdenCompraExcel}
+    style={{ display:"none" }}
+  />
+</label>
+<div style={{
+  background:COLORS.card,
+  border:`1px solid ${COLORS.border}`,
+  borderRadius:12,
+  padding:12,
+  marginBottom:16
+}}>
+  <input
+    value={busquedaInventario}
+    onChange={(e) => setBusquedaInventario(e.target.value)}
+    placeholder="Buscar producto..."
+    style={{
+      width:"100%",
+      padding:"10px",
+      borderRadius:8,
+      border:`1px solid ${COLORS.border}`,
+      background:COLORS.surface,
+      color:COLORS.text,
+      fontSize:16,
+      boxSizing:"border-box",
+      marginBottom:10
+    }}
+  />
+
+  <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+    {[
+      ["todos", "Todos"],
+      ["tableros", "Tableros"],
+      ["laminados", "Laminados"],
+      ["pegamentos", "Pegamentos"],
+      ["embalaje", "Embalaje"],
+      ["tornillos", "Tornillos"],
+      ["herrajes", "Herrajes"],
+      ["insumos generales", "Insumos"]
+    ].map(([valor, texto]) => (
+      <button
+        key={valor}
+        onClick={() => setFiltroCategoriaInventario(valor)}
+        style={{
+          border:`1px solid ${filtroCategoriaInventario === valor ? COLORS.accent : COLORS.border}`,
+          background:filtroCategoriaInventario === valor ? COLORS.accent : COLORS.surface,
+          color:filtroCategoriaInventario === valor ? "#111" : COLORS.text,
+          borderRadius:999,
+          padding:"6px 10px",
+          cursor:"pointer",
+          fontSize:12,
+          fontWeight:700
+        }}
+      >
+        {texto}
+      </button>
+    ))}
+  </div>
+</div>
+    <div style={{
+      background:COLORS.card,
+      border:`1px solid ${COLORS.border}`,
+      borderRadius:12,
+      padding:14,
+      marginBottom:18
+    }}>
+      <p style={{ margin:"0 0 6px", color:COLORS.text, fontWeight:700 }}>
+        Inventario general
+      </p>
+      <p style={{ margin:0, color:COLORS.muted, fontSize:13 }}>
+        Aquí se controlarán MDF, Melamil, pegamentos, cartón, film, tornillos, herrajes y otros productos.
+      </p>
+    </div>
+
+    <h3 style={{ color:COLORS.success, fontSize:15, margin:"0 0 10px" }}>
+      Productos generales
+    </h3>
+
+    <div style={{
+      display:"grid",
+      gridTemplateColumns:"repeat(auto-fit, minmax(230px, 1fr))",
+      gap:12,
+      marginBottom:24
+    }}>
+      {productosInventarioFiltrados.filter(p => !p.es_laminado).length === 0 ? (
+        <p style={{ color:COLORS.muted }}>
+          Todavía no hay productos generales cargados.
+        </p>
+      ) : (
+        productosInventarioFiltrados
+  .filter(p => !p.es_laminado)
+          .map((p) => {
+            const estado = estadoStockInventario(p);
+
+            return (
+              <div key={p.id} style={{
+                background:COLORS.card,
+                border:`1px solid ${COLORS.border}`,
+                borderRadius:12,
+                padding:14
+              }}>
+                <div style={{
+  display:"flex",
+  justifyContent:"space-between",
+  alignItems:"center",
+  gap:10
+}}>
+  <b style={{
+    color:COLORS.text,
+    fontSize:14,
+    lineHeight:1.2
+  }}>
+    {p.nombre}
+  </b>
+
+  <span style={{
+    fontSize:22,
+    fontWeight:800,
+    color:COLORS.accent,
+    whiteSpace:"nowrap"
+  }}>
+    {Number(p.stock_actual || 0)}
+  </span>
+</div>
+
+<div style={{
+  marginTop:8,
+  color:estado.color,
+  fontSize:12,
+  fontWeight:700
+}}>
+  {estado.texto}
+</div>
+                <div style={{
+  display:"grid",
+  gridTemplateColumns:"repeat(4, 1fr)",
+  gap:6,
+  marginTop:12
+}}>
+  <button
+    title="Entrada"
+    onClick={() => setModalMovimientoInventario({ producto:p, tipo:"entrada" })}
+    style={{
+      padding:"6px",
+      borderRadius:8,
+      border:"none",
+      background:COLORS.success,
+      color:"#fff",
+      fontWeight:700,
+      cursor:"pointer"
+    }}
+  >
+    ➕
+  </button>
+
+  <button
+    title="Salida"
+    onClick={() => setModalMovimientoInventario({ producto:p, tipo:"salida" })}
+    style={{
+      padding:"6px",
+      borderRadius:8,
+      border:"none",
+      background:COLORS.danger,
+      color:"#fff",
+      fontWeight:700,
+      cursor:"pointer"
+    }}
+  >
+    ➖
+  </button>
+
+  <button
+    title="Historial"
+    onClick={() => setModalHistorialProducto(p)}
+    style={{
+      padding:"6px",
+      borderRadius:8,
+      border:`1px solid ${COLORS.border}`,
+      background:COLORS.surface,
+      color:COLORS.text,
+      fontWeight:700,
+      cursor:"pointer"
+    }}
+  >
+    📜
+  </button>
+
+  <button
+    title="Editar"
+    onClick={() => setModalEditarProducto(p)}
+    style={{
+      padding:"6px",
+      borderRadius:8,
+      border:`1px solid ${COLORS.border}`,
+      background:COLORS.surface,
+      color:COLORS.text,
+      fontWeight:700,
+      cursor:"pointer"
+    }}
+  >
+    ✏️
+  </button>
+</div>
+              </div>
+            );
+          })
+      )}
+    </div>
+
+    <h3 style={{ color:COLORS.accent, fontSize:15, margin:"0 0 10px" }}>
+      Laminados
+    </h3>
+<div style={{
+  background:COLORS.card,
+  border:`1px solid ${COLORS.border}`,
+  borderRadius:12,
+  padding:12,
+  marginBottom:14
+}}>
+  <p style={{ margin:"0 0 10px", color:COLORS.text, fontWeight:700 }}>
+    Buscar sobrantes disponibles
+  </p>
+
+  <input
+    value={busquedaLaminadoNombre}
+    onChange={(e) => setBusquedaLaminadoNombre(e.target.value)}
+    placeholder="Filtrar por color o nombre del laminado..."
+    style={{
+      width:"100%",
+      padding:"10px",
+      borderRadius:8,
+      border:`1px solid ${COLORS.border}`,
+      background:COLORS.surface,
+      color:COLORS.text,
+      fontSize:16,
+      boxSizing:"border-box",
+      marginBottom:8
+    }}
+  />
+
+  <div style={{
+    display:"grid",
+    gridTemplateColumns:"1fr 1fr",
+    gap:8
+  }}>
+    <input
+      type="number"
+      value={busquedaSobranteLargo}
+      onChange={(e) => setBusquedaSobranteLargo(e.target.value)}
+      placeholder="Largo necesario"
+      style={{
+        width:"100%",
+        padding:"10px",
+        borderRadius:8,
+        border:`1px solid ${COLORS.border}`,
+        background:COLORS.surface,
+        color:COLORS.text,
+        fontSize:16,
+        boxSizing:"border-box"
+      }}
+    />
+
+    <input
+      type="number"
+      value={busquedaSobranteAncho}
+      onChange={(e) => setBusquedaSobranteAncho(e.target.value)}
+      placeholder="Ancho necesario"
+      style={{
+        width:"100%",
+        padding:"10px",
+        borderRadius:8,
+        border:`1px solid ${COLORS.border}`,
+        background:COLORS.surface,
+        color:COLORS.text,
+        fontSize:16,
+        boxSizing:"border-box"
+      }}
+    />
+  </div>
+
+  {Number(busquedaSobranteLargo) > 0 && Number(busquedaSobranteAncho) > 0 && (
+    <div style={{ marginTop:12 }}>
+      {sobrantesGlobalesCompatibles.length === 0 ? (
+        <p style={{ margin:0, color:COLORS.danger, fontSize:13, fontWeight:700 }}>
+          No hay sobrantes compatibles.
+        </p>
+      ) : (
+        <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+          {sobrantesGlobalesCompatibles.map((s) => (
+            <div
+              key={s.id}
+              style={{
+                border:`1px solid ${COLORS.border}`,
+                borderRadius:8,
+                padding:10,
+                background:COLORS.surface
+              }}
+            >
+              <div style={{
+                display:"flex",
+                justifyContent:"space-between",
+                gap:10
+              }}>
+                <b style={{ color:COLORS.text }}>
+                  {s.producto_nombre}
+                </b>
+
+                <span style={{ color:COLORS.success, fontWeight:700 }}>
+                  {Number(s.largo)} x {Number(s.ancho)}
+                </span>
+              </div>
+
+              <div style={{ color:COLORS.muted, fontSize:12, marginTop:4 }}>
+                Sobrante compatible
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )}
+</div>
+    <div style={{
+      display:"grid",
+      gridTemplateColumns:"repeat(auto-fit, minmax(230px, 1fr))",
+      gap:12
+    }}>
+      {productosInventarioFiltrados.filter(p => p.es_laminado).length === 0 ? (
+        <p style={{ color:COLORS.muted }}>
+          Todavía no hay laminados cargados.
+        </p>
+      ) : (
+        productosInventarioFiltrados
+  .filter(p => p.es_laminado)
+          .map((p) => {
+            const estado = estadoStockInventario(p);
+
+            return (
+              <div key={p.id} style={{
+                background:COLORS.card,
+                border:`1px solid ${COLORS.border}`,
+                borderRadius:12,
+                padding:14
+              }}>
+                <div style={{
+  display:"flex",
+  justifyContent:"space-between",
+  alignItems:"center",
+  gap:10
+}}>
+  <b style={{
+    color:COLORS.text,
+    fontSize:14,
+    lineHeight:1.2
+  }}>
+    {p.nombre}
+  </b>
+
+  <span style={{
+    fontSize:22,
+    fontWeight:800,
+    color:COLORS.accent,
+    whiteSpace:"nowrap"
+  }}>
+    {Number(p.stock_actual || 0)}
+  </span>
+</div>
+
+<div style={{
+  marginTop:8,
+  color:estado.color,
+  fontSize:12,
+  fontWeight:700
+}}>
+  {estado.texto}
+</div>
+                <div style={{
+  display:"grid",
+  gridTemplateColumns:"repeat(4, 1fr)",
+  gap:6,
+  marginTop:12
+}}>
+  <button
+    title="Entrada"
+    onClick={() => setModalMovimientoInventario({ producto:p, tipo:"entrada" })}
+    style={{
+      padding:"6px",
+      borderRadius:8,
+      border:"none",
+      background:COLORS.success,
+      color:"#fff",
+      fontWeight:700,
+      cursor:"pointer"
+    }}
+  >
+    ➕
+  </button>
+
+  <button
+    title="Salida"
+    onClick={() => setModalMovimientoInventario({ producto:p, tipo:"salida" })}
+    style={{
+      padding:"6px",
+      borderRadius:8,
+      border:"none",
+      background:COLORS.danger,
+      color:"#fff",
+      fontWeight:700,
+      cursor:"pointer"
+    }}
+  >
+    ➖
+  </button>
+
+  <button
+    title="Historial"
+    onClick={() => setModalHistorialProducto(p)}
+    style={{
+      padding:"6px",
+      borderRadius:8,
+      border:`1px solid ${COLORS.border}`,
+      background:COLORS.surface,
+      color:COLORS.text,
+      fontWeight:700,
+      cursor:"pointer"
+    }}
+  >
+    📜
+  </button>
+
+  <button
+    title="Editar"
+    onClick={() => setModalEditarProducto(p)}
+    style={{
+      padding:"6px",
+      borderRadius:8,
+      border:`1px solid ${COLORS.border}`,
+      background:COLORS.surface,
+      color:COLORS.text,
+      fontWeight:700,
+      cursor:"pointer"
+    }}
+  >
+    ✏️
+  </button>
+</div>
+
+                <button
+  onClick={() => setModalSobrantesLaminado(p)}
+  style={{
+    marginTop:12,
+    width:"100%",
+    padding:"8px 10px",
+    borderRadius:8,
+    border:`1px solid ${COLORS.border}`,
+    background:COLORS.surface,
+    color:COLORS.text,
+    fontWeight:700,
+    cursor:"pointer"
+  }}
+>
+  Sobrantes ({sobrantesLaminados.filter(s => s.producto_id === p.id && !s.usado).length})
+</button>
+              </div>
+            );
+          })
+      )}
+    </div>
+  </div>
+)}
         {tab==="sinmatch" && (
           <div>
             <h2 style={{ margin:"0 0 6px", fontFamily:"Georgia,serif", color:COLORS.warning, fontSize:17 }}>⚠ Ventas sin cotización cruzada</h2>
@@ -2021,6 +3983,50 @@ const prioridadProduccion = (n) => {
     seguimiento={seguimiento}
     onSave={saveSeguimiento}
     onClose={() => setModalCot(null)}
+  />
+)}
+{modalNuevoProducto && (
+  <NuevoProductoModal
+    onClose={() => setModalNuevoProducto(false)}
+    onSave={guardarNuevoProducto}
+  />
+)}
+{modalMovimientoInventario && (
+  <MovimientoInventarioModal
+    data={modalMovimientoInventario}
+    onClose={() => setModalMovimientoInventario(null)}
+    onSave={guardarMovimientoInventario}
+  />
+)}
+
+{modalHistorialProducto && (
+  <HistorialInventarioModal
+    producto={modalHistorialProducto}
+    movimientos={movimientosInventario}
+    onClose={() => setModalHistorialProducto(null)}
+  />
+)}
+{modalEditarProducto && (
+  <EditarProductoModal
+    producto={modalEditarProducto}
+    onClose={() => setModalEditarProducto(null)}
+    onSave={guardarEdicionProducto}
+  />
+)}
+{modalSobrantesLaminado && (
+  <SobrantesLaminadoModal
+    producto={modalSobrantesLaminado}
+    sobrantes={sobrantesLaminados.filter(s => s.producto_id === modalSobrantesLaminado.id)}
+    onClose={() => setModalSobrantesLaminado(null)}
+    onSave={guardarSobrantesLaminado}
+    onUsar={marcarSobranteUsado}
+  />
+)}
+{modalPreviewOC && (
+  <PreviewOCModal
+    productos={previewOC}
+    onClose={() => setModalPreviewOC(false)}
+    onConfirm={confirmarImportacionOC}
   />
 )}
 {modalProduccion && (
