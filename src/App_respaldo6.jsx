@@ -3001,7 +3001,7 @@ if (!errorAsientosContables) {
   const [filter, setFilter] = useState("");
   const [fechaDesde, setFechaDesde] = useState("");
   const [fechaHasta, setFechaHasta] = useState("");
-  const [mesFiltro, setMesFiltro] = useState(new Date().toISOString().slice(0, 7));
+  const [mesFiltro, setMesFiltro] = useState("");
   const [showVencidas, setShowVencidas] = useState(false);
   const [seguimiento, setSeguimiento] = useState({});
   const [cotizaciones, setCotizaciones] = useState([]);
@@ -3090,38 +3090,21 @@ if (!errorAsientosContables) {
   return true;
 };
 
-const obtenerMesFecha = (fecha) => {
-  if (!fecha) return "";
-
-  const texto = String(fecha).trim();
-  const match = texto.match(/^(\d{4})-(\d{2})/);
-  if (match) return `${match[1]}-${match[2]}`;
-
-  const fechaObj = new Date(fecha);
-  if (Number.isNaN(fechaObj.getTime())) return "";
-
-  const year = fechaObj.getFullYear();
-  const month = String(fechaObj.getMonth() + 1).padStart(2, "0");
-  return `${year}-${month}`;
-};
-
-const nombreMes = (mes) => {
-  if (!mes) return "Todos los meses";
-  const [year, month] = mes.split("-");
-  const nombre = new Date(Number(year), Number(month) - 1, 1)
-    .toLocaleDateString("es-CL", { month:"long", year:"numeric" });
-  return nombre.charAt(0).toUpperCase() + nombre.slice(1);
-};
-
 const cumpleMes = (fecha) => {
   if (!mesFiltro) return true;
-  return obtenerMesFecha(fecha) === mesFiltro;
+  if (!fecha) return false;
+
+  const fechaObj = new Date(fecha);
+  const year = fechaObj.getFullYear();
+  const month = String(fechaObj.getMonth() + 1).padStart(2, "0");
+
+  return `${year}-${month}` === mesFiltro;
 };
   const limpiarFiltros = () => {
   setSearch("");
   setFechaDesde("");
   setFechaHasta("");
-  setMesFiltro(new Date().toISOString().slice(0, 7));
+  setMesFiltro("");
 };
 
 const filteredQuotes = withStatus.filter(q =>
@@ -3139,9 +3122,6 @@ const filteredNotas = notas.filter(s =>
   cumpleFecha(s.fecha) &&
   cumpleMes(s.fecha)
 );
-
-const totalSoldFiltrado = filteredNotas.reduce((s,n) => s + Number(n.total || 0), 0);
-const mesSeleccionadoTexto = nombreMes(mesFiltro);
 
   const r2=58,cx=80,cy=76;
   const toRad=d=>d*Math.PI/180;
@@ -4266,7 +4246,7 @@ const eliminarAsientoContable = async (asiento) => {
 };
 
 const asientosContablesFiltrados = asientosContables.filter(a => {
-  const cumpleMesContabilidad = !mesContabilidad || obtenerMesFecha(a.fecha) === mesContabilidad;
+  const cumpleMesContabilidad = !mesContabilidad || String(a.fecha || "").slice(0, 7) === mesContabilidad;
   const texto = `${a.detalle || ""} ${a.desglose || ""} ${a.documento || ""} ${a.definicion || ""}`.toLowerCase();
   const cumpleBusqueda = !busquedaContabilidad || texto.includes(busquedaContabilidad.toLowerCase());
   return cumpleMesContabilidad && cumpleBusqueda;
@@ -4292,7 +4272,6 @@ const resumenContabilidad = asientosContablesFiltrados.reduce((acc, a) => {
 
 const diferenciaContabilidad = resumenContabilidad.debe - resumenContabilidad.haber;
 const detalleCxcNotas = notas
-  .filter(n => !mesContabilidad || obtenerMesFecha(n.fecha) === mesContabilidad)
   .map(n => {
     const idNota = Number(String(n.id).replace("supabase-", ""));
 
@@ -4349,7 +4328,7 @@ Esta acción no se puede deshacer.`
 
 const ventasLaminasDelMes = ventasLaminas.filter(v => {
   if (!mesVentaLaminas) return true;
-  return obtenerMesFecha(v.fecha) === mesVentaLaminas;
+  return String(v.fecha || "").slice(0, 7) === mesVentaLaminas;
 });
 
 const resumenVentasLaminasMes = ventasLaminasDelMes.reduce((acc, venta) => {
@@ -4379,13 +4358,13 @@ const maxRankingCantidad = Math.max(...rankingLaminas.map(r => r.cantidad), 1);
 
   const tabs=[
     {key:"dashboard",label:"📊 Resumen"},
-    {key:"quotes",label:`📋 Cotizaciones (${filteredQuotes.length})`},
-    {key:"sales",label:`✅ Notas de Venta (${filteredNotas.length})`},
+    {key:"quotes",label:`📋 Cotizaciones (${cotizaciones.length})`},
+    {key:"sales",label:`✅ Notas de Venta (${notas.length})`},
     {key:"sinmatch",label:`⚠ Sin cruzar (${sinCotizacion.length})`},
     {key:"produccion",label:`🏭 Producción`},
     {key:"inventario",label:`📦 Inventario`},
-    {key:"venta_laminas",label:`🧾 Venta de Láminas (${ventasLaminasDelMes.length})`},
-    {key:"contabilidad",label:`📚 Contabilidad (${asientosContablesFiltrados.length})`},
+    {key:"venta_laminas",label:`🧾 Venta de Láminas (${ventasLaminas.length})`},
+    {key:"contabilidad",label:`📚 Contabilidad (${asientosContables.length})`},
   ];
 
   return (
@@ -4580,7 +4559,7 @@ const maxRankingCantidad = Math.max(...rankingLaminas.map(r => r.cantidad), 1);
     border: "1px solid #444"
   }}
 />
-              <h2 style={{ margin:0, fontFamily:"Georgia,serif", color:COLORS.accent, fontSize:17 }}>Cotizaciones {mesSeleccionadoTexto}</h2>
+              <h2 style={{ margin:0, fontFamily:"Georgia,serif", color:COLORS.accent, fontSize:17 }}>Cotizaciones Mayo 2026</h2>
               <label style={{ display:"flex", alignItems:"center", gap:8, fontSize:12, color:COLORS.muted, cursor:"pointer" }}>
                 <input type="checkbox" checked={showVencidas} onChange={e=>setShowVencidas(e.target.checked)}/> Mostrar vencidas ({vencidas.length})
               </label>
@@ -4614,18 +4593,28 @@ const maxRankingCantidad = Math.max(...rankingLaminas.map(r => r.cantidad), 1);
 >
   <option value="">Todos los meses</option>
 
-  {[...new Set([
-    new Date().toISOString().slice(0, 7),
-    ...[...cotizaciones, ...notas]
-      .map(item => item.fecha)
-      .filter(Boolean)
-      .map(fecha => obtenerMesFecha(fecha))
-      .filter(Boolean)
-  ])]
+  {[...new Set([...cotizaciones, ...notas]
+    .map(item => item.fecha)
+    .filter(Boolean)
+    .map(fecha => {
+      const f = new Date(fecha);
+      const year = f.getFullYear();
+      const month = String(f.getMonth() + 1).padStart(2, "0");
+      return `${year}-${month}`;
+    })
+  )]
     .sort((a, b) => b.localeCompare(a))
-    .map(mes => (
-      <option key={mes} value={mes}>{nombreMes(mes)}</option>
-    ))}
+    .map(mes => {
+      const [year, month] = mes.split("-");
+      const nombreMes = new Date(year, Number(month) - 1)
+        .toLocaleDateString("es-CL", { month:"long", year:"numeric" });
+
+      return (
+        <option key={mes} value={mes}>
+          {nombreMes.charAt(0).toUpperCase() + nombreMes.slice(1)}
+        </option>
+      );
+    })}
 </select>
 <button
   onClick={limpiarFiltros}
@@ -4729,18 +4718,10 @@ const maxRankingCantidad = Math.max(...rankingLaminas.map(r => r.cantidad), 1);
 
         {tab==="sales" && (
           <div>
-            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:10, flexWrap:"wrap", marginBottom:14 }}>
-              <h2 style={{ margin:0, fontFamily:"Georgia,serif", color:COLORS.success, fontSize:17 }}>Notas de Venta {mesSeleccionadoTexto}</h2>
-              <input
-                type="month"
-                value={mesFiltro}
-                onChange={(e) => setMesFiltro(e.target.value)}
-                style={{ background:COLORS.surface, border:`1px solid ${COLORS.border}`, color:COLORS.text, borderRadius:8, padding:"8px 10px" }}
-              />
-            </div>
+            <h2 style={{ margin:"0 0 14px", fontFamily:"Georgia,serif", color:COLORS.success, fontSize:17 }}>Notas de Venta Mayo 2026</h2>
             <div style={{ marginBottom:14, background:COLORS.subtle, borderRadius:10, padding:"10px 16px", display:"flex", gap:24 }}>
-              <div><span style={{ fontSize:11, color:COLORS.muted }}>TOTAL VENDIDO</span><div style={{ fontSize:18, fontWeight:700, color:COLORS.success }}>{fmt(totalSoldFiltrado)}</div></div>
-              <div><span style={{ fontSize:11, color:COLORS.muted }}>NOTAS</span><div style={{ fontSize:18, fontWeight:700, color:COLORS.success }}>{filteredNotas.length}</div></div>
+              <div><span style={{ fontSize:11, color:COLORS.muted }}>TOTAL VENDIDO</span><div style={{ fontSize:18, fontWeight:700, color:COLORS.success }}>{fmt(totalSold)}</div></div>
+              <div><span style={{ fontSize:11, color:COLORS.muted }}>NOTAS</span><div style={{ fontSize:18, fontWeight:700, color:COLORS.success }}>{notas.length}</div></div>
             </div>
             <div style={{ display:"flex", flexDirection:"column", gap:7 }}>
               {filteredNotas.map(s=>(
