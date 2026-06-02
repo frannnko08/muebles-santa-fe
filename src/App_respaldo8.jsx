@@ -765,7 +765,6 @@ boxSizing:"border-box"
 function EditarNVCompletaModal({ nota, detalles = [], onClose, onSave }) {
   const [form, setForm] = useState({
     numero: nota.numero || "",
-    cotizacion: nota.cotizacion || "",
     cliente: nota.cliente || "",
     fecha: nota.fecha || "",
     total: nota.total || ""
@@ -839,7 +838,6 @@ function EditarNVCompletaModal({ nota, detalles = [], onClose, onSave }) {
       notaEditada: {
         ...nota,
         numero: String(form.numero).trim(),
-        cotizacion: String(form.cotizacion || "").trim(),
         cliente: String(form.cliente).trim(),
         fecha: form.fecha,
         total: Number(form.total || 0)
@@ -898,7 +896,6 @@ function EditarNVCompletaModal({ nota, detalles = [], onClose, onSave }) {
 
         <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(170px, 1fr))", gap:10, marginBottom:14 }}>
           <label style={{ fontSize:12, color:COLORS.muted }}>Número NV<input value={form.numero} onChange={e=>cambiarForm("numero", e.target.value)} style={inputStyle}/></label>
-          <label style={{ fontSize:12, color:COLORS.muted }}>N° Cotización asociada<input value={form.cotizacion} onChange={e=>cambiarForm("cotizacion", e.target.value)} placeholder="Ej: 12143" style={inputStyle}/></label>
           <label style={{ fontSize:12, color:COLORS.muted }}>Cliente<input value={form.cliente} onChange={e=>cambiarForm("cliente", e.target.value)} style={inputStyle}/></label>
           <label style={{ fontSize:12, color:COLORS.muted }}>Fecha<input type="date" value={form.fecha || ""} onChange={e=>cambiarForm("fecha", e.target.value)} style={inputStyle}/></label>
           <label style={{ fontSize:12, color:COLORS.muted }}>Total<input type="number" value={form.total} onChange={e=>cambiarForm("total", e.target.value)} style={inputStyle}/></label>
@@ -931,183 +928,6 @@ function EditarNVCompletaModal({ nota, detalles = [], onClose, onSave }) {
                   <td style={{ padding:5, border:`1px solid ${COLORS.border}` }}><input type="number" value={fila.alto} onChange={e=>cambiarFila(idx,"alto",e.target.value)} style={inputStyle}/></td>
                   <td style={{ padding:5, border:`1px solid ${COLORS.border}` }}><input type="number" value={fila.ancho} onChange={e=>cambiarFila(idx,"ancho",e.target.value)} style={inputStyle}/></td>
                   <td style={{ padding:5, border:`1px solid ${COLORS.border}` }}><input value={fila.color} onChange={e=>cambiarFila(idx,"color",e.target.value)} style={inputStyle}/></td>
-                  <td style={{ padding:5, border:`1px solid ${COLORS.border}`, textAlign:"center" }}>
-                    <button onClick={()=>eliminarFila(idx)} disabled={filas.length===1} style={{ background:filas.length===1?COLORS.subtle:COLORS.danger, color:"#fff", border:"none", borderRadius:7, padding:"7px 9px", cursor:filas.length===1?"not-allowed":"pointer" }}>🗑</button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        <div style={{ display:"flex", justifyContent:"flex-end", gap:10, marginTop:16 }}>
-          <button onClick={onClose} style={{ padding:"10px 14px", borderRadius:8, border:`1px solid ${COLORS.border}`, background:COLORS.surface, color:COLORS.text, cursor:"pointer" }}>Cancelar</button>
-          <button onClick={guardar} style={{ padding:"10px 14px", borderRadius:8, border:"none", background:COLORS.success, color:"#fff", fontWeight:700, cursor:"pointer" }}>Guardar cambios</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-
-function EditarCotizacionCompletaModal({ cotizacion, detalles = [], onClose, onSave }) {
-  const [form, setForm] = useState({
-    numero: cotizacion.numero || "",
-    cliente: cotizacion.cliente || "",
-    fecha: cotizacion.fecha || "",
-    total: cotizacion.total || ""
-  });
-
-  const normalizarDetalle = (d, idx) => ({
-    unidad: d.unidad ?? d.cantidad ?? "",
-    tipo: d.tipo || d.descripcion || "",
-    largo: d.largo ?? d.alto ?? "",
-    ancho: d.ancho ?? "",
-    color: d.color || "",
-    valor: d.valor ?? "",
-    total: d.total ?? "",
-    orden: d.orden || idx + 1
-  });
-
-  const [filas, setFilas] = useState(
-    detalles.length > 0
-      ? detalles.map(normalizarDetalle)
-      : [{ unidad:"", tipo:"", largo:"", ancho:"", color:"", valor:"", total:"", orden:1 }]
-  );
-
-  useEffect(() => {
-    const cerrarConEsc = (e) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", cerrarConEsc);
-    return () => window.removeEventListener("keydown", cerrarConEsc);
-  }, [onClose]);
-
-  const inputStyle = {
-    width:"100%",
-    boxSizing:"border-box",
-    padding:"9px 10px",
-    borderRadius:8,
-    border:`1px solid ${COLORS.border}`,
-    background:COLORS.surface,
-    color:COLORS.text,
-    fontSize:13
-  };
-
-  const cambiarForm = (campo, valor) => setForm(prev => ({ ...prev, [campo]: valor }));
-  const cambiarFila = (idx, campo, valor) => setFilas(prev => prev.map((f, i) => i === idx ? { ...f, [campo]: valor } : f));
-  const agregarFila = () => setFilas(prev => [...prev, { unidad:"", tipo:"", largo:"", ancho:"", color:"", valor:"", total:"", orden:prev.length + 1 }]);
-  const eliminarFila = (idx) => setFilas(prev => prev.length === 1 ? prev : prev.filter((_, i) => i !== idx).map((f, i) => ({ ...f, orden:i + 1 })));
-
-  const guardar = () => {
-    if (!String(form.numero || "").trim()) {
-      alert("Debes ingresar el número de la cotización.");
-      return;
-    }
-    if (!String(form.cliente || "").trim()) {
-      alert("Debes ingresar el cliente.");
-      return;
-    }
-
-    const detallesLimpios = filas
-      .map((f, idx) => ({
-        unidad: Number(f.unidad || 0),
-        tipo: String(f.tipo || "").trim(),
-        largo: Number(f.largo || 0),
-        ancho: Number(f.ancho || 0),
-        color: String(f.color || "").trim(),
-        valor: Number(f.valor || 0),
-        total: Number(f.total || 0),
-        orden: idx + 1
-      }))
-      .filter(f => f.unidad || f.tipo || f.largo || f.ancho || f.color || f.valor || f.total);
-
-    onSave({
-      cotizacionOriginal: cotizacion,
-      cotizacionEditada: {
-        ...cotizacion,
-        numero: String(form.numero).trim(),
-        cliente: String(form.cliente).trim(),
-        fecha: form.fecha,
-        total: Number(form.total || 0)
-      },
-      detallesEditados: detallesLimpios
-    });
-  };
-
-  return (
-    <div
-      onClick={onClose}
-      style={{
-        position:"fixed",
-        inset:0,
-        background:"rgba(0,0,0,.65)",
-        display:"flex",
-        alignItems:"flex-start",
-        justifyContent:"center",
-        zIndex:9999,
-        overflowY:"auto",
-        padding:"18px 10px"
-      }}
-    >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        style={{
-          background:COLORS.card,
-          border:`1px solid ${COLORS.border}`,
-          borderRadius:14,
-          padding:18,
-          width:"min(1050px, 96vw)",
-          maxHeight:"90vh",
-          overflow:"auto",
-          color:COLORS.text,
-          boxSizing:"border-box"
-        }}
-      >
-        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:12, marginBottom:14 }}>
-          <div>
-            <h2 style={{ margin:0, color:COLORS.accent }}>Editar Cotización</h2>
-            <div style={{ fontSize:12, color:COLORS.muted }}>Corrige datos leídos desde Excel.</div>
-          </div>
-          <button onClick={onClose} style={{ background:COLORS.danger, color:"#fff", border:"none", borderRadius:8, padding:"8px 11px", cursor:"pointer", fontWeight:700 }}>Cerrar</button>
-        </div>
-
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(170px, 1fr))", gap:10, marginBottom:14 }}>
-          <label style={{ fontSize:12, color:COLORS.muted }}>Número cotización<input value={form.numero} onChange={e=>cambiarForm("numero", e.target.value)} style={inputStyle}/></label>
-          <label style={{ fontSize:12, color:COLORS.muted }}>Cliente<input value={form.cliente} onChange={e=>cambiarForm("cliente", e.target.value)} style={inputStyle}/></label>
-          <label style={{ fontSize:12, color:COLORS.muted }}>Fecha<input type="date" value={form.fecha || ""} onChange={e=>cambiarForm("fecha", e.target.value)} style={inputStyle}/></label>
-          <label style={{ fontSize:12, color:COLORS.muted }}>Total<input type="number" value={form.total} onChange={e=>cambiarForm("total", e.target.value)} style={inputStyle}/></label>
-        </div>
-
-        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", margin:"8px 0 10px", gap:10 }}>
-          <h3 style={{ margin:0, color:COLORS.success, fontSize:15 }}>Detalle de cotización</h3>
-          <button onClick={agregarFila} style={{ background:COLORS.success, color:"#fff", border:"none", borderRadius:8, padding:"8px 12px", cursor:"pointer", fontWeight:700 }}>+ Agregar fila</button>
-        </div>
-
-        <div style={{ overflowX:"auto" }}>
-          <table style={{ width:"100%", borderCollapse:"collapse", minWidth:900, fontSize:12 }}>
-            <thead>
-              <tr style={{ background:COLORS.surface }}>
-                <th style={{ padding:7, border:`1px solid ${COLORS.border}`, textAlign:"left" }}>Cantidad</th>
-                <th style={{ padding:7, border:`1px solid ${COLORS.border}`, textAlign:"left" }}>Tipo</th>
-                <th style={{ padding:7, border:`1px solid ${COLORS.border}`, textAlign:"left" }}>Largo</th>
-                <th style={{ padding:7, border:`1px solid ${COLORS.border}`, textAlign:"left" }}>Ancho</th>
-                <th style={{ padding:7, border:`1px solid ${COLORS.border}`, textAlign:"left" }}>Color</th>
-                <th style={{ padding:7, border:`1px solid ${COLORS.border}`, textAlign:"left" }}>Valor</th>
-                <th style={{ padding:7, border:`1px solid ${COLORS.border}`, textAlign:"left" }}>Total</th>
-                <th style={{ padding:7, border:`1px solid ${COLORS.border}`, textAlign:"center" }}>Eliminar</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filas.map((fila, idx) => (
-                <tr key={idx}>
-                  <td style={{ padding:5, border:`1px solid ${COLORS.border}` }}><input type="number" value={fila.unidad} onChange={e=>cambiarFila(idx,"unidad",e.target.value)} style={inputStyle}/></td>
-                  <td style={{ padding:5, border:`1px solid ${COLORS.border}` }}><input value={fila.tipo} onChange={e=>cambiarFila(idx,"tipo",e.target.value)} style={inputStyle}/></td>
-                  <td style={{ padding:5, border:`1px solid ${COLORS.border}` }}><input type="number" value={fila.largo} onChange={e=>cambiarFila(idx,"largo",e.target.value)} style={inputStyle}/></td>
-                  <td style={{ padding:5, border:`1px solid ${COLORS.border}` }}><input type="number" value={fila.ancho} onChange={e=>cambiarFila(idx,"ancho",e.target.value)} style={inputStyle}/></td>
-                  <td style={{ padding:5, border:`1px solid ${COLORS.border}` }}><input value={fila.color} onChange={e=>cambiarFila(idx,"color",e.target.value)} style={inputStyle}/></td>
-                  <td style={{ padding:5, border:`1px solid ${COLORS.border}` }}><input type="number" value={fila.valor} onChange={e=>cambiarFila(idx,"valor",e.target.value)} style={inputStyle}/></td>
-                  <td style={{ padding:5, border:`1px solid ${COLORS.border}` }}><input type="number" value={fila.total} onChange={e=>cambiarFila(idx,"total",e.target.value)} style={inputStyle}/></td>
                   <td style={{ padding:5, border:`1px solid ${COLORS.border}`, textAlign:"center" }}>
                     <button onClick={()=>eliminarFila(idx)} disabled={filas.length===1} style={{ background:filas.length===1?COLORS.subtle:COLORS.danger, color:"#fff", border:"none", borderRadius:7, padding:"7px 9px", cursor:filas.length===1?"not-allowed":"pointer" }}>🗑</button>
                   </td>
@@ -3306,15 +3126,7 @@ const { data: dataDetallesNV, error: errorDetallesNV } = await supabase
   .order("orden", { ascending: true });
 
 if (!errorDetallesNV) {
-  const detallesNVData = dataDetallesNV || [];
-  setDetallesNotasVenta(detallesNVData);
-  setNotas(prev => prev.map(n => {
-    if (n.cotizacion) return n;
-    const detalleRelacionado = detallesNVData.find(d => String(d.nota_venta_numero) === String(n.numero));
-    return detalleRelacionado?.cotizacion_numero
-      ? { ...n, cotizacion: String(detalleRelacionado.cotizacion_numero) }
-      : n;
-  }));
+  setDetallesNotasVenta(dataDetallesNV || []);
 }
 const { data: dataInventario, error: errorInventario } = await supabase
   .from("inventario_productos")
@@ -3398,7 +3210,6 @@ if (!errorAsientosContables) {
   const [notas, setNotas] = useState([]);
   const [abonosNV, setAbonosNV] = useState([]);
   const [modalCot, setModalCot] = useState(null);
-  const [modalEditarCotizacion, setModalEditarCotizacion] = useState(null);
   const [modalNV, setModalNV] = useState(null);
   const [modalEditarNV, setModalEditarNV] = useState(null);
   const [modalProduccion, setModalProduccion] = useState(null);
@@ -3528,108 +3339,10 @@ const mesSeleccionadoTexto = nombreMes(mesFiltro);
   };
   const fillEnd=startA+sweepA*(rate/100);
 
-  const guardarEdicionCompletaCotizacion = async ({ cotizacionOriginal, cotizacionEditada, detallesEditados }) => {
-    const idReal = Number(String(cotizacionOriginal.id).replace("supabase-", ""));
-    const numeroAnterior = String(cotizacionOriginal.numero || "");
-    const numeroNuevo = String(cotizacionEditada.numero || "").trim();
-
-    const { error } = await supabase
-      .from("cotizaciones")
-      .update({
-        numero: Number(numeroNuevo) || numeroNuevo,
-        cliente: cotizacionEditada.cliente,
-        fecha_creacion: cotizacionEditada.fecha,
-        total: Number(cotizacionEditada.total || 0)
-      })
-      .eq("id", idReal);
-
-    if (error) {
-      console.error(error);
-      alert("No se pudo actualizar la cotización.");
-      return;
-    }
-
-    await supabase
-      .from("detalles_cotizaciones")
-      .delete()
-      .eq("cotizacion_id", idReal);
-
-    let detallesGuardados = [];
-
-    if (detallesEditados.length > 0) {
-      const detallesParaGuardar = detallesEditados.map((d) => ({
-        cotizacion_id: idReal,
-        unidad: d.unidad,
-        tipo: d.tipo,
-        largo: d.largo,
-        ancho: d.ancho,
-        color: d.color,
-        valor: d.valor,
-        total: d.total
-      }));
-
-      const { data, error: errorInsert } = await supabase
-        .from("detalles_cotizaciones")
-        .insert(detallesParaGuardar)
-        .select("*");
-
-      if (errorInsert) {
-        console.error(errorInsert);
-        alert("La cotización se actualizó, pero hubo un error guardando el detalle.");
-        return;
-      }
-
-      detallesGuardados = data || detallesParaGuardar;
-    }
-
-    setCotizaciones(prev => prev.map(c =>
-      c.id === cotizacionOriginal.id
-        ? { ...c, ...cotizacionEditada, numero: numeroNuevo, total: Number(cotizacionEditada.total || 0) }
-        : c
-    ));
-
-    setNotas(prev => prev.map(n =>
-      String(n.cotizacion) === numeroAnterior
-        ? { ...n, cotizacion: numeroNuevo }
-        : n
-    ));
-
-    setDetallesCotizaciones(prev => [
-      ...prev.filter(d => Number(d.cotizacion_id) !== idReal),
-      ...detallesGuardados
-    ]);
-
-    if (modalCot?.id === cotizacionOriginal.id) {
-      setModalCot({ ...modalCot, ...cotizacionEditada, numero: numeroNuevo, total: Number(cotizacionEditada.total || 0) });
-    }
-
-    setModalEditarCotizacion(null);
-    alert("Cotización actualizada correctamente.");
-  };
-
   const guardarEdicionCompletaNV = async ({ notaOriginal, notaEditada, detallesEditados }) => {
     const idReal = Number(String(notaOriginal.id).replace("supabase-", ""));
     const numeroAnterior = String(notaOriginal.numero || "");
     const numeroNuevo = String(notaEditada.numero || "").trim();
-    const cotizacionNumero = String(notaEditada.cotizacion || "").trim();
-
-    let cotizacionId = null;
-
-    if (cotizacionNumero) {
-      const { data: cotizacionEncontrada, error: errorCotizacion } = await supabase
-        .from("cotizaciones")
-        .select("id")
-        .eq("numero", cotizacionNumero)
-        .maybeSingle();
-
-      if (errorCotizacion) {
-        console.error(errorCotizacion);
-      }
-
-      if (cotizacionEncontrada?.id) {
-        cotizacionId = cotizacionEncontrada.id;
-      }
-    }
 
     const { error } = await supabase
       .from("notas_venta")
@@ -3637,8 +3350,7 @@ const mesSeleccionadoTexto = nombreMes(mesFiltro);
         numero: Number(numeroNuevo) || numeroNuevo,
         cliente: notaEditada.cliente,
         fecha: notaEditada.fecha,
-        total: Number(notaEditada.total || 0),
-        cotizacion_id: cotizacionId
+        total: Number(notaEditada.total || 0)
       })
       .eq("id", idReal);
 
@@ -3668,7 +3380,7 @@ const mesSeleccionadoTexto = nombreMes(mesFiltro);
 
     const detallesParaGuardar = detallesEditados.map((d, idx) => ({
       nota_venta_numero: numeroNuevo,
-      cotizacion_numero: cotizacionNumero,
+      cotizacion_numero: String(notaEditada.cotizacion || ""),
       cliente: notaEditada.cliente,
       material: d.material,
       cantidad: d.cantidad,
@@ -3698,7 +3410,7 @@ const mesSeleccionadoTexto = nombreMes(mesFiltro);
 
     setNotas(prev => prev.map(n =>
       n.id === notaOriginal.id
-        ? { ...n, ...notaEditada, numero: numeroNuevo, cotizacion: cotizacionNumero || null, total: Number(notaEditada.total || 0) }
+        ? { ...n, ...notaEditada, numero: numeroNuevo, total: Number(notaEditada.total || 0) }
         : n
     ));
 
@@ -3708,7 +3420,7 @@ const mesSeleccionadoTexto = nombreMes(mesFiltro);
     ]);
 
     if (modalNV?.id === notaOriginal.id) {
-      setModalNV({ ...modalNV, ...notaEditada, numero: numeroNuevo, cotizacion: cotizacionNumero || null, total: Number(notaEditada.total || 0) });
+      setModalNV({ ...modalNV, ...notaEditada, numero: numeroNuevo, total: Number(notaEditada.total || 0) });
     }
 
     setModalEditarNV(null);
@@ -4944,6 +4656,7 @@ const maxRankingCantidad = Math.max(...rankingLaminas.map(r => r.cantidad), 1);
     {key:"dashboard",label:"📊 Resumen"},
     {key:"quotes",label:`📋 Cotizaciones (${filteredQuotes.length})`},
     {key:"sales",label:`✅ Notas de Venta (${filteredNotas.length})`},
+    {key:"sinmatch",label:`⚠ Sin cruzar (${sinCotizacion.length})`},
     {key:"produccion",label:`🏭 Producción`},
     {key:"inventario",label:`📦 Inventario`},
     {key:"venta_laminas",label:`🧾 Venta de Láminas (${ventasLaminasDelMes.length})`},
@@ -5044,21 +4757,31 @@ const maxRankingCantidad = Math.max(...rankingLaminas.map(r => r.cantidad), 1);
                     <div style={{ display:"flex", alignItems:"center", gap:8 }}>
                       <span style={{ color:COLORS.muted, fontSize:11 }}>{businessDaysSince(q.fecha)} días háb.</span>
                       <button onClick={()=>setModalCot(q)} style={{ background:COLORS.warning, border:"none", borderRadius:6, padding:"3px 10px", color:"#0f0e0c", fontWeight:700, cursor:"pointer", fontSize:11 }}>+ Nota</button>
-                   <button
-    onClick={() => setModalEditarCotizacion(q)}
+                   {q.status !== "vendida" && (
+  <button
+    onClick={async () => {
+      const idReal = String(q.id).replace("supabase-", "");
+      const nv = await aceptarCotizacion(idReal);
+
+      if (nv) {
+        alert(`Cotización aceptada. Nota de venta creada: ${nv}`);
+        window.location.reload();
+      }
+    }}
     style={{
-      background: COLORS.accent,
+      background: COLORS.success,
       border: "none",
       borderRadius: 6,
       padding: "4px 10px",
-      color: "#0f0e0c",
+      color: "#fff",
       cursor: "pointer",
       fontSize: 12,
       fontWeight: 700
     }}
   >
-    Editar
+    Aceptar
   </button>
+)}
                     </div>
                   </div>
                 ))}
@@ -5241,24 +4964,30 @@ const maxRankingCantidad = Math.max(...rankingLaminas.map(r => r.cantidad), 1);
                         <button onClick={()=>setModalCot(q)} style={{ background:seg.length>0?COLORS.subtle:"none", border:`1px solid ${COLORS.border}`, borderRadius:6, padding:"4px 10px", color:seg.length>0?COLORS.accent:COLORS.muted, cursor:"pointer", fontSize:12 }}>
                           📝 {seg.length>0?seg.length:""}
                         </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setModalEditarCotizacion(q);
-                          }}
-                          style={{
-                            background: COLORS.accent,
-                            border: "none",
-                            borderRadius: 6,
-                            padding: "4px 10px",
-                            color: "#0f0e0c",
-                            cursor: "pointer",
-                            fontSize: 12,
-                            fontWeight: 700
-                          }}
-                        >
-                          Editar
-                        </button>
+                        {q.status !== "vendida" && (
+  <button
+    onClick={async () => {
+      const idReal = String(q.id).replace("supabase-", "");
+      const nv = await aceptarCotizacion(idReal);
+
+      if (nv) {
+        alert(`Cotización aceptada. Nota de venta creada: ${nv}`);
+      }
+    }}
+    style={{
+      background: COLORS.success,
+      border: "none",
+      borderRadius: 6,
+      padding: "4px 10px",
+      color: "#fff",
+      cursor: "pointer",
+      fontSize: 12,
+      fontWeight: 700
+    }}
+  >
+    Aceptar
+  </button>
+)}
                       </div>
                     </div>
                     {last && (
@@ -6249,6 +5978,28 @@ const maxRankingCantidad = Math.max(...rankingLaminas.map(r => r.cantidad), 1);
           </div>
         )}
 
+        {tab==="sinmatch" && (
+          <div>
+            <h2 style={{ margin:"0 0 6px", fontFamily:"Georgia,serif", color:COLORS.warning, fontSize:17 }}>⚠ Ventas sin cotización cruzada</h2>
+            <p style={{ margin:"0 0 16px", fontSize:12, color:COLORS.muted }}>Notas sin cotización correspondiente en Mayo 2026.</p>
+            <div style={{ display:"flex", flexDirection:"column", gap:7 }}>
+              {sinCotizacion.map(s=>(
+                <div key={s.id} style={{ background:COLORS.card, border:`1px solid #3a2a10`, borderLeft:`4px solid ${COLORS.warning}`, borderRadius:10, padding:"11px 14px", display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:8 }}>
+                  <div>
+                    <span style={{ fontWeight:700, color:COLORS.warning, marginRight:8 }}>NV#{s.numero}</span>
+                    <span style={{ color:COLORS.text }}>{s.cliente}</span>
+                    <span style={{ color:COLORS.muted, marginLeft:8, fontSize:11 }}>{s.fecha}</span>
+                  </div>
+                  <span style={{ fontWeight:700, color:COLORS.warning }}>{fmt(s.total)}</span>
+                </div>
+              ))}
+            </div>
+            <div style={{ marginTop:16, background:COLORS.subtle, borderRadius:10, padding:14 }}>
+              <div style={{ fontSize:11, color:COLORS.muted, marginBottom:4 }}>TOTAL SIN COTIZACIÓN CRUZADA</div>
+              <div style={{ fontSize:22, fontWeight:700, color:COLORS.warning }}>{fmt(sinCotizacion.reduce((s,n)=>s+n.total,0))}</div>
+            </div>
+          </div>
+        )}
       </div>
 
       {modalCot && (
@@ -6260,16 +6011,6 @@ const maxRankingCantidad = Math.max(...rankingLaminas.map(r => r.cantidad), 1);
     seguimiento={seguimiento}
     onSave={saveSeguimiento}
     onClose={() => setModalCot(null)}
-  />
-)}
-{modalEditarCotizacion && (
-  <EditarCotizacionCompletaModal
-    cotizacion={modalEditarCotizacion}
-    detalles={detallesCotizaciones.filter(d =>
-      d.cotizacion_id === Number(String(modalEditarCotizacion.id).replace("supabase-", ""))
-    )}
-    onClose={() => setModalEditarCotizacion(null)}
-    onSave={guardarEdicionCompletaCotizacion}
   />
 )}
 {modalNuevoProducto && (
