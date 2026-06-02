@@ -3233,11 +3233,6 @@ export default function App() {
 
     if (ok) {
       await supabase
-        .from("notas_venta")
-        .update({ tipo_documento: "nv" })
-        .eq("numero", notaVenta);
-
-      await supabase
         .from("detalles_notas_venta_produccion")
         .delete()
         .eq("nota_venta_numero", String(notaVenta));
@@ -3306,148 +3301,6 @@ export default function App() {
 
     window.location.reload();
   };
-
-  const procesarBarranArchivo = async (file) => {
-    const data = await file.arrayBuffer();
-    const workbook = XLSX.read(data);
-    const sheet = workbook.Sheets["RESUMEN"];
-
-    if (!sheet) {
-      throw new Error(`No existe hoja RESUMEN en ${file.name}`);
-    }
-
-    const cotizacion = sheet["A2"]?.v;
-    const barran = sheet["B2"]?.v;
-    const cliente = sheet["C2"]?.v;
-    const fecha = sheet["D2"]?.v;
-    const total = sheet["E2"]?.v;
-
-    if (!barran || !total) {
-      throw new Error(`No se pudo leer número o total de Barrán en ${file.name}`);
-    }
-
-    const { data: existente, error: errorBuscar } = await supabase
-      .from("notas_venta")
-      .select("id")
-      .eq("numero", barran)
-      .eq("tipo_documento", "barran")
-      .maybeSingle();
-
-    if (errorBuscar) {
-      console.error(errorBuscar);
-      throw new Error(`No se pudo verificar si el Barrán ${barran} ya existe.`);
-    }
-
-    if (existente?.id) {
-      return false;
-    }
-
-    const { data: nuevoBarran, error: errorInsert } = await supabase
-      .from("notas_venta")
-      .insert({
-        numero: Number(barran) || barran,
-        cliente: String(cliente || ""),
-        fecha: excelDateToISO(fecha),
-        total: Number(total || 0),
-        cotizacion_id: null,
-        tipo_documento: "barran",
-        estado_pago: "pendiente",
-        materiales: "falta",
-        proceso: "en espera"
-      })
-      .select("*")
-      .single();
-
-    if (errorInsert) {
-      console.error(errorInsert);
-      throw new Error(`No se pudo importar el Barrán ${barran}.`);
-    }
-
-    const detallesProduccion = obtenerDetalleProduccionDesdeExcel(workbook);
-
-    await supabase
-      .from("detalles_notas_venta_produccion")
-      .delete()
-      .eq("nota_venta_numero", String(barran));
-
-    if (detallesProduccion.length > 0) {
-      const detallesParaGuardar = detallesProduccion.map((d) => ({
-        nota_venta_numero: String(barran),
-        cotizacion_numero: String(cotizacion || ""),
-        cliente: String(cliente || ""),
-        material: d.material,
-        cantidad: d.cantidad,
-        descripcion: d.descripcion,
-        alto: d.alto,
-        ancho: d.ancho,
-        color: d.color,
-        orden: d.orden
-      }));
-
-      const { error: errorDetalles } = await supabase
-        .from("detalles_notas_venta_produccion")
-        .insert(detallesParaGuardar);
-
-      if (errorDetalles) {
-        console.error(errorDetalles);
-        throw new Error(`El Barrán ${barran} se importó, pero falló el detalle de producción.`);
-      }
-    }
-
-    setNotas(prev => [{
-      id: `supabase-${nuevoBarran.id}`,
-      numero: String(nuevoBarran.numero),
-      cliente: nuevoBarran.cliente || "(sin cliente)",
-      fecha: nuevoBarran.fecha?.split("T")[0] || new Date().toISOString().split("T")[0],
-      total: nuevoBarran.total || 0,
-      cotizacion: null,
-      abono: nuevoBarran.abono || 0,
-      estado_pago: nuevoBarran.estado_pago || "pendiente",
-      materiales: nuevoBarran.materiales || "falta",
-      proceso: nuevoBarran.proceso || "en espera",
-      observaciones: nuevoBarran.observaciones || "",
-      fecha_entrega_estimada: nuevoBarran.fecha_entrega_estimada || "",
-      produccion_observaciones: nuevoBarran.produccion_observaciones || "",
-      mdf_cortado: nuevoBarran.mdf_cortado || false,
-      lamina_cortada: nuevoBarran.lamina_cortada || false,
-      tupizado: nuevoBarran.tupizado || false,
-      armado: nuevoBarran.armado || false,
-      pegado: nuevoBarran.pegado || false,
-      postformado: nuevoBarran.postformado || false,
-      tipo_documento: "barran"
-    }, ...prev]);
-
-    return true;
-  };
-
-  const importarBarranesExcel = async (event) => {
-    const files = Array.from(event.target.files || []);
-    if (files.length === 0) return;
-
-    let importadas = 0;
-    let saltadas = 0;
-    const errores = [];
-
-    for (const file of files) {
-      try {
-        const ok = await procesarBarranArchivo(file);
-        if (ok) importadas += 1;
-        else saltadas += 1;
-      } catch (error) {
-        console.error(error);
-        errores.push(`${file.name}: ${error.message || "Error desconocido"}`);
-      }
-    }
-
-    event.target.value = "";
-
-    alert(
-      `Importación de barranes terminada.\n\nImportados: ${importadas}\nDuplicados o saltados: ${saltadas}\nCon error: ${errores.length}` +
-      (errores.length ? `\n\nErrores:\n${errores.slice(0, 5).join("\n")}` : "")
-    );
-
-    window.location.reload();
-  };
   useEffect(() => {
   async function cargarDatos() {
     const dataCotizaciones = await obtenerCotizaciones();
@@ -3464,12 +3317,7 @@ export default function App() {
     const detallesData = await obtenerDetallesCotizaciones();
     setDetallesCotizaciones(detallesData);
 
-    const { data: dataNotasDirectas, error: errorNotasDirectas } = await supabase
-      .from("notas_venta")
-      .select("*, cotizaciones(numero, cliente, total)")
-      .order("fecha", { ascending: false });
-
-    const dataNotas = errorNotasDirectas ? await obtenerNotasVenta() : (dataNotasDirectas || []);
+    const dataNotas = await obtenerNotasVenta();
 
     const notasFormateadas = dataNotas.map((n) => ({
       id: `supabase-${n.id}`,
@@ -3491,7 +3339,6 @@ export default function App() {
       armado: n.armado || false,
       pegado: n.pegado || false,
       postformado: n.postformado || false,
-      tipo_documento: n.tipo_documento || "nv",
 }));
 
     setNotas(notasFormateadas);
@@ -3634,11 +3481,8 @@ if (!errorAsientosContables) {
     try { localStorage.setItem("sf-seguimiento", JSON.stringify(updated)); } catch(e) {}
   }, [seguimiento]);
 
-  const notasVenta = notas.filter(n => (n.tipo_documento || "nv") !== "barran");
-  const barranes = notas.filter(n => (n.tipo_documento || "nv") === "barran");
-
-  const convertedNums = new Set(notasVenta.filter(s => s.cotizacion).map(s => s.cotizacion));
-  const sinCotizacion = notasVenta.filter(s => !s.cotizacion);
+  const convertedNums = new Set(notas.filter(s => s.cotizacion).map(s => s.cotizacion));
+  const sinCotizacion = notas.filter(s => !s.cotizacion);
   const withStatus = cotizaciones.map(q => ({ ...q, status: getStatus(q, convertedNums) }));
   const cotizacionesFiltradas = withStatus.filter((q) =>
   q.cliente
@@ -3653,7 +3497,7 @@ if (!errorAsientosContables) {
   const rate = cotizaciones.length > 0
     ? (vendidas.length / cotizaciones.length * 100).toFixed(1)
     : 0;
-  const totalSold = notasVenta.reduce((s,n) => s + n.total, 0);
+  const totalSold = notas.reduce((s,n) => s + n.total, 0);
   const totalActiva = [...activas,...urgentes].reduce((s,q) => s + q.total, 0);
   const totalVencida = vencidas.reduce((s,q) => s + q.total, 0);
   const totalQuoted = cotizaciones.reduce((s,q) => s + q.total, 0);
@@ -3715,20 +3559,13 @@ const filteredQuotes = withStatus.filter(q =>
   return o[a.status]-o[b.status]; 
 });
 
-const filteredNotas = notasVenta.filter(s =>
-  (s.numero.toLowerCase().includes(filter.toLowerCase()) || s.cliente.toLowerCase().includes(filter.toLowerCase())) &&
-  cumpleFecha(s.fecha) &&
-  cumpleMes(s.fecha)
-);
-
-const filteredBarranes = barranes.filter(s =>
+const filteredNotas = notas.filter(s =>
   (s.numero.toLowerCase().includes(filter.toLowerCase()) || s.cliente.toLowerCase().includes(filter.toLowerCase())) &&
   cumpleFecha(s.fecha) &&
   cumpleMes(s.fecha)
 );
 
 const totalSoldFiltrado = filteredNotas.reduce((s,n) => s + Number(n.total || 0), 0);
-const totalBarranesFiltrado = filteredBarranes.reduce((s,n) => s + Number(n.total || 0), 0);
 const mesSeleccionadoTexto = nombreMes(mesFiltro);
 
   const r2=58,cx=80,cy=76;
@@ -4016,30 +3853,6 @@ const mesSeleccionadoTexto = nombreMes(mesFiltro);
   setModalNV(null);
 };
   
-const marcarComoEntregadaProduccion = async (nota) => {
-  const confirmar = window.confirm(`¿Marcar ${((nota.tipo_documento || "nv") === "barran" ? "Barrán" : "NV")} ${nota.numero} como entregada?\n\nDesaparecerá del listado de Producción.`);
-  if (!confirmar) return;
-
-  const idReal = Number(String(nota.id).replace("supabase-", ""));
-
-  const { error } = await supabase
-    .from("notas_venta")
-    .update({ proceso: "entregado" })
-    .eq("id", idReal);
-
-  if (error) {
-    console.error(error);
-    alert("No se pudo marcar como entregada.");
-    return;
-  }
-
-  setNotas(prev => prev.map(n =>
-    n.id === nota.id ? { ...n, proceso: "entregado" } : n
-  ));
-
-  setModalProduccion(null);
-};
-
 const guardarProduccion = async (notaActualizada) => {
   const idReal = Number(String(notaActualizada.id).replace("supabase-", ""));
 
@@ -5212,7 +5025,6 @@ const maxRankingCantidad = Math.max(...rankingLaminas.map(r => r.cantidad), 1);
     {key:"dashboard",label:"📊 Resumen"},
     {key:"quotes",label:`📋 Cotizaciones (${filteredQuotes.length})`},
     {key:"sales",label:`✅ Notas de Venta (${filteredNotas.length})`},
-    {key:"barranes",label:`🧾 Barranes (${filteredBarranes.length})`},
     {key:"produccion",label:`🏭 Producción`},
     {key:"inventario",label:`📦 Inventario`},
     {key:"venta_laminas",label:`🧾 Venta de Láminas (${ventasLaminasDelMes.length})`},
@@ -5241,28 +5053,6 @@ const maxRankingCantidad = Math.max(...rankingLaminas.map(r => r.cantidad), 1);
     accept=".xlsx,.xls"
     multiple
     onChange={importarExcel}
-    style={{ display: "none" }}
-  />
-</label>
-<label
-  style={{
-    padding: "10px 18px",
-    background: "#8b5cf6",
-    border: "none",
-    borderRadius: 8,
-    fontWeight: 700,
-    cursor: "pointer",
-    color: "#fff",
-    display: "inline-block",
-    marginLeft: 10
-  }}
->
-  Importar Barrán
-  <input
-    type="file"
-    accept=".xlsx,.xls"
-    multiple
-    onChange={importarBarranesExcel}
     style={{ display: "none" }}
   />
 </label>
@@ -5709,149 +5499,6 @@ const maxRankingCantidad = Math.max(...rankingLaminas.map(r => r.cantidad), 1);
             </div>
           </div>
         )}
-{tab==="barranes" && (
-          <div>
-            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:10, flexWrap:"wrap", marginBottom:14 }}>
-              <h2 style={{ margin:0, fontFamily:"Georgia,serif", color:COLORS.success, fontSize:17 }}>Barranes {mesSeleccionadoTexto}</h2>
-              <input
-                type="month"
-                value={mesFiltro}
-                onChange={(e) => setMesFiltro(e.target.value)}
-                style={{ background:COLORS.surface, border:`1px solid ${COLORS.border}`, color:COLORS.text, borderRadius:8, padding:"8px 10px" }}
-              />
-            </div>
-            <div style={{ marginBottom:14, background:COLORS.subtle, borderRadius:10, padding:"10px 16px", display:"flex", gap:24 }}>
-              <div><span style={{ fontSize:11, color:COLORS.muted }}>TOTAL BARRANES</span><div style={{ fontSize:18, fontWeight:700, color:COLORS.success }}>{fmt(totalBarranesFiltrado)}</div></div>
-              <div><span style={{ fontSize:11, color:COLORS.muted }}>BARRANES</span><div style={{ fontSize:18, fontWeight:700, color:COLORS.success }}>{filteredBarranes.length}</div></div>
-            </div>
-            <div style={{ display:"flex", flexDirection:"column", gap:7 }}>
-              {filteredBarranes.map(s=>(
-                <div
-                key={s.id}
-                onClick={() => setModalNV(s)}
-                style={{background:COLORS.card, border:`1px solid ${s.cotizacion?"#2d5040":COLORS.border}`, borderLeft:`4px solid ${s.cotizacion?COLORS.success:COLORS.warning}`, borderRadius:10, padding:"11px 14px", display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:8 }}>
-                  <div>
-  <div>
-    <span style={{ fontWeight:700, color:COLORS.success, marginRight:8 }}>Barrán #{s.numero}</span>
-    <span style={{ color:COLORS.text }}>{s.cliente}</span>
-    {s.cotizacion ? <span style={{ marginLeft:8, fontSize:11, color:COLORS.muted, background:COLORS.subtle, borderRadius:4, padding:"2px 7px" }}>← COT#{s.cotizacion}</span>
-      : <span style={{ marginLeft:8, fontSize:11, color:COLORS.warning, background:"#2a1f0a", borderRadius:4, padding:"2px 7px", border:`1px solid ${COLORS.warning}` }}>barrán interno</span>}
-    <span style={{ color:COLORS.muted, marginLeft:8, fontSize:11 }}>{s.fecha}</span>
-  </div>
-
-  <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginTop:7 }}>
-    <span style={{
-      padding:"3px 8px",
-      borderRadius:999,
-      fontSize:11,
-      fontWeight:700,
-      background:
-        s.estado_pago === "pagada"
-          ? "rgba(34,197,94,.18)"
-          : s.estado_pago === "abonada"
-          ? "rgba(250,204,21,.18)"
-          : "rgba(239,68,68,.18)",
-      color:
-        s.estado_pago === "pagada"
-          ? "#4ade80"
-          : s.estado_pago === "abonada"
-          ? "#fde047"
-          : "#f87171"
-    }}>
-      {s.estado_pago === "pagada"
-        ? "🟢 Pagada"
-        : s.estado_pago === "abonada"
-        ? "🟡 Abonada"
-        : "🔴 Pendiente"}
-    </span>
-
-    <span style={{
-      padding:"3px 8px",
-      borderRadius:999,
-      fontSize:11,
-      fontWeight:700,
-      background:"rgba(59,130,246,.15)",
-      color:"#60a5fa"
-    }}>
-      {s.proceso === "en espera" && "⏳ En espera"}
-      {s.proceso === "en producción" && "📦 En producción"}
-      {s.proceso === "terminado" && "✅ Terminado"}
-      {s.proceso === "entregado" && "🚚 Entregado"}
-    </span>
-
-    <span style={{
-      padding:"3px 8px",
-      borderRadius:999,
-      fontSize:11,
-      fontWeight:700,
-      background:
-        s.materiales === "comprados"
-          ? "rgba(34,197,94,.18)"
-          : "rgba(239,68,68,.18)",
-      color:
-        s.materiales === "comprados"
-          ? "#4ade80"
-          : "#f87171"
-    }}>
-      {s.materiales === "comprados"
-        ? "✅ Materiales"
-        : "❌ Falta material"}
-    </span>
-  </div>
-</div>
-                  <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-  <span style={{ fontWeight:700, color:COLORS.success }}>{fmt(s.total)}</span>
-
-  {String(s.id).startsWith("supabase-") && (
-    <button
-      onClick={(e) => {
-        e.stopPropagation();
-        setModalEditarNV(s);
-      }}
-      style={{
-        background: COLORS.subtle,
-        border: `1px solid ${COLORS.border}`,
-        borderRadius: 6,
-        padding: "4px 8px",
-        color: COLORS.accent,
-        cursor: "pointer",
-        fontSize: 11
-      }}
-    >
-      Editar
-    </button>
-  )}
-  <button
-  onClick={async (e) => {
-    e.stopPropagation();
-    const confirmar = confirm(`¿Eliminar Barrán ${s.numero}?`);
-
-    if (!confirmar) return;
-
-    const ok = await eliminarNotaVenta(s.id);
-
-    if (ok) {
-      window.location.reload();
-    }
-  }}
-  style={{
-    background: COLORS.danger,
-    border: "none",
-    borderRadius: 6,
-    padding: "4px 8px",
-    color: "#fff",
-    cursor: "pointer",
-    fontSize: 11
-  }}
->
-  Eliminar
-</button>
-</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
 {tab==="produccion" && (
   <div>
     <h2 style={{ margin:"0 0 14px", fontFamily:"Georgia,serif", color:COLORS.accent, fontSize:17 }}>
@@ -5920,7 +5567,7 @@ const maxRankingCantidad = Math.max(...rankingLaminas.map(r => r.cantidad), 1);
           >
             <div style={{ display:"flex", justifyContent:"space-between", gap:12, flexWrap:"wrap" }}>
               <div>
-  <b style={{ color:COLORS.success }}>{(n.tipo_documento || "nv") === "barran" ? "Barrán #" : "NV#"}{n.numero}</b>
+  <b style={{ color:COLORS.success }}>NV#{n.numero}</b>
   <span style={{ marginLeft:8 }}>{n.cliente}</span>
 
   <span style={{
@@ -5970,27 +5617,6 @@ const maxRankingCantidad = Math.max(...rankingLaminas.map(r => r.cantidad), 1);
                 Obs: {n.produccion_observaciones}
               </p>
             )}
-
-            <div style={{ marginTop:12, display:"flex", justifyContent:"flex-end" }}>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  marcarComoEntregadaProduccion(n);
-                }}
-                style={{
-                  background: COLORS.success,
-                  color: "#fff",
-                  border: "none",
-                  borderRadius: 8,
-                  padding: "7px 11px",
-                  fontWeight: 700,
-                  cursor: "pointer",
-                  fontSize: 12
-                }}
-              >
-                Entregada
-              </button>
-            </div>
           </div>
         ))}
     </div>
