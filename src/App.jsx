@@ -3079,77 +3079,76 @@ export default function App() {
 
   return detalles;
 };
-  const importarCotizacion = async (event) => {
-  const file = event.target.files[0];
-
-  if (!file) return;
-
+  const procesarCotizacionArchivo = async (file) => {
   const data = await file.arrayBuffer();
   const workbook = XLSX.read(data);
   const sheet = workbook.Sheets["RESUMEN"];
+
+  if (!sheet) {
+    throw new Error(`No existe hoja RESUMEN en ${file.name}`);
+  }
+
   const nombresHojas = workbook.SheetNames;
 
   const hojaDetalleNombre = nombresHojas.find(
-  n =>
-    n !== "RESUMEN" &&
-    n !== "NOTA DE VENTA" &&
-    n !== "PRODUCCION" &&
-    n !== "SEGUIMIENTO"
-);
+    n =>
+      n !== "RESUMEN" &&
+      n !== "NOTA DE VENTA" &&
+      n !== "PRODUCCION" &&
+      n !== "SEGUIMIENTO"
+  );
 
-  const hojaDetalle = workbook.Sheets[hojaDetalleNombre];
+  const detalles = [];
 
-  const detalleJson = XLSX.utils.sheet_to_json(hojaDetalle, {
-  header: 1,
-  defval: ""
-});
-  let inicioDetalle = -1;
+  if (hojaDetalleNombre && workbook.Sheets[hojaDetalleNombre]) {
+    const hojaDetalle = workbook.Sheets[hojaDetalleNombre];
 
-for (let i = 0; i < detalleJson.length; i++) {
-  const filaTexto = detalleJson[i].join(" ").toUpperCase();
+    const detalleJson = XLSX.utils.sheet_to_json(hojaDetalle, {
+      header: 1,
+      defval: ""
+    });
 
-  if (
-    filaTexto.includes("UNIDAD") &&
-    filaTexto.includes("TIPO")
-  ) {
-    inicioDetalle = i + 1;
-    break;
-  }
-}
+    let inicioDetalle = -1;
 
-const detalles = [];
+    for (let i = 0; i < detalleJson.length; i++) {
+      const filaTexto = detalleJson[i].join(" ").toUpperCase();
 
-if (inicioDetalle !== -1) {
-  for (let i = inicioDetalle; i < detalleJson.length; i++) {
-    const fila = detalleJson[i];
-
-    const textoFila = fila.join(" ").toUpperCase();
-
-    if (
-      textoFila.includes("NETO") ||
-      textoFila.includes("IVA") ||
-      textoFila.includes("TOTAL")
-    ) {
-      break;
+      if (
+        filaTexto.includes("UNIDAD") &&
+        filaTexto.includes("TIPO")
+      ) {
+        inicioDetalle = i + 1;
+        break;
+      }
     }
 
-    if (!fila[1]) continue;
+    if (inicioDetalle !== -1) {
+      for (let i = inicioDetalle; i < detalleJson.length; i++) {
+        const fila = detalleJson[i];
 
-    detalles.push({
-  unidad: Number(fila[1]) || 0,
-  tipo: String(fila[2] || ""),
-  largo: Number(fila[3]) || 0,
-  ancho: Number(fila[4]) || 0,
-  color: String(fila[5] || ""),
-  valor: Number(fila[6]) || 0,
-  total: Number(fila[7]) || 0,
-});
-  }
-}
+        const textoFila = fila.join(" ").toUpperCase();
 
-  if (!sheet) {
-    alert("No existe hoja RESUMEN");
-    return;
+        if (
+          textoFila.includes("NETO") ||
+          textoFila.includes("IVA") ||
+          textoFila.includes("TOTAL")
+        ) {
+          break;
+        }
+
+        if (!fila[1]) continue;
+
+        detalles.push({
+          unidad: Number(fila[1]) || 0,
+          tipo: String(fila[2] || ""),
+          largo: Number(fila[3]) || 0,
+          ancho: Number(fila[4]) || 0,
+          color: String(fila[5] || ""),
+          valor: Number(fila[6]) || 0,
+          total: Number(fila[7]) || 0,
+        });
+      }
+    }
   }
 
   const numero = sheet["A2"]?.v;
@@ -3157,100 +3156,151 @@ if (inicioDetalle !== -1) {
   const fecha = sheet["C2"]?.v;
   const total = sheet["D2"]?.v;
 
-  const ok = await importarCotizacionExcel({
-  numero,
-  cliente,
-  fecha,
-  total,
-  detalles
-});
-
-  if (ok) {
-    window.location.reload();
+  if (!numero || !total) {
+    throw new Error(`No se pudo leer número o total en ${file.name}`);
   }
+
+  const ok = await importarCotizacionExcel({
+    numero,
+    cliente,
+    fecha,
+    total,
+    detalles
+  });
+
+  return ok;
 };
-  const importarExcel = async (event) => {
-    const file = event.target.files[0]
 
-    if (!file) return
+  const importarCotizacion = async (event) => {
+  const files = Array.from(event.target.files || []);
 
-    const data = await file.arrayBuffer()
+  if (files.length === 0) return;
 
-    const workbook = XLSX.read(data)
+  let importadas = 0;
+  let saltadas = 0;
+  const errores = [];
 
-    const sheet = workbook.Sheets['RESUMEN']
+  for (const file of files) {
+    try {
+      const ok = await procesarCotizacionArchivo(file);
+      if (ok) importadas += 1;
+      else saltadas += 1;
+    } catch (error) {
+      console.error(error);
+      errores.push(`${file.name}: ${error.message || "Error desconocido"}`);
+    }
+  }
+
+  event.target.value = "";
+
+  alert(
+    `Importación de cotizaciones terminada.\n\nImportadas: ${importadas}\nDuplicadas o saltadas: ${saltadas}\nCon error: ${errores.length}` +
+    (errores.length ? `\n\nErrores:\n${errores.slice(0, 5).join("\n")}` : "")
+  );
+
+  window.location.reload();
+};
+  const procesarNotaVentaArchivo = async (file) => {
+    const data = await file.arrayBuffer();
+
+    const workbook = XLSX.read(data);
+
+    const sheet = workbook.Sheets['RESUMEN'];
 
     if (!sheet) {
-      alert('No existe hoja RESUMEN')
-      return
+      throw new Error(`No existe hoja RESUMEN en ${file.name}`);
     }
-    
 
-    const cotizacion = sheet['A2']?.v
-    const notaVenta = sheet['B2']?.v
-    const cliente = sheet['C2']?.v
-    const fecha = sheet['D2']?.v
-    const total = sheet['E2']?.v
+    const cotizacion = sheet['A2']?.v;
+    const notaVenta = sheet['B2']?.v;
+    const cliente = sheet['C2']?.v;
+    const fecha = sheet['D2']?.v;
+    const total = sheet['E2']?.v;
 
-    console.log({
+    if (!notaVenta || !total) {
+      throw new Error(`No se pudo leer número o total de NV en ${file.name}`);
+    }
+
+    const detallesProduccion = obtenerDetalleProduccionDesdeExcel(workbook);
+
+    const ok = await importarNotaVentaExcel({
       cotizacion,
       notaVenta,
       cliente,
       fecha,
       total
-    })
-    
-    const detallesProduccion = obtenerDetalleProduccionDesdeExcel(workbook);
+    });
 
-const ok = await importarNotaVentaExcel({
-  cotizacion,
-  notaVenta,
-  cliente,
-  fecha,
-  total
-});
+    if (ok) {
+      await supabase
+        .from("detalles_notas_venta_produccion")
+        .delete()
+        .eq("nota_venta_numero", String(notaVenta));
 
-if (ok) {
-  await supabase
-    .from("detalles_notas_venta_produccion")
-    .delete()
-    .eq("nota_venta_numero", String(notaVenta));
+      if (detallesProduccion.length > 0) {
+        const detallesParaGuardar = detallesProduccion.map((d) => ({
+          nota_venta_numero: String(notaVenta),
+          cotizacion_numero: String(cotizacion || ""),
+          cliente: String(cliente || ""),
+          material: d.material,
+          cantidad: d.cantidad,
+          descripcion: d.descripcion,
+          alto: d.alto,
+          ancho: d.ancho,
+          color: d.color,
+          orden: d.orden
+        }));
 
-  if (detallesProduccion.length > 0) {
-    const detallesParaGuardar = detallesProduccion.map((d) => ({
-      nota_venta_numero: String(notaVenta),
-      cotizacion_numero: String(cotizacion || ""),
-      cliente: String(cliente || ""),
-      material: d.material,
-      cantidad: d.cantidad,
-      descripcion: d.descripcion,
-      alto: d.alto,
-      ancho: d.ancho,
-      color: d.color,
-      orden: d.orden
-    }));
+        const { error: errorDetalles } = await supabase
+          .from("detalles_notas_venta_produccion")
+          .insert(detallesParaGuardar);
 
-    const { error: errorDetalles } = await supabase
-      .from("detalles_notas_venta_produccion")
-      .insert(detallesParaGuardar);
+        if (errorDetalles) {
+          console.error(errorDetalles);
+          throw new Error(`La NV ${notaVenta} se importó, pero falló el detalle de producción.`);
+        }
+      }
 
-    if (errorDetalles) {
-      console.error(errorDetalles);
-      alert("La nota se importó, pero hubo un error guardando el detalle de producción.");
-      return;
+      await crearAsientoVentaNVAutomatica({
+        fecha: excelDateToISO(fecha),
+        numero: notaVenta,
+        cliente,
+        totalVenta: total
+      });
     }
-  }
 
-  await crearAsientoVentaNVAutomatica({
-    fecha: excelDateToISO(fecha),
-    numero: notaVenta,
-    cliente,
-    totalVenta: total
-  });
+    return ok;
+  };
 
-  window.location.reload();
-}
-  }
+  const importarExcel = async (event) => {
+    const files = Array.from(event.target.files || []);
+
+    if (files.length === 0) return;
+
+    let importadas = 0;
+    let saltadas = 0;
+    const errores = [];
+
+    for (const file of files) {
+      try {
+        const ok = await procesarNotaVentaArchivo(file);
+        if (ok) importadas += 1;
+        else saltadas += 1;
+      } catch (error) {
+        console.error(error);
+        errores.push(`${file.name}: ${error.message || "Error desconocido"}`);
+      }
+    }
+
+    event.target.value = "";
+
+    alert(
+      `Importación de notas de venta terminada.\n\nImportadas: ${importadas}\nDuplicadas o saltadas: ${saltadas}\nCon error: ${errores.length}` +
+      (errores.length ? `\n\nErrores:\n${errores.slice(0, 5).join("\n")}` : "")
+    );
+
+    window.location.reload();
+  };
   useEffect(() => {
   async function cargarDatos() {
     const dataCotizaciones = await obtenerCotizaciones();
@@ -4278,10 +4328,7 @@ const crearAsientoCostoVentaLaminasAutomatico = async ({ fecha, numero, cliente,
   });
 };
 
-const importarOrdenCompraExcel = async (e) => {
-  const file = e.target.files?.[0];
-  if (!file) return;
-
+const leerProductosDesdeOC = async (file) => {
   const buffer = await file.arrayBuffer();
   const workbook = XLSX.read(buffer, { type: "array" });
 
@@ -4312,8 +4359,7 @@ const importarOrdenCompraExcel = async (e) => {
   }
 
   if (filaEncabezado === -1) {
-    alert("No se encontró la tabla de productos en la orden de compra.");
-    return;
+    throw new Error(`No se encontró la tabla de productos en ${file.name}`);
   }
 
   const productosEncontrados = [];
@@ -4335,11 +4381,39 @@ const importarOrdenCompraExcel = async (e) => {
   }
 
   if (productosEncontrados.length === 0) {
-    alert("No se encontraron productos válidos en la orden de compra.");
+    throw new Error(`No se encontraron productos válidos en ${file.name}`);
+  }
+
+  return productosEncontrados;
+};
+
+const importarOrdenCompraExcel = async (e) => {
+  const files = Array.from(e.target.files || []);
+  if (files.length === 0) return;
+
+  const productosTodos = [];
+  const errores = [];
+
+  for (const file of files) {
+    try {
+      const productosArchivo = await leerProductosDesdeOC(file);
+      productosTodos.push(...productosArchivo);
+    } catch (error) {
+      console.error(error);
+      errores.push(`${file.name}: ${error.message || "Error desconocido"}`);
+    }
+  }
+
+  if (productosTodos.length === 0) {
+    alert(
+      `No se pudo importar ninguna orden de compra.` +
+      (errores.length ? `\n\nErrores:\n${errores.slice(0, 5).join("\n")}` : "")
+    );
+    e.target.value = "";
     return;
   }
 
-  const agrupados = productosEncontrados.reduce((acc, item) => {
+  const agrupados = productosTodos.reduce((acc, item) => {
     const existente = acc.find(p => p.nombre === item.nombre);
 
     if (existente) {
@@ -4350,6 +4424,13 @@ const importarOrdenCompraExcel = async (e) => {
 
     return acc;
   }, []);
+
+  if (errores.length) {
+    alert(
+      `Se leyeron ${files.length - errores.length} archivo(s) correctamente y ${errores.length} con error.\n\n` +
+      `Se abrirá la vista previa con los productos válidos.\n\nErrores:\n${errores.slice(0, 5).join("\n")}`
+    );
+  }
 
   setPreviewOC(agrupados);
   setModalPreviewOC(true);
@@ -4970,6 +5051,7 @@ const maxRankingCantidad = Math.max(...rankingLaminas.map(r => r.cantidad), 1);
   <input
     type="file"
     accept=".xlsx,.xls"
+    multiple
     onChange={importarExcel}
     style={{ display: "none" }}
   />
@@ -4990,6 +5072,7 @@ const maxRankingCantidad = Math.max(...rankingLaminas.map(r => r.cantidad), 1);
   <input
     type="file"
     accept=".xlsx,.xls"
+    multiple
     onChange={importarCotizacion}
     style={{ display: "none" }}
   />
@@ -5577,6 +5660,7 @@ const maxRankingCantidad = Math.max(...rankingLaminas.map(r => r.cantidad), 1);
   <input
     type="file"
     accept=".xls,.xlsx"
+    multiple
     onChange={importarOrdenCompraExcel}
     style={{ display:"none" }}
   />

@@ -761,6 +761,371 @@ boxSizing:"border-box"
     </div>
   );
 }
+
+function EditarNVCompletaModal({ nota, detalles = [], onClose, onSave }) {
+  const [form, setForm] = useState({
+    numero: nota.numero || "",
+    cotizacion: nota.cotizacion || "",
+    cliente: nota.cliente || "",
+    fecha: nota.fecha || "",
+    total: nota.total || ""
+  });
+
+  const normalizarDetalle = (d, idx) => ({
+    material: d.material || "",
+    cantidad: d.cantidad ?? "",
+    descripcion: d.descripcion || d.tipo || "",
+    alto: d.alto ?? d.largo ?? "",
+    ancho: d.ancho ?? "",
+    color: d.color || "",
+    orden: d.orden || idx + 1
+  });
+
+  const [filas, setFilas] = useState(
+    detalles.length > 0
+      ? detalles.map(normalizarDetalle)
+      : [{ material:"", cantidad:"", descripcion:"", alto:"", ancho:"", color:"", orden:1 }]
+  );
+
+  useEffect(() => {
+    const cerrarConEsc = (e) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", cerrarConEsc);
+    return () => window.removeEventListener("keydown", cerrarConEsc);
+  }, [onClose]);
+
+  const cambiarForm = (campo, valor) => {
+    setForm(prev => ({ ...prev, [campo]: valor }));
+  };
+
+  const cambiarFila = (idx, campo, valor) => {
+    setFilas(prev => prev.map((f, i) => i === idx ? { ...f, [campo]: valor } : f));
+  };
+
+  const agregarFila = () => {
+    setFilas(prev => [...prev, { material:"", cantidad:"", descripcion:"", alto:"", ancho:"", color:"", orden:prev.length + 1 }]);
+  };
+
+  const eliminarFila = (idx) => {
+    setFilas(prev => prev.length === 1 ? prev : prev.filter((_, i) => i !== idx).map((f, i) => ({ ...f, orden:i + 1 })));
+  };
+
+  const guardar = () => {
+    if (!String(form.numero || "").trim()) {
+      alert("Debes ingresar el número de la Nota de Venta.");
+      return;
+    }
+
+    if (!String(form.cliente || "").trim()) {
+      alert("Debes ingresar el cliente.");
+      return;
+    }
+
+    const detallesLimpios = filas
+      .map((f, idx) => ({
+        material: String(f.material || "").trim(),
+        cantidad: Number(f.cantidad || 0),
+        descripcion: String(f.descripcion || "").trim(),
+        alto: Number(f.alto || 0),
+        ancho: Number(f.ancho || 0),
+        color: String(f.color || "").trim(),
+        orden: idx + 1
+      }))
+      .filter(f => f.material || f.descripcion || f.cantidad || f.alto || f.ancho || f.color);
+
+    onSave({
+      notaOriginal: nota,
+      notaEditada: {
+        ...nota,
+        numero: String(form.numero).trim(),
+        cotizacion: String(form.cotizacion || "").trim(),
+        cliente: String(form.cliente).trim(),
+        fecha: form.fecha,
+        total: Number(form.total || 0)
+      },
+      detallesEditados: detallesLimpios
+    });
+  };
+
+  const inputStyle = {
+    width:"100%",
+    boxSizing:"border-box",
+    padding:"9px 10px",
+    borderRadius:8,
+    border:`1px solid ${COLORS.border}`,
+    background:COLORS.surface,
+    color:COLORS.text,
+    fontSize:13
+  };
+
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position:"fixed",
+        inset:0,
+        background:"rgba(0,0,0,.65)",
+        display:"flex",
+        alignItems:"flex-start",
+        justifyContent:"center",
+        zIndex:9999,
+        overflowY:"auto",
+        padding:"18px 10px"
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background:COLORS.card,
+          border:`1px solid ${COLORS.border}`,
+          borderRadius:14,
+          padding:18,
+          width:"min(1050px, 96vw)",
+          maxHeight:"90vh",
+          overflow:"auto",
+          color:COLORS.text,
+          boxSizing:"border-box"
+        }}
+      >
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:12, marginBottom:14 }}>
+          <div>
+            <h2 style={{ margin:0, color:COLORS.accent }}>Editar Nota de Venta</h2>
+            <div style={{ fontSize:12, color:COLORS.muted }}>Corrige datos leídos desde Excel sin perder abonos ni gestión.</div>
+          </div>
+          <button onClick={onClose} style={{ background:COLORS.danger, color:"#fff", border:"none", borderRadius:8, padding:"8px 11px", cursor:"pointer", fontWeight:700 }}>Cerrar</button>
+        </div>
+
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(170px, 1fr))", gap:10, marginBottom:14 }}>
+          <label style={{ fontSize:12, color:COLORS.muted }}>Número NV<input value={form.numero} onChange={e=>cambiarForm("numero", e.target.value)} style={inputStyle}/></label>
+          <label style={{ fontSize:12, color:COLORS.muted }}>N° Cotización asociada<input value={form.cotizacion} onChange={e=>cambiarForm("cotizacion", e.target.value)} placeholder="Ej: 12143" style={inputStyle}/></label>
+          <label style={{ fontSize:12, color:COLORS.muted }}>Cliente<input value={form.cliente} onChange={e=>cambiarForm("cliente", e.target.value)} style={inputStyle}/></label>
+          <label style={{ fontSize:12, color:COLORS.muted }}>Fecha<input type="date" value={form.fecha || ""} onChange={e=>cambiarForm("fecha", e.target.value)} style={inputStyle}/></label>
+          <label style={{ fontSize:12, color:COLORS.muted }}>Total<input type="number" value={form.total} onChange={e=>cambiarForm("total", e.target.value)} style={inputStyle}/></label>
+        </div>
+
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", margin:"8px 0 10px", gap:10 }}>
+          <h3 style={{ margin:0, color:COLORS.success, fontSize:15 }}>Detalle del pedido</h3>
+          <button onClick={agregarFila} style={{ background:COLORS.success, color:"#fff", border:"none", borderRadius:8, padding:"8px 12px", cursor:"pointer", fontWeight:700 }}>+ Agregar fila</button>
+        </div>
+
+        <div style={{ overflowX:"auto" }}>
+          <table style={{ width:"100%", borderCollapse:"collapse", minWidth:850, fontSize:12 }}>
+            <thead>
+              <tr style={{ background:COLORS.surface }}>
+                <th style={{ padding:7, border:`1px solid ${COLORS.border}`, textAlign:"left" }}>Cantidad</th>
+                <th style={{ padding:7, border:`1px solid ${COLORS.border}`, textAlign:"left" }}>Material</th>
+                <th style={{ padding:7, border:`1px solid ${COLORS.border}`, textAlign:"left" }}>Detalle / Tipo</th>
+                <th style={{ padding:7, border:`1px solid ${COLORS.border}`, textAlign:"left" }}>Largo / Alto</th>
+                <th style={{ padding:7, border:`1px solid ${COLORS.border}`, textAlign:"left" }}>Ancho</th>
+                <th style={{ padding:7, border:`1px solid ${COLORS.border}`, textAlign:"left" }}>Color</th>
+                <th style={{ padding:7, border:`1px solid ${COLORS.border}`, textAlign:"center" }}>Eliminar</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filas.map((fila, idx) => (
+                <tr key={idx}>
+                  <td style={{ padding:5, border:`1px solid ${COLORS.border}` }}><input type="number" value={fila.cantidad} onChange={e=>cambiarFila(idx,"cantidad",e.target.value)} style={inputStyle}/></td>
+                  <td style={{ padding:5, border:`1px solid ${COLORS.border}` }}><input value={fila.material} onChange={e=>cambiarFila(idx,"material",e.target.value)} style={inputStyle}/></td>
+                  <td style={{ padding:5, border:`1px solid ${COLORS.border}` }}><input value={fila.descripcion} onChange={e=>cambiarFila(idx,"descripcion",e.target.value)} style={inputStyle}/></td>
+                  <td style={{ padding:5, border:`1px solid ${COLORS.border}` }}><input type="number" value={fila.alto} onChange={e=>cambiarFila(idx,"alto",e.target.value)} style={inputStyle}/></td>
+                  <td style={{ padding:5, border:`1px solid ${COLORS.border}` }}><input type="number" value={fila.ancho} onChange={e=>cambiarFila(idx,"ancho",e.target.value)} style={inputStyle}/></td>
+                  <td style={{ padding:5, border:`1px solid ${COLORS.border}` }}><input value={fila.color} onChange={e=>cambiarFila(idx,"color",e.target.value)} style={inputStyle}/></td>
+                  <td style={{ padding:5, border:`1px solid ${COLORS.border}`, textAlign:"center" }}>
+                    <button onClick={()=>eliminarFila(idx)} disabled={filas.length===1} style={{ background:filas.length===1?COLORS.subtle:COLORS.danger, color:"#fff", border:"none", borderRadius:7, padding:"7px 9px", cursor:filas.length===1?"not-allowed":"pointer" }}>🗑</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <div style={{ display:"flex", justifyContent:"flex-end", gap:10, marginTop:16 }}>
+          <button onClick={onClose} style={{ padding:"10px 14px", borderRadius:8, border:`1px solid ${COLORS.border}`, background:COLORS.surface, color:COLORS.text, cursor:"pointer" }}>Cancelar</button>
+          <button onClick={guardar} style={{ padding:"10px 14px", borderRadius:8, border:"none", background:COLORS.success, color:"#fff", fontWeight:700, cursor:"pointer" }}>Guardar cambios</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+function EditarCotizacionCompletaModal({ cotizacion, detalles = [], onClose, onSave }) {
+  const [form, setForm] = useState({
+    numero: cotizacion.numero || "",
+    cliente: cotizacion.cliente || "",
+    fecha: cotizacion.fecha || "",
+    total: cotizacion.total || ""
+  });
+
+  const normalizarDetalle = (d, idx) => ({
+    unidad: d.unidad ?? d.cantidad ?? "",
+    tipo: d.tipo || d.descripcion || "",
+    largo: d.largo ?? d.alto ?? "",
+    ancho: d.ancho ?? "",
+    color: d.color || "",
+    valor: d.valor ?? "",
+    total: d.total ?? "",
+    orden: d.orden || idx + 1
+  });
+
+  const [filas, setFilas] = useState(
+    detalles.length > 0
+      ? detalles.map(normalizarDetalle)
+      : [{ unidad:"", tipo:"", largo:"", ancho:"", color:"", valor:"", total:"", orden:1 }]
+  );
+
+  useEffect(() => {
+    const cerrarConEsc = (e) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", cerrarConEsc);
+    return () => window.removeEventListener("keydown", cerrarConEsc);
+  }, [onClose]);
+
+  const inputStyle = {
+    width:"100%",
+    boxSizing:"border-box",
+    padding:"9px 10px",
+    borderRadius:8,
+    border:`1px solid ${COLORS.border}`,
+    background:COLORS.surface,
+    color:COLORS.text,
+    fontSize:13
+  };
+
+  const cambiarForm = (campo, valor) => setForm(prev => ({ ...prev, [campo]: valor }));
+  const cambiarFila = (idx, campo, valor) => setFilas(prev => prev.map((f, i) => i === idx ? { ...f, [campo]: valor } : f));
+  const agregarFila = () => setFilas(prev => [...prev, { unidad:"", tipo:"", largo:"", ancho:"", color:"", valor:"", total:"", orden:prev.length + 1 }]);
+  const eliminarFila = (idx) => setFilas(prev => prev.length === 1 ? prev : prev.filter((_, i) => i !== idx).map((f, i) => ({ ...f, orden:i + 1 })));
+
+  const guardar = () => {
+    if (!String(form.numero || "").trim()) {
+      alert("Debes ingresar el número de la cotización.");
+      return;
+    }
+    if (!String(form.cliente || "").trim()) {
+      alert("Debes ingresar el cliente.");
+      return;
+    }
+
+    const detallesLimpios = filas
+      .map((f, idx) => ({
+        unidad: Number(f.unidad || 0),
+        tipo: String(f.tipo || "").trim(),
+        largo: Number(f.largo || 0),
+        ancho: Number(f.ancho || 0),
+        color: String(f.color || "").trim(),
+        valor: Number(f.valor || 0),
+        total: Number(f.total || 0),
+        orden: idx + 1
+      }))
+      .filter(f => f.unidad || f.tipo || f.largo || f.ancho || f.color || f.valor || f.total);
+
+    onSave({
+      cotizacionOriginal: cotizacion,
+      cotizacionEditada: {
+        ...cotizacion,
+        numero: String(form.numero).trim(),
+        cliente: String(form.cliente).trim(),
+        fecha: form.fecha,
+        total: Number(form.total || 0)
+      },
+      detallesEditados: detallesLimpios
+    });
+  };
+
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position:"fixed",
+        inset:0,
+        background:"rgba(0,0,0,.65)",
+        display:"flex",
+        alignItems:"flex-start",
+        justifyContent:"center",
+        zIndex:9999,
+        overflowY:"auto",
+        padding:"18px 10px"
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background:COLORS.card,
+          border:`1px solid ${COLORS.border}`,
+          borderRadius:14,
+          padding:18,
+          width:"min(1050px, 96vw)",
+          maxHeight:"90vh",
+          overflow:"auto",
+          color:COLORS.text,
+          boxSizing:"border-box"
+        }}
+      >
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:12, marginBottom:14 }}>
+          <div>
+            <h2 style={{ margin:0, color:COLORS.accent }}>Editar Cotización</h2>
+            <div style={{ fontSize:12, color:COLORS.muted }}>Corrige datos leídos desde Excel.</div>
+          </div>
+          <button onClick={onClose} style={{ background:COLORS.danger, color:"#fff", border:"none", borderRadius:8, padding:"8px 11px", cursor:"pointer", fontWeight:700 }}>Cerrar</button>
+        </div>
+
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(170px, 1fr))", gap:10, marginBottom:14 }}>
+          <label style={{ fontSize:12, color:COLORS.muted }}>Número cotización<input value={form.numero} onChange={e=>cambiarForm("numero", e.target.value)} style={inputStyle}/></label>
+          <label style={{ fontSize:12, color:COLORS.muted }}>Cliente<input value={form.cliente} onChange={e=>cambiarForm("cliente", e.target.value)} style={inputStyle}/></label>
+          <label style={{ fontSize:12, color:COLORS.muted }}>Fecha<input type="date" value={form.fecha || ""} onChange={e=>cambiarForm("fecha", e.target.value)} style={inputStyle}/></label>
+          <label style={{ fontSize:12, color:COLORS.muted }}>Total<input type="number" value={form.total} onChange={e=>cambiarForm("total", e.target.value)} style={inputStyle}/></label>
+        </div>
+
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", margin:"8px 0 10px", gap:10 }}>
+          <h3 style={{ margin:0, color:COLORS.success, fontSize:15 }}>Detalle de cotización</h3>
+          <button onClick={agregarFila} style={{ background:COLORS.success, color:"#fff", border:"none", borderRadius:8, padding:"8px 12px", cursor:"pointer", fontWeight:700 }}>+ Agregar fila</button>
+        </div>
+
+        <div style={{ overflowX:"auto" }}>
+          <table style={{ width:"100%", borderCollapse:"collapse", minWidth:900, fontSize:12 }}>
+            <thead>
+              <tr style={{ background:COLORS.surface }}>
+                <th style={{ padding:7, border:`1px solid ${COLORS.border}`, textAlign:"left" }}>Cantidad</th>
+                <th style={{ padding:7, border:`1px solid ${COLORS.border}`, textAlign:"left" }}>Tipo</th>
+                <th style={{ padding:7, border:`1px solid ${COLORS.border}`, textAlign:"left" }}>Largo</th>
+                <th style={{ padding:7, border:`1px solid ${COLORS.border}`, textAlign:"left" }}>Ancho</th>
+                <th style={{ padding:7, border:`1px solid ${COLORS.border}`, textAlign:"left" }}>Color</th>
+                <th style={{ padding:7, border:`1px solid ${COLORS.border}`, textAlign:"left" }}>Valor</th>
+                <th style={{ padding:7, border:`1px solid ${COLORS.border}`, textAlign:"left" }}>Total</th>
+                <th style={{ padding:7, border:`1px solid ${COLORS.border}`, textAlign:"center" }}>Eliminar</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filas.map((fila, idx) => (
+                <tr key={idx}>
+                  <td style={{ padding:5, border:`1px solid ${COLORS.border}` }}><input type="number" value={fila.unidad} onChange={e=>cambiarFila(idx,"unidad",e.target.value)} style={inputStyle}/></td>
+                  <td style={{ padding:5, border:`1px solid ${COLORS.border}` }}><input value={fila.tipo} onChange={e=>cambiarFila(idx,"tipo",e.target.value)} style={inputStyle}/></td>
+                  <td style={{ padding:5, border:`1px solid ${COLORS.border}` }}><input type="number" value={fila.largo} onChange={e=>cambiarFila(idx,"largo",e.target.value)} style={inputStyle}/></td>
+                  <td style={{ padding:5, border:`1px solid ${COLORS.border}` }}><input type="number" value={fila.ancho} onChange={e=>cambiarFila(idx,"ancho",e.target.value)} style={inputStyle}/></td>
+                  <td style={{ padding:5, border:`1px solid ${COLORS.border}` }}><input value={fila.color} onChange={e=>cambiarFila(idx,"color",e.target.value)} style={inputStyle}/></td>
+                  <td style={{ padding:5, border:`1px solid ${COLORS.border}` }}><input type="number" value={fila.valor} onChange={e=>cambiarFila(idx,"valor",e.target.value)} style={inputStyle}/></td>
+                  <td style={{ padding:5, border:`1px solid ${COLORS.border}` }}><input type="number" value={fila.total} onChange={e=>cambiarFila(idx,"total",e.target.value)} style={inputStyle}/></td>
+                  <td style={{ padding:5, border:`1px solid ${COLORS.border}`, textAlign:"center" }}>
+                    <button onClick={()=>eliminarFila(idx)} disabled={filas.length===1} style={{ background:filas.length===1?COLORS.subtle:COLORS.danger, color:"#fff", border:"none", borderRadius:7, padding:"7px 9px", cursor:filas.length===1?"not-allowed":"pointer" }}>🗑</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <div style={{ display:"flex", justifyContent:"flex-end", gap:10, marginTop:16 }}>
+          <button onClick={onClose} style={{ padding:"10px 14px", borderRadius:8, border:`1px solid ${COLORS.border}`, background:COLORS.surface, color:COLORS.text, cursor:"pointer" }}>Cancelar</button>
+          <button onClick={guardar} style={{ padding:"10px 14px", borderRadius:8, border:"none", background:COLORS.success, color:"#fff", fontWeight:700, cursor:"pointer" }}>Guardar cambios</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function SobrantesLaminadoModal({ producto, sobrantes, onClose, onSave, onUsar }) {
   const [filas, setFilas] = useState([{ largo:"", ancho:"" }]);
   const [largoBuscado, setLargoBuscado] = useState("");
@@ -1067,6 +1432,13 @@ function SobrantesLaminadoModal({ producto, sobrantes, onClose, onSave, onUsar }
   );
 }
 function PreviewOCModal({ productos, onClose, onConfirm }) {
+  const hoy = new Date().toISOString().split("T")[0];
+  const [fecha, setFecha] = useState(hoy);
+  const [documento, setDocumento] = useState("");
+  const [proveedor, setProveedor] = useState("");
+  const [totalCompra, setTotalCompra] = useState("");
+  const [estadoPago, setEstadoPago] = useState("pagado");
+
   useEffect(() => {
     const cerrarConEsc = (e) => {
       if (e.key === "Escape") onClose();
@@ -1078,6 +1450,26 @@ function PreviewOCModal({ productos, onClose, onConfirm }) {
       window.removeEventListener("keydown", cerrarConEsc);
     };
   }, [onClose]);
+
+  const inputStyle = {
+    width:"100%",
+    padding:"9px 10px",
+    borderRadius:8,
+    border:`1px solid ${COLORS.border}`,
+    background:COLORS.surface,
+    color:COLORS.text,
+    boxSizing:"border-box"
+  };
+
+  const confirmar = () => {
+    onConfirm({
+      fecha,
+      documento: documento.trim(),
+      proveedor: proveedor.trim(),
+      totalCompra: Number(totalCompra || 0),
+      estadoPago
+    });
+  };
 
   return (
     <div
@@ -1101,7 +1493,7 @@ function PreviewOCModal({ productos, onClose, onConfirm }) {
           border:`1px solid ${COLORS.border}`,
           borderRadius:14,
           padding:22,
-          width:"520px",
+          width:"620px",
           maxWidth:"92%",
           maxHeight:"90vh",
           overflowY:"auto",
@@ -1114,8 +1506,58 @@ function PreviewOCModal({ productos, onClose, onConfirm }) {
         </h2>
 
         <p style={{ color:COLORS.muted, fontSize:13 }}>
-          Revisa los productos antes de ingresarlos al inventario.
+          Revisa los productos antes de ingresarlos al inventario. Si ingresas el total de la compra, la app también creará el asiento contable automáticamente.
         </p>
+
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(160px, 1fr))", gap:10, margin:"12px 0" }}>
+          <div>
+            <label style={{ fontSize:12, color:COLORS.muted }}>Fecha</label>
+            <input type="date" value={fecha} onChange={(e)=>setFecha(e.target.value)} style={inputStyle} />
+          </div>
+          <div>
+            <label style={{ fontSize:12, color:COLORS.muted }}>Factura / OC</label>
+            <input value={documento} onChange={(e)=>setDocumento(e.target.value)} placeholder="Ej: F-12345" style={inputStyle} />
+          </div>
+          <div>
+            <label style={{ fontSize:12, color:COLORS.muted }}>Proveedor</label>
+            <input value={proveedor} onChange={(e)=>setProveedor(e.target.value)} placeholder="Ej: Imperial" style={inputStyle} />
+          </div>
+          <div>
+            <label style={{ fontSize:12, color:COLORS.muted }}>Total compra IVA incluido</label>
+            <input type="number" value={totalCompra} onChange={(e)=>setTotalCompra(e.target.value)} placeholder="Ej: 119000" style={inputStyle} />
+          </div>
+        </div>
+
+        <div style={{ display:"flex", gap:10, flexWrap:"wrap", margin:"0 0 14px" }}>
+          <button
+            onClick={() => setEstadoPago("pagado")}
+            style={{
+              padding:"8px 12px",
+              borderRadius:8,
+              border:`1px solid ${estadoPago === "pagado" ? COLORS.success : COLORS.border}`,
+              background:estadoPago === "pagado" ? COLORS.success : COLORS.surface,
+              color:estadoPago === "pagado" ? "#fff" : COLORS.text,
+              fontWeight:700,
+              cursor:"pointer"
+            }}
+          >
+            Pagado con banco
+          </button>
+          <button
+            onClick={() => setEstadoPago("pendiente")}
+            style={{
+              padding:"8px 12px",
+              borderRadius:8,
+              border:`1px solid ${estadoPago === "pendiente" ? COLORS.warn : COLORS.border}`,
+              background:estadoPago === "pendiente" ? COLORS.warn : COLORS.surface,
+              color:estadoPago === "pendiente" ? "#111" : COLORS.text,
+              fontWeight:700,
+              cursor:"pointer"
+            }}
+          >
+            Pendiente proveedor
+          </button>
+        </div>
 
         <div style={{ display:"flex", flexDirection:"column", gap:8, marginTop:12 }}>
           {productos.map((p, index) => (
@@ -1143,7 +1585,7 @@ function PreviewOCModal({ productos, onClose, onConfirm }) {
           </button>
 
           <button
-            onClick={onConfirm}
+            onClick={confirmar}
             style={{
               padding:"9px 14px",
               borderRadius:8,
@@ -2799,6 +3241,13 @@ if (ok) {
     }
   }
 
+  await crearAsientoVentaNVAutomatica({
+    fecha: excelDateToISO(fecha),
+    numero: notaVenta,
+    cliente,
+    totalVenta: total
+  });
+
   window.location.reload();
 }
   }
@@ -2823,9 +3272,9 @@ if (ok) {
     const notasFormateadas = dataNotas.map((n) => ({
       id: `supabase-${n.id}`,
       numero: String(n.numero),
-      cliente: n.cotizaciones?.cliente || n.cliente || "(sin cliente)",
+      cliente: n.cliente || n.cotizaciones?.cliente || "(sin cliente)",
       fecha: n.fecha?.split("T")[0] || new Date().toISOString().split("T")[0],
-     total: n.cotizaciones?.total || n.total || 0,
+     total: n.total || n.cotizaciones?.total || 0,
       cotizacion: n.cotizaciones?.numero ? String(n.cotizaciones.numero) : null,
       abono: n.abono || 0,
       estado_pago: n.estado_pago || "pendiente",
@@ -2857,7 +3306,15 @@ const { data: dataDetallesNV, error: errorDetallesNV } = await supabase
   .order("orden", { ascending: true });
 
 if (!errorDetallesNV) {
-  setDetallesNotasVenta(dataDetallesNV || []);
+  const detallesNVData = dataDetallesNV || [];
+  setDetallesNotasVenta(detallesNVData);
+  setNotas(prev => prev.map(n => {
+    if (n.cotizacion) return n;
+    const detalleRelacionado = detallesNVData.find(d => String(d.nota_venta_numero) === String(n.numero));
+    return detalleRelacionado?.cotizacion_numero
+      ? { ...n, cotizacion: String(detalleRelacionado.cotizacion_numero) }
+      : n;
+  }));
 }
 const { data: dataInventario, error: errorInventario } = await supabase
   .from("inventario_productos")
@@ -2917,7 +3374,7 @@ if (!errorAsientosContables) {
   const [filter, setFilter] = useState("");
   const [fechaDesde, setFechaDesde] = useState("");
   const [fechaHasta, setFechaHasta] = useState("");
-  const [mesFiltro, setMesFiltro] = useState("");
+  const [mesFiltro, setMesFiltro] = useState(new Date().toISOString().slice(0, 7));
   const [showVencidas, setShowVencidas] = useState(false);
   const [seguimiento, setSeguimiento] = useState({});
   const [cotizaciones, setCotizaciones] = useState([]);
@@ -2941,13 +3398,16 @@ if (!errorAsientosContables) {
   const [notas, setNotas] = useState([]);
   const [abonosNV, setAbonosNV] = useState([]);
   const [modalCot, setModalCot] = useState(null);
+  const [modalEditarCotizacion, setModalEditarCotizacion] = useState(null);
   const [modalNV, setModalNV] = useState(null);
+  const [modalEditarNV, setModalEditarNV] = useState(null);
   const [modalProduccion, setModalProduccion] = useState(null);
   const [filtroProduccion, setFiltroProduccion] = useState("todos");
   const [busquedaCliente, setBusquedaCliente] = useState("")
   const [ventasLaminas, setVentasLaminas] = useState([]);
   const [detallesVentasLaminas, setDetallesVentasLaminas] = useState([]);
   const [modalVentaLaminas, setModalVentaLaminas] = useState(null);
+  const [modalCxcClientes, setModalCxcClientes] = useState(false);
   const [mesVentaLaminas, setMesVentaLaminas] = useState(new Date().toISOString().slice(0, 7));
   const [topLaminasCantidad, setTopLaminasCantidad] = useState(10);
   const [asientosContables, setAsientosContables] = useState([]);
@@ -3005,21 +3465,38 @@ if (!errorAsientosContables) {
   return true;
 };
 
-const cumpleMes = (fecha) => {
-  if (!mesFiltro) return true;
-  if (!fecha) return false;
+const obtenerMesFecha = (fecha) => {
+  if (!fecha) return "";
+
+  const texto = String(fecha).trim();
+  const match = texto.match(/^(\d{4})-(\d{2})/);
+  if (match) return `${match[1]}-${match[2]}`;
 
   const fechaObj = new Date(fecha);
+  if (Number.isNaN(fechaObj.getTime())) return "";
+
   const year = fechaObj.getFullYear();
   const month = String(fechaObj.getMonth() + 1).padStart(2, "0");
+  return `${year}-${month}`;
+};
 
-  return `${year}-${month}` === mesFiltro;
+const nombreMes = (mes) => {
+  if (!mes) return "Todos los meses";
+  const [year, month] = mes.split("-");
+  const nombre = new Date(Number(year), Number(month) - 1, 1)
+    .toLocaleDateString("es-CL", { month:"long", year:"numeric" });
+  return nombre.charAt(0).toUpperCase() + nombre.slice(1);
+};
+
+const cumpleMes = (fecha) => {
+  if (!mesFiltro) return true;
+  return obtenerMesFecha(fecha) === mesFiltro;
 };
   const limpiarFiltros = () => {
   setSearch("");
   setFechaDesde("");
   setFechaHasta("");
-  setMesFiltro("");
+  setMesFiltro(new Date().toISOString().slice(0, 7));
 };
 
 const filteredQuotes = withStatus.filter(q =>
@@ -3038,6 +3515,9 @@ const filteredNotas = notas.filter(s =>
   cumpleMes(s.fecha)
 );
 
+const totalSoldFiltrado = filteredNotas.reduce((s,n) => s + Number(n.total || 0), 0);
+const mesSeleccionadoTexto = nombreMes(mesFiltro);
+
   const r2=58,cx=80,cy=76;
   const toRad=d=>d*Math.PI/180;
   const startA=200,sweepA=140;
@@ -3047,6 +3527,194 @@ const filteredNotas = notas.filter(s =>
     return `M ${p1.x} ${p1.y} A ${r2} ${r2} 0 ${e-s>180?1:0} 1 ${p2.x} ${p2.y}`;
   };
   const fillEnd=startA+sweepA*(rate/100);
+
+  const guardarEdicionCompletaCotizacion = async ({ cotizacionOriginal, cotizacionEditada, detallesEditados }) => {
+    const idReal = Number(String(cotizacionOriginal.id).replace("supabase-", ""));
+    const numeroAnterior = String(cotizacionOriginal.numero || "");
+    const numeroNuevo = String(cotizacionEditada.numero || "").trim();
+
+    const { error } = await supabase
+      .from("cotizaciones")
+      .update({
+        numero: Number(numeroNuevo) || numeroNuevo,
+        cliente: cotizacionEditada.cliente,
+        fecha_creacion: cotizacionEditada.fecha,
+        total: Number(cotizacionEditada.total || 0)
+      })
+      .eq("id", idReal);
+
+    if (error) {
+      console.error(error);
+      alert("No se pudo actualizar la cotización.");
+      return;
+    }
+
+    await supabase
+      .from("detalles_cotizaciones")
+      .delete()
+      .eq("cotizacion_id", idReal);
+
+    let detallesGuardados = [];
+
+    if (detallesEditados.length > 0) {
+      const detallesParaGuardar = detallesEditados.map((d) => ({
+        cotizacion_id: idReal,
+        unidad: d.unidad,
+        tipo: d.tipo,
+        largo: d.largo,
+        ancho: d.ancho,
+        color: d.color,
+        valor: d.valor,
+        total: d.total
+      }));
+
+      const { data, error: errorInsert } = await supabase
+        .from("detalles_cotizaciones")
+        .insert(detallesParaGuardar)
+        .select("*");
+
+      if (errorInsert) {
+        console.error(errorInsert);
+        alert("La cotización se actualizó, pero hubo un error guardando el detalle.");
+        return;
+      }
+
+      detallesGuardados = data || detallesParaGuardar;
+    }
+
+    setCotizaciones(prev => prev.map(c =>
+      c.id === cotizacionOriginal.id
+        ? { ...c, ...cotizacionEditada, numero: numeroNuevo, total: Number(cotizacionEditada.total || 0) }
+        : c
+    ));
+
+    setNotas(prev => prev.map(n =>
+      String(n.cotizacion) === numeroAnterior
+        ? { ...n, cotizacion: numeroNuevo }
+        : n
+    ));
+
+    setDetallesCotizaciones(prev => [
+      ...prev.filter(d => Number(d.cotizacion_id) !== idReal),
+      ...detallesGuardados
+    ]);
+
+    if (modalCot?.id === cotizacionOriginal.id) {
+      setModalCot({ ...modalCot, ...cotizacionEditada, numero: numeroNuevo, total: Number(cotizacionEditada.total || 0) });
+    }
+
+    setModalEditarCotizacion(null);
+    alert("Cotización actualizada correctamente.");
+  };
+
+  const guardarEdicionCompletaNV = async ({ notaOriginal, notaEditada, detallesEditados }) => {
+    const idReal = Number(String(notaOriginal.id).replace("supabase-", ""));
+    const numeroAnterior = String(notaOriginal.numero || "");
+    const numeroNuevo = String(notaEditada.numero || "").trim();
+    const cotizacionNumero = String(notaEditada.cotizacion || "").trim();
+
+    let cotizacionId = null;
+
+    if (cotizacionNumero) {
+      const { data: cotizacionEncontrada, error: errorCotizacion } = await supabase
+        .from("cotizaciones")
+        .select("id")
+        .eq("numero", cotizacionNumero)
+        .maybeSingle();
+
+      if (errorCotizacion) {
+        console.error(errorCotizacion);
+      }
+
+      if (cotizacionEncontrada?.id) {
+        cotizacionId = cotizacionEncontrada.id;
+      }
+    }
+
+    const { error } = await supabase
+      .from("notas_venta")
+      .update({
+        numero: Number(numeroNuevo) || numeroNuevo,
+        cliente: notaEditada.cliente,
+        fecha: notaEditada.fecha,
+        total: Number(notaEditada.total || 0),
+        cotizacion_id: cotizacionId
+      })
+      .eq("id", idReal);
+
+    if (error) {
+      console.error(error);
+      alert("No se pudo actualizar la Nota de Venta.");
+      return;
+    }
+
+    const { error: errorDeleteAnterior } = await supabase
+      .from("detalles_notas_venta_produccion")
+      .delete()
+      .eq("nota_venta_numero", numeroAnterior);
+
+    if (errorDeleteAnterior) {
+      console.error(errorDeleteAnterior);
+      alert("La NV se actualizó, pero no se pudo reemplazar el detalle anterior.");
+      return;
+    }
+
+    if (numeroNuevo !== numeroAnterior) {
+      await supabase
+        .from("detalles_notas_venta_produccion")
+        .delete()
+        .eq("nota_venta_numero", numeroNuevo);
+    }
+
+    const detallesParaGuardar = detallesEditados.map((d, idx) => ({
+      nota_venta_numero: numeroNuevo,
+      cotizacion_numero: cotizacionNumero,
+      cliente: notaEditada.cliente,
+      material: d.material,
+      cantidad: d.cantidad,
+      descripcion: d.descripcion,
+      alto: d.alto,
+      ancho: d.ancho,
+      color: d.color,
+      orden: idx + 1
+    }));
+
+    let detallesGuardados = [];
+
+    if (detallesParaGuardar.length > 0) {
+      const { data, error: errorInsert } = await supabase
+        .from("detalles_notas_venta_produccion")
+        .insert(detallesParaGuardar)
+        .select("*");
+
+      if (errorInsert) {
+        console.error(errorInsert);
+        alert("La NV se actualizó, pero hubo un error guardando el nuevo detalle.");
+        return;
+      }
+
+      detallesGuardados = data || detallesParaGuardar;
+    }
+
+    setNotas(prev => prev.map(n =>
+      n.id === notaOriginal.id
+        ? { ...n, ...notaEditada, numero: numeroNuevo, cotizacion: cotizacionNumero || null, total: Number(notaEditada.total || 0) }
+        : n
+    ));
+
+    setDetallesNotasVenta(prev => [
+      ...prev.filter(d => String(d.nota_venta_numero) !== numeroAnterior && String(d.nota_venta_numero) !== numeroNuevo),
+      ...detallesGuardados
+    ]);
+
+    if (modalNV?.id === notaOriginal.id) {
+      setModalNV({ ...modalNV, ...notaEditada, numero: numeroNuevo, cotizacion: cotizacionNumero || null, total: Number(notaEditada.total || 0) });
+    }
+
+    setModalEditarNV(null);
+    alert("Nota de Venta actualizada correctamente.");
+  };
+
   const guardarGestionNV = async (nvActualizada) => {
   const idReal = Number(String(nvActualizada.id).replace("supabase-", ""));
 
@@ -3122,6 +3790,15 @@ const filteredNotas = notas.filter(s =>
       ? { ...nvActualizada, abono: totalAbonado, estado_pago: estadoPago }
       : n
   ));
+
+  if (nuevoAbono > 0) {
+    await crearAsientoAbonoNVAutomatico({
+      fecha: new Date().toISOString().split("T")[0],
+      numero: nvActualizada.numero,
+      cliente: nvActualizada.cliente,
+      monto: nuevoAbono
+    });
+  }
 
   setModalNV(null);
 };
@@ -3469,6 +4146,138 @@ const guardarEdicionProducto = async (productoEditado) => {
 
   setModalEditarProducto(null);
 };
+const calcularNetoIvaDesdeTotal = (totalConIva) => {
+  const total = Math.round(Number(totalConIva || 0));
+  const neto = Math.round(total / 1.19);
+  const iva = total - neto;
+  return { total, neto, iva };
+};
+
+const guardarAsientosAutomaticos = async (asientos, opciones = {}) => {
+  const payload = asientos
+    .map(a => ({
+      fecha: a.fecha || new Date().toISOString().split("T")[0],
+      detalle: a.detalle || "",
+      desglose: a.desglose || "",
+      documento: a.documento || "",
+      definicion: a.definicion || "",
+      debe: Number(a.debe || 0),
+      haber: Number(a.haber || 0)
+    }))
+    .filter(a => a.detalle && (a.debe > 0 || a.haber > 0));
+
+  if (payload.length === 0) return true;
+
+  const totalDebe = payload.reduce((sum, a) => sum + Number(a.debe || 0), 0);
+  const totalHaber = payload.reduce((sum, a) => sum + Number(a.haber || 0), 0);
+
+  if (totalDebe !== totalHaber) {
+    alert("No se generó el asiento automático porque Debe y Haber no cuadran.");
+    return false;
+  }
+
+  if (opciones.reemplazarDocumento && opciones.reemplazarDesglose) {
+    await supabase
+      .from("asientos_contables")
+      .delete()
+      .eq("documento", opciones.reemplazarDocumento)
+      .eq("desglose", opciones.reemplazarDesglose);
+
+    setAsientosContables(prev => prev.filter(a =>
+      !(a.documento === opciones.reemplazarDocumento && a.desglose === opciones.reemplazarDesglose)
+    ));
+  }
+
+  const { data, error } = await supabase
+    .from("asientos_contables")
+    .insert(payload)
+    .select();
+
+  if (error) {
+    console.error(error);
+    alert("La operación se guardó, pero no se pudo crear el asiento contable automático.");
+    return false;
+  }
+
+  setAsientosContables(prev => [...(data || []), ...prev]);
+  return true;
+};
+
+const crearAsientoCompraAutomatica = async ({ fecha, documento, proveedor, totalCompra, estadoPago, detalleBase }) => {
+  const { total, neto, iva } = calcularNetoIvaDesdeTotal(totalCompra);
+  if (!total) return true;
+
+  const doc = documento || `COMPRA-${Date.now()}`;
+  const detalle = detalleBase || `Compra ${proveedor || "proveedor"}`;
+  const cuentaHaber = estadoPago === "pendiente" ? "Proveedores" : "Banco";
+
+  return guardarAsientosAutomaticos([
+    { fecha, detalle, desglose:"Compra automática", documento:doc, definicion:"Compras", debe:neto, haber:0 },
+    { fecha, detalle, desglose:"Compra automática", documento:doc, definicion:"IVA CF", debe:iva, haber:0 },
+    { fecha, detalle, desglose:"Compra automática", documento:doc, definicion:cuentaHaber, debe:0, haber:total }
+  ]);
+};
+
+const crearAsientoVentaNVAutomatica = async ({ fecha, numero, cliente, totalVenta }) => {
+  const { total, neto, iva } = calcularNetoIvaDesdeTotal(totalVenta);
+  if (!total) return true;
+
+  const documento = `NV-${numero}`;
+
+  return guardarAsientosAutomaticos([
+    { fecha, detalle:`Venta NV ${numero} - ${cliente || "cliente"}`, desglose:"Venta nota de venta", documento, definicion:"Clientes", debe:total, haber:0 },
+    { fecha, detalle:`Venta NV ${numero} - ${cliente || "cliente"}`, desglose:"Venta nota de venta", documento, definicion:"Ventas", debe:0, haber:neto },
+    { fecha, detalle:`Venta NV ${numero} - ${cliente || "cliente"}`, desglose:"Venta nota de venta", documento, definicion:"IVA DF", debe:0, haber:iva }
+  ], {
+    reemplazarDocumento: documento,
+    reemplazarDesglose: "Venta nota de venta"
+  });
+};
+
+const crearAsientoAbonoNVAutomatico = async ({ fecha, numero, cliente, monto }) => {
+  const total = Math.round(Number(monto || 0));
+  if (!total) return true;
+
+  const documento = `ABONO-NV-${numero}-${Date.now()}`;
+
+  return guardarAsientosAutomaticos([
+    { fecha, detalle:`Abono NV ${numero} - ${cliente || "cliente"}`, desglose:"Abono cliente", documento, definicion:"Banco", debe:total, haber:0 },
+    { fecha, detalle:`Abono NV ${numero} - ${cliente || "cliente"}`, desglose:"Abono cliente", documento, definicion:"Clientes", debe:0, haber:total }
+  ]);
+};
+
+const crearAsientoVentaLaminasAutomatica = async ({ fecha, numero, cliente, totalVenta }) => {
+  const { total, neto, iva } = calcularNetoIvaDesdeTotal(totalVenta);
+  if (!total) return true;
+
+  const documento = `VL-${numero}`;
+
+  return guardarAsientosAutomaticos([
+    { fecha, detalle:`Venta láminas ${numero} - ${cliente || "cliente"}`, desglose:"Venta láminas", documento, definicion:"Banco", debe:total, haber:0 },
+    { fecha, detalle:`Venta láminas ${numero} - ${cliente || "cliente"}`, desglose:"Venta láminas", documento, definicion:"Ventas", debe:0, haber:neto },
+    { fecha, detalle:`Venta láminas ${numero} - ${cliente || "cliente"}`, desglose:"Venta láminas", documento, definicion:"IVA DF", debe:0, haber:iva }
+  ], {
+    reemplazarDocumento: documento,
+    reemplazarDesglose: "Venta láminas"
+  });
+};
+
+const crearAsientoCostoVentaLaminasAutomatico = async ({ fecha, numero, cliente, costoCompra }) => {
+  const { total, neto, iva } = calcularNetoIvaDesdeTotal(costoCompra);
+  if (!total) return true;
+
+  const documento = `VL-${numero}`;
+
+  return guardarAsientosAutomaticos([
+    { fecha, detalle:`Costo láminas ${numero} - ${cliente || "cliente"}`, desglose:"Costo venta láminas", documento, definicion:"Compras", debe:neto, haber:0 },
+    { fecha, detalle:`Costo láminas ${numero} - ${cliente || "cliente"}`, desglose:"Costo venta láminas", documento, definicion:"IVA CF", debe:iva, haber:0 },
+    { fecha, detalle:`Costo láminas ${numero} - ${cliente || "cliente"}`, desglose:"Costo venta láminas", documento, definicion:"Banco", debe:0, haber:total }
+  ], {
+    reemplazarDocumento: documento,
+    reemplazarDesglose: "Costo venta láminas"
+  });
+};
+
 const importarOrdenCompraExcel = async (e) => {
   const file = e.target.files?.[0];
   if (!file) return;
@@ -3573,7 +4382,7 @@ const detectarUnidadProducto = (nombre) => {
   return "unidades";
 };
 
-const confirmarImportacionOC = async () => {
+const confirmarImportacionOC = async (datosCompra = {}) => {
   if (previewOC.length === 0) return;
 
   for (const item of previewOC) {
@@ -3657,6 +4466,17 @@ const confirmarImportacionOC = async () => {
         [...prev, nuevoProducto].sort((a,b) => a.nombre.localeCompare(b.nombre))
       );
     }
+  }
+
+  if (Number(datosCompra.totalCompra || 0) > 0) {
+    await crearAsientoCompraAutomatica({
+      fecha: datosCompra.fecha || new Date().toISOString().split("T")[0],
+      documento: datosCompra.documento || `OC-${Date.now()}`,
+      proveedor: datosCompra.proveedor || "Proveedor",
+      totalCompra: datosCompra.totalCompra,
+      estadoPago: datosCompra.estadoPago || "pagado",
+      detalleBase: `Compra OC ${datosCompra.documento || "sin documento"} ${datosCompra.proveedor || ""}`.trim()
+    });
   }
 
   setPreviewOC([]);
@@ -3870,6 +4690,14 @@ const importarVentaLaminasExcel = async (event) => {
   }
 
   setVentasLaminas(prev => [nuevaVenta, ...prev]);
+
+  await crearAsientoVentaLaminasAutomatica({
+    fecha,
+    numero,
+    cliente,
+    totalVenta
+  });
+
   setTab("venta_laminas");
   event.target.value = "";
   alert("Venta de láminas importada correctamente.");
@@ -3890,6 +4718,14 @@ const guardarCostoVentaLaminas = async (venta, costoCompraTotal) => {
 
   const actualizada = data[0];
   setVentasLaminas(prev => prev.map(v => v.id === actualizada.id ? actualizada : v));
+
+  await crearAsientoCostoVentaLaminasAutomatico({
+    fecha: actualizada.fecha || new Date().toISOString().split("T")[0],
+    numero: actualizada.numero,
+    cliente: actualizada.cliente,
+    costoCompra: costoCompraTotal
+  });
+
   setModalVentaLaminas(actualizada);
 };
 
@@ -3993,7 +4829,7 @@ const eliminarAsientoContable = async (asiento) => {
 };
 
 const asientosContablesFiltrados = asientosContables.filter(a => {
-  const cumpleMesContabilidad = !mesContabilidad || String(a.fecha || "").slice(0, 7) === mesContabilidad;
+  const cumpleMesContabilidad = !mesContabilidad || obtenerMesFecha(a.fecha) === mesContabilidad;
   const texto = `${a.detalle || ""} ${a.desglose || ""} ${a.documento || ""} ${a.definicion || ""}`.toLowerCase();
   const cumpleBusqueda = !busquedaContabilidad || texto.includes(busquedaContabilidad.toLowerCase());
   return cumpleMesContabilidad && cumpleBusqueda;
@@ -4001,23 +4837,49 @@ const asientosContablesFiltrados = asientosContables.filter(a => {
 
 const resumenContabilidad = asientosContablesFiltrados.reduce((acc, a) => {
   const detalle = String(a.detalle || "").toUpperCase().trim();
+  const definicion = String(a.definicion || "").toUpperCase().trim();
   const debe = Number(a.debe || 0);
   const haber = Number(a.haber || 0);
 
   acc.debe += debe;
   acc.haber += haber;
 
-  if (detalle === "IVA CF" || detalle.includes("IVA CREDITO") || detalle.includes("IVA CRÉDITO")) acc.ivaCf += debe - haber;
-  if (detalle === "IVA DF" || detalle.includes("IVA DEBITO") || detalle.includes("IVA DÉBITO")) acc.ivaDf += haber - debe;
-  if (detalle === "BANCO" || detalle.includes("BANCO")) acc.banco += debe - haber;
-  if (detalle === "CAJA" || detalle.includes("CAJA")) acc.caja += debe - haber;
-  if (detalle === "CLIENTE" || detalle.includes("CLIENTE") || detalle.includes("CXC") || detalle.includes("CUENTAS X COBRAR")) acc.cxc += debe - haber;
+  if (definicion === "IVA CF" || definicion.includes("IVA CREDITO") || definicion.includes("IVA CRÉDITO")) acc.ivaCf += debe - haber;
+  if (definicion === "IVA DF" || definicion.includes("IVA DEBITO") || definicion.includes("IVA DÉBITO")) acc.ivaDf += haber - debe;
+  if (definicion === "BANCO" || definicion.includes("BANCO")) acc.banco += debe - haber;
+  if (definicion === "CAJA" || definicion.includes("CAJA")) acc.caja += debe - haber;
+  if (definicion === "CLIENTES" || definicion.includes("CLIENTE") || definicion.includes("CXC") || definicion.includes("CUENTAS X COBRAR")) acc.cxc += debe - haber;
 
   return acc;
 }, { debe:0, haber:0, ivaCf:0, ivaDf:0, banco:0, caja:0, cxc:0 });
 
 const diferenciaContabilidad = resumenContabilidad.debe - resumenContabilidad.haber;
+const detalleCxcNotas = notas
+  .filter(n => !mesContabilidad || obtenerMesFecha(n.fecha) === mesContabilidad)
+  .map(n => {
+    const idNota = Number(String(n.id).replace("supabase-", ""));
 
+    const total = Number(n.total || 0);
+
+    const abonadoDesdeNota = Number(n.abono || n.abonado || 0);
+
+    const abonadoDesdeHistorial = abonosNV
+      .filter(a => Number(a.nota_venta_id) === idNota)
+      .reduce((sum, a) => sum + Number(a.monto || 0), 0);
+
+    const abonado = Math.max(abonadoDesdeNota, abonadoDesdeHistorial);
+
+    const saldo = Math.max(total - abonado, 0);
+
+    return {
+      numero: n.numero || n.nota_venta || n.id,
+      cliente: n.cliente || "Sin cliente",
+      saldo
+    };
+  })
+  .filter(n => n.saldo > 0);
+
+const totalCxcNotas = detalleCxcNotas.reduce((sum, n) => sum + Number(n.saldo || 0), 0);
 const eliminarVentaLaminas = async (venta) => {
   const confirmar = window.confirm(
     `¿Seguro que quieres eliminar la venta de láminas #${venta.numero}?
@@ -4050,7 +4912,7 @@ Esta acción no se puede deshacer.`
 
 const ventasLaminasDelMes = ventasLaminas.filter(v => {
   if (!mesVentaLaminas) return true;
-  return String(v.fecha || "").slice(0, 7) === mesVentaLaminas;
+  return obtenerMesFecha(v.fecha) === mesVentaLaminas;
 });
 
 const resumenVentasLaminasMes = ventasLaminasDelMes.reduce((acc, venta) => {
@@ -4080,13 +4942,12 @@ const maxRankingCantidad = Math.max(...rankingLaminas.map(r => r.cantidad), 1);
 
   const tabs=[
     {key:"dashboard",label:"📊 Resumen"},
-    {key:"quotes",label:`📋 Cotizaciones (${cotizaciones.length})`},
-    {key:"sales",label:`✅ Notas de Venta (${notas.length})`},
-    {key:"sinmatch",label:`⚠ Sin cruzar (${sinCotizacion.length})`},
+    {key:"quotes",label:`📋 Cotizaciones (${filteredQuotes.length})`},
+    {key:"sales",label:`✅ Notas de Venta (${filteredNotas.length})`},
     {key:"produccion",label:`🏭 Producción`},
     {key:"inventario",label:`📦 Inventario`},
-    {key:"venta_laminas",label:`🧾 Venta de Láminas (${ventasLaminas.length})`},
-    {key:"contabilidad",label:`📚 Contabilidad (${asientosContables.length})`},
+    {key:"venta_laminas",label:`🧾 Venta de Láminas (${ventasLaminasDelMes.length})`},
+    {key:"contabilidad",label:`📚 Contabilidad (${asientosContablesFiltrados.length})`},
   ];
 
   return (
@@ -4154,13 +5015,7 @@ const maxRankingCantidad = Math.max(...rankingLaminas.map(r => r.cantidad), 1);
   />
 </label>
 </div>
-      <div style={{ background:COLORS.surface, borderBottom:`1px solid ${COLORS.border}`, padding:"14px 24px", display:"flex", alignItems:"center", gap:12 }}>
-        <span style={{ fontSize:24 }}>🪑</span>
-        <div>
-          <h1 style={{ margin:0, fontSize:17, color:COLORS.accent, fontFamily:"Georgia,serif" }}>Muebles Santa Fe · Panel de Conversión</h1>
-          <span style={{ fontSize:11, color:COLORS.muted }}>Mayo 2026 · {cotizaciones.length} cotizaciones · {notas.length} notas de venta</span>
-        </div>
-      </div>
+      
 
       <div style={{ display:"flex", gap:2, padding:"12px 24px 0", borderBottom:`1px solid ${COLORS.border}`, overflowX:"auto" }}>
         {tabs.map(t=>(
@@ -4168,7 +5023,7 @@ const maxRankingCantidad = Math.max(...rankingLaminas.map(r => r.cantidad), 1);
         ))}
       </div>
 
-      <div style={{ padding:"22px 24px", maxWidth:1100, margin:"0 auto" }}>
+      <div style={{ padding:"clamp(12px, 4vw, 22px)", maxWidth:1100, margin:"0 auto" }}>
         {tab==="dashboard" && (
           <div>
             <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))", gap:12, marginBottom:20 }}>
@@ -4189,31 +5044,21 @@ const maxRankingCantidad = Math.max(...rankingLaminas.map(r => r.cantidad), 1);
                     <div style={{ display:"flex", alignItems:"center", gap:8 }}>
                       <span style={{ color:COLORS.muted, fontSize:11 }}>{businessDaysSince(q.fecha)} días háb.</span>
                       <button onClick={()=>setModalCot(q)} style={{ background:COLORS.warning, border:"none", borderRadius:6, padding:"3px 10px", color:"#0f0e0c", fontWeight:700, cursor:"pointer", fontSize:11 }}>+ Nota</button>
-                   {q.status !== "vendida" && (
-  <button
-    onClick={async () => {
-      const idReal = String(q.id).replace("supabase-", "");
-      const nv = await aceptarCotizacion(idReal);
-
-      if (nv) {
-        alert(`Cotización aceptada. Nota de venta creada: ${nv}`);
-        window.location.reload();
-      }
-    }}
+                   <button
+    onClick={() => setModalEditarCotizacion(q)}
     style={{
-      background: COLORS.success,
+      background: COLORS.accent,
       border: "none",
       borderRadius: 6,
       padding: "4px 10px",
-      color: "#fff",
+      color: "#0f0e0c",
       cursor: "pointer",
       fontSize: 12,
       fontWeight: 700
     }}
   >
-    Aceptar
+    Editar
   </button>
-)}
                     </div>
                   </div>
                 ))}
@@ -4287,7 +5132,7 @@ const maxRankingCantidad = Math.max(...rankingLaminas.map(r => r.cantidad), 1);
     border: "1px solid #444"
   }}
 />
-              <h2 style={{ margin:0, fontFamily:"Georgia,serif", color:COLORS.accent, fontSize:17 }}>Cotizaciones Mayo 2026</h2>
+              <h2 style={{ margin:0, fontFamily:"Georgia,serif", color:COLORS.accent, fontSize:17 }}>Cotizaciones {mesSeleccionadoTexto}</h2>
               <label style={{ display:"flex", alignItems:"center", gap:8, fontSize:12, color:COLORS.muted, cursor:"pointer" }}>
                 <input type="checkbox" checked={showVencidas} onChange={e=>setShowVencidas(e.target.checked)}/> Mostrar vencidas ({vencidas.length})
               </label>
@@ -4321,28 +5166,18 @@ const maxRankingCantidad = Math.max(...rankingLaminas.map(r => r.cantidad), 1);
 >
   <option value="">Todos los meses</option>
 
-  {[...new Set([...cotizaciones, ...notas]
-    .map(item => item.fecha)
-    .filter(Boolean)
-    .map(fecha => {
-      const f = new Date(fecha);
-      const year = f.getFullYear();
-      const month = String(f.getMonth() + 1).padStart(2, "0");
-      return `${year}-${month}`;
-    })
-  )]
+  {[...new Set([
+    new Date().toISOString().slice(0, 7),
+    ...[...cotizaciones, ...notas]
+      .map(item => item.fecha)
+      .filter(Boolean)
+      .map(fecha => obtenerMesFecha(fecha))
+      .filter(Boolean)
+  ])]
     .sort((a, b) => b.localeCompare(a))
-    .map(mes => {
-      const [year, month] = mes.split("-");
-      const nombreMes = new Date(year, Number(month) - 1)
-        .toLocaleDateString("es-CL", { month:"long", year:"numeric" });
-
-      return (
-        <option key={mes} value={mes}>
-          {nombreMes.charAt(0).toUpperCase() + nombreMes.slice(1)}
-        </option>
-      );
-    })}
+    .map(mes => (
+      <option key={mes} value={mes}>{nombreMes(mes)}</option>
+    ))}
 </select>
 <button
   onClick={limpiarFiltros}
@@ -4406,30 +5241,24 @@ const maxRankingCantidad = Math.max(...rankingLaminas.map(r => r.cantidad), 1);
                         <button onClick={()=>setModalCot(q)} style={{ background:seg.length>0?COLORS.subtle:"none", border:`1px solid ${COLORS.border}`, borderRadius:6, padding:"4px 10px", color:seg.length>0?COLORS.accent:COLORS.muted, cursor:"pointer", fontSize:12 }}>
                           📝 {seg.length>0?seg.length:""}
                         </button>
-                        {q.status !== "vendida" && (
-  <button
-    onClick={async () => {
-      const idReal = String(q.id).replace("supabase-", "");
-      const nv = await aceptarCotizacion(idReal);
-
-      if (nv) {
-        alert(`Cotización aceptada. Nota de venta creada: ${nv}`);
-      }
-    }}
-    style={{
-      background: COLORS.success,
-      border: "none",
-      borderRadius: 6,
-      padding: "4px 10px",
-      color: "#fff",
-      cursor: "pointer",
-      fontSize: 12,
-      fontWeight: 700
-    }}
-  >
-    Aceptar
-  </button>
-)}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setModalEditarCotizacion(q);
+                          }}
+                          style={{
+                            background: COLORS.accent,
+                            border: "none",
+                            borderRadius: 6,
+                            padding: "4px 10px",
+                            color: "#0f0e0c",
+                            cursor: "pointer",
+                            fontSize: 12,
+                            fontWeight: 700
+                          }}
+                        >
+                          Editar
+                        </button>
                       </div>
                     </div>
                     {last && (
@@ -4446,10 +5275,18 @@ const maxRankingCantidad = Math.max(...rankingLaminas.map(r => r.cantidad), 1);
 
         {tab==="sales" && (
           <div>
-            <h2 style={{ margin:"0 0 14px", fontFamily:"Georgia,serif", color:COLORS.success, fontSize:17 }}>Notas de Venta Mayo 2026</h2>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:10, flexWrap:"wrap", marginBottom:14 }}>
+              <h2 style={{ margin:0, fontFamily:"Georgia,serif", color:COLORS.success, fontSize:17 }}>Notas de Venta {mesSeleccionadoTexto}</h2>
+              <input
+                type="month"
+                value={mesFiltro}
+                onChange={(e) => setMesFiltro(e.target.value)}
+                style={{ background:COLORS.surface, border:`1px solid ${COLORS.border}`, color:COLORS.text, borderRadius:8, padding:"8px 10px" }}
+              />
+            </div>
             <div style={{ marginBottom:14, background:COLORS.subtle, borderRadius:10, padding:"10px 16px", display:"flex", gap:24 }}>
-              <div><span style={{ fontSize:11, color:COLORS.muted }}>TOTAL VENDIDO</span><div style={{ fontSize:18, fontWeight:700, color:COLORS.success }}>{fmt(totalSold)}</div></div>
-              <div><span style={{ fontSize:11, color:COLORS.muted }}>NOTAS</span><div style={{ fontSize:18, fontWeight:700, color:COLORS.success }}>{notas.length}</div></div>
+              <div><span style={{ fontSize:11, color:COLORS.muted }}>TOTAL VENDIDO</span><div style={{ fontSize:18, fontWeight:700, color:COLORS.success }}>{fmt(totalSoldFiltrado)}</div></div>
+              <div><span style={{ fontSize:11, color:COLORS.muted }}>NOTAS</span><div style={{ fontSize:18, fontWeight:700, color:COLORS.success }}>{filteredNotas.length}</div></div>
             </div>
             <div style={{ display:"flex", flexDirection:"column", gap:7 }}>
               {filteredNotas.map(s=>(
@@ -4531,28 +5368,9 @@ const maxRankingCantidad = Math.max(...rankingLaminas.map(r => r.cantidad), 1);
 
   {String(s.id).startsWith("supabase-") && (
     <button
-      onClick={async () => {
-        const nuevoNumero = prompt("Nuevo número de Nota de Venta:", s.numero);
-
-        if (!nuevoNumero) return;
-
-        const cotizacionRelacionada = cotizaciones.find(
-          (q) => String(q.numero) === String(s.cotizacion)
-        );
-
-        if (!cotizacionRelacionada) {
-          alert("No se encontró la cotización relacionada");
-          return;
-        }
-
-        const idRealCotizacion = String(cotizacionRelacionada.id).replace("supabase-", "");
-
-        const ok = await editarNumeroNotaVenta(idRealCotizacion, Number(nuevoNumero));
-
-        if (ok) {
-          alert("Número de Nota de Venta actualizado");
-          window.location.reload();
-        }
+      onClick={(e) => {
+        e.stopPropagation();
+        setModalEditarNV(s);
       }}
       style={{
         background: COLORS.subtle,
@@ -4568,7 +5386,8 @@ const maxRankingCantidad = Math.max(...rankingLaminas.map(r => r.cantidad), 1);
     </button>
   )}
   <button
-  onClick={async () => {
+  onClick={async (e) => {
+    e.stopPropagation();
     const confirmar = confirm(`¿Eliminar NV ${s.numero}?`);
 
     if (!confirmar) return;
@@ -5371,11 +6190,12 @@ const maxRankingCantidad = Math.max(...rankingLaminas.map(r => r.cantidad), 1);
               <StatCard label="IVA a pagar" value={fmt(resumenContabilidad.ivaDf - resumenContabilidad.ivaCf)} icon="📌" color={(resumenContabilidad.ivaDf - resumenContabilidad.ivaCf) >= 0 ? COLORS.warning : COLORS.success}/>
             </div>
 
-            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(170px,1fr))", gap:12, marginBottom:18 }}>
-              <StatCard label="Banco" value={fmt(resumenContabilidad.banco)} icon="🏦" color={COLORS.success}/>
-              <StatCard label="Caja" value={fmt(resumenContabilidad.caja)} icon="💵" color={COLORS.success}/>
-              <StatCard label="CxC Clientes" value={fmt(resumenContabilidad.cxc)} icon="👥" color={COLORS.warning}/>
-            </div>
+            <div
+  onClick={() => setModalCxcClientes(true)}
+  style={{ cursor: "pointer" }}
+>
+  <StatCard label="CxC Clientes" value={fmt(totalCxcNotas)} icon="👥" color={COLORS.warning}/>
+</div>
 
             <div style={{ background:COLORS.card, border:`1px solid ${COLORS.border}`, borderRadius:12, padding:14 }}>
               <div style={{ display:"flex", justifyContent:"space-between", gap:10, flexWrap:"wrap", alignItems:"center", marginBottom:12 }}>
@@ -5429,28 +6249,6 @@ const maxRankingCantidad = Math.max(...rankingLaminas.map(r => r.cantidad), 1);
           </div>
         )}
 
-        {tab==="sinmatch" && (
-          <div>
-            <h2 style={{ margin:"0 0 6px", fontFamily:"Georgia,serif", color:COLORS.warning, fontSize:17 }}>⚠ Ventas sin cotización cruzada</h2>
-            <p style={{ margin:"0 0 16px", fontSize:12, color:COLORS.muted }}>Notas sin cotización correspondiente en Mayo 2026.</p>
-            <div style={{ display:"flex", flexDirection:"column", gap:7 }}>
-              {sinCotizacion.map(s=>(
-                <div key={s.id} style={{ background:COLORS.card, border:`1px solid #3a2a10`, borderLeft:`4px solid ${COLORS.warning}`, borderRadius:10, padding:"11px 14px", display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:8 }}>
-                  <div>
-                    <span style={{ fontWeight:700, color:COLORS.warning, marginRight:8 }}>NV#{s.numero}</span>
-                    <span style={{ color:COLORS.text }}>{s.cliente}</span>
-                    <span style={{ color:COLORS.muted, marginLeft:8, fontSize:11 }}>{s.fecha}</span>
-                  </div>
-                  <span style={{ fontWeight:700, color:COLORS.warning }}>{fmt(s.total)}</span>
-                </div>
-              ))}
-            </div>
-            <div style={{ marginTop:16, background:COLORS.subtle, borderRadius:10, padding:14 }}>
-              <div style={{ fontSize:11, color:COLORS.muted, marginBottom:4 }}>TOTAL SIN COTIZACIÓN CRUZADA</div>
-              <div style={{ fontSize:22, fontWeight:700, color:COLORS.warning }}>{fmt(sinCotizacion.reduce((s,n)=>s+n.total,0))}</div>
-            </div>
-          </div>
-        )}
       </div>
 
       {modalCot && (
@@ -5462,6 +6260,16 @@ const maxRankingCantidad = Math.max(...rankingLaminas.map(r => r.cantidad), 1);
     seguimiento={seguimiento}
     onSave={saveSeguimiento}
     onClose={() => setModalCot(null)}
+  />
+)}
+{modalEditarCotizacion && (
+  <EditarCotizacionCompletaModal
+    cotizacion={modalEditarCotizacion}
+    detalles={detallesCotizaciones.filter(d =>
+      d.cotizacion_id === Number(String(modalEditarCotizacion.id).replace("supabase-", ""))
+    )}
+    onClose={() => setModalEditarCotizacion(null)}
+    onSave={guardarEdicionCompletaCotizacion}
   />
 )}
 {modalNuevoProducto && (
@@ -5541,6 +6349,15 @@ const maxRankingCantidad = Math.max(...rankingLaminas.map(r => r.cantidad), 1);
   onSave={guardarProduccion}
 />
 )}
+
+{modalEditarNV && (
+  <EditarNVCompletaModal
+    nota={modalEditarNV}
+    detalles={detallesNotasVenta.filter(d => String(d.nota_venta_numero) === String(modalEditarNV.numero))}
+    onClose={() => setModalEditarNV(null)}
+    onSave={guardarEdicionCompletaNV}
+  />
+)}
     {modalNV && (
   <GestionNVModal
   nota={modalNV}
@@ -5548,6 +6365,91 @@ const maxRankingCantidad = Math.max(...rankingLaminas.map(r => r.cantidad), 1);
   onClose={() => setModalNV(null)}
   onSave={guardarGestionNV}
 />
+)}
+{modalCxcClientes && (
+  <div
+    onClick={() => setModalCxcClientes(false)}
+    style={{
+      position: "fixed",
+      inset: 0,
+      background: "rgba(0,0,0,.45)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      zIndex: 9999,
+      padding: 16
+    }}
+  >
+    <div
+      onClick={(e) => e.stopPropagation()}
+      style={{
+        background: COLORS.surface,
+        borderRadius: 14,
+        width: "min(720px, 96vw)",
+        maxHeight: "85vh",
+        overflow: "auto",
+        padding: 18,
+        border: `1px solid ${COLORS.border}`
+      }}
+    >
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:12, marginBottom:14 }}>
+        <div>
+          <h2 style={{ margin:0, color:COLORS.accent }}>Detalle CxC Clientes</h2>
+          <div style={{ fontSize:12, color:COLORS.muted }}>
+            Notas de venta con saldo pendiente
+          </div>
+        </div>
+
+        <button
+          onClick={() => setModalCxcClientes(false)}
+          style={{
+            border:"none",
+            background:COLORS.danger,
+            color:"#fff",
+            borderRadius:8,
+            padding:"7px 10px",
+            fontWeight:700,
+            cursor:"pointer"
+          }}
+        >
+          Cerrar
+        </button>
+      </div>
+
+      {detalleCxcNotas.length === 0 ? (
+        <div style={{ color:COLORS.muted, padding:12 }}>
+          No hay notas de venta con saldo pendiente.
+        </div>
+      ) : (
+        <div style={{ overflowX:"auto" }}>
+          <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
+            <thead>
+              <tr style={{ background:COLORS.bg }}>
+                <th style={{ textAlign:"left", padding:8, borderBottom:`1px solid ${COLORS.border}` }}>NV</th>
+                <th style={{ textAlign:"left", padding:8, borderBottom:`1px solid ${COLORS.border}` }}>Cliente</th>
+                <th style={{ textAlign:"right", padding:8, borderBottom:`1px solid ${COLORS.border}` }}>Saldo</th>
+              </tr>
+            </thead>
+            <tbody>
+              {detalleCxcNotas.map((n, idx) => (
+                <tr key={idx}>
+                  <td style={{ padding:8, borderBottom:`1px solid ${COLORS.border}` }}>{n.numero}</td>
+                  <td style={{ padding:8, borderBottom:`1px solid ${COLORS.border}` }}>{n.cliente}</td>
+                  <td style={{ padding:8, textAlign:"right", fontWeight:700, borderBottom:`1px solid ${COLORS.border}` }}>
+                    {fmt(n.saldo)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <div style={{ marginTop:14, textAlign:"right", fontWeight:800, color:COLORS.accent }}>
+        Total CxC: {fmt(totalCxcNotas)}
+      </div>
+    </div>
+  </div>
 )}
     </div>
   );
