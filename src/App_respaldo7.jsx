@@ -761,191 +761,6 @@ boxSizing:"border-box"
     </div>
   );
 }
-
-function EditarNVCompletaModal({ nota, detalles = [], onClose, onSave }) {
-  const [form, setForm] = useState({
-    numero: nota.numero || "",
-    cliente: nota.cliente || "",
-    fecha: nota.fecha || "",
-    total: nota.total || ""
-  });
-
-  const normalizarDetalle = (d, idx) => ({
-    material: d.material || "",
-    cantidad: d.cantidad ?? "",
-    descripcion: d.descripcion || d.tipo || "",
-    alto: d.alto ?? d.largo ?? "",
-    ancho: d.ancho ?? "",
-    color: d.color || "",
-    orden: d.orden || idx + 1
-  });
-
-  const [filas, setFilas] = useState(
-    detalles.length > 0
-      ? detalles.map(normalizarDetalle)
-      : [{ material:"", cantidad:"", descripcion:"", alto:"", ancho:"", color:"", orden:1 }]
-  );
-
-  useEffect(() => {
-    const cerrarConEsc = (e) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", cerrarConEsc);
-    return () => window.removeEventListener("keydown", cerrarConEsc);
-  }, [onClose]);
-
-  const cambiarForm = (campo, valor) => {
-    setForm(prev => ({ ...prev, [campo]: valor }));
-  };
-
-  const cambiarFila = (idx, campo, valor) => {
-    setFilas(prev => prev.map((f, i) => i === idx ? { ...f, [campo]: valor } : f));
-  };
-
-  const agregarFila = () => {
-    setFilas(prev => [...prev, { material:"", cantidad:"", descripcion:"", alto:"", ancho:"", color:"", orden:prev.length + 1 }]);
-  };
-
-  const eliminarFila = (idx) => {
-    setFilas(prev => prev.length === 1 ? prev : prev.filter((_, i) => i !== idx).map((f, i) => ({ ...f, orden:i + 1 })));
-  };
-
-  const guardar = () => {
-    if (!String(form.numero || "").trim()) {
-      alert("Debes ingresar el número de la Nota de Venta.");
-      return;
-    }
-
-    if (!String(form.cliente || "").trim()) {
-      alert("Debes ingresar el cliente.");
-      return;
-    }
-
-    const detallesLimpios = filas
-      .map((f, idx) => ({
-        material: String(f.material || "").trim(),
-        cantidad: Number(f.cantidad || 0),
-        descripcion: String(f.descripcion || "").trim(),
-        alto: Number(f.alto || 0),
-        ancho: Number(f.ancho || 0),
-        color: String(f.color || "").trim(),
-        orden: idx + 1
-      }))
-      .filter(f => f.material || f.descripcion || f.cantidad || f.alto || f.ancho || f.color);
-
-    onSave({
-      notaOriginal: nota,
-      notaEditada: {
-        ...nota,
-        numero: String(form.numero).trim(),
-        cliente: String(form.cliente).trim(),
-        fecha: form.fecha,
-        total: Number(form.total || 0)
-      },
-      detallesEditados: detallesLimpios
-    });
-  };
-
-  const inputStyle = {
-    width:"100%",
-    boxSizing:"border-box",
-    padding:"9px 10px",
-    borderRadius:8,
-    border:`1px solid ${COLORS.border}`,
-    background:COLORS.surface,
-    color:COLORS.text,
-    fontSize:13
-  };
-
-  return (
-    <div
-      onClick={onClose}
-      style={{
-        position:"fixed",
-        inset:0,
-        background:"rgba(0,0,0,.65)",
-        display:"flex",
-        alignItems:"flex-start",
-        justifyContent:"center",
-        zIndex:9999,
-        overflowY:"auto",
-        padding:"18px 10px"
-      }}
-    >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        style={{
-          background:COLORS.card,
-          border:`1px solid ${COLORS.border}`,
-          borderRadius:14,
-          padding:18,
-          width:"min(1050px, 96vw)",
-          maxHeight:"90vh",
-          overflow:"auto",
-          color:COLORS.text,
-          boxSizing:"border-box"
-        }}
-      >
-        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:12, marginBottom:14 }}>
-          <div>
-            <h2 style={{ margin:0, color:COLORS.accent }}>Editar Nota de Venta</h2>
-            <div style={{ fontSize:12, color:COLORS.muted }}>Corrige datos leídos desde Excel sin perder abonos ni gestión.</div>
-          </div>
-          <button onClick={onClose} style={{ background:COLORS.danger, color:"#fff", border:"none", borderRadius:8, padding:"8px 11px", cursor:"pointer", fontWeight:700 }}>Cerrar</button>
-        </div>
-
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(170px, 1fr))", gap:10, marginBottom:14 }}>
-          <label style={{ fontSize:12, color:COLORS.muted }}>Número NV<input value={form.numero} onChange={e=>cambiarForm("numero", e.target.value)} style={inputStyle}/></label>
-          <label style={{ fontSize:12, color:COLORS.muted }}>Cliente<input value={form.cliente} onChange={e=>cambiarForm("cliente", e.target.value)} style={inputStyle}/></label>
-          <label style={{ fontSize:12, color:COLORS.muted }}>Fecha<input type="date" value={form.fecha || ""} onChange={e=>cambiarForm("fecha", e.target.value)} style={inputStyle}/></label>
-          <label style={{ fontSize:12, color:COLORS.muted }}>Total<input type="number" value={form.total} onChange={e=>cambiarForm("total", e.target.value)} style={inputStyle}/></label>
-        </div>
-
-        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", margin:"8px 0 10px", gap:10 }}>
-          <h3 style={{ margin:0, color:COLORS.success, fontSize:15 }}>Detalle del pedido</h3>
-          <button onClick={agregarFila} style={{ background:COLORS.success, color:"#fff", border:"none", borderRadius:8, padding:"8px 12px", cursor:"pointer", fontWeight:700 }}>+ Agregar fila</button>
-        </div>
-
-        <div style={{ overflowX:"auto" }}>
-          <table style={{ width:"100%", borderCollapse:"collapse", minWidth:850, fontSize:12 }}>
-            <thead>
-              <tr style={{ background:COLORS.surface }}>
-                <th style={{ padding:7, border:`1px solid ${COLORS.border}`, textAlign:"left" }}>Cantidad</th>
-                <th style={{ padding:7, border:`1px solid ${COLORS.border}`, textAlign:"left" }}>Material</th>
-                <th style={{ padding:7, border:`1px solid ${COLORS.border}`, textAlign:"left" }}>Detalle / Tipo</th>
-                <th style={{ padding:7, border:`1px solid ${COLORS.border}`, textAlign:"left" }}>Largo / Alto</th>
-                <th style={{ padding:7, border:`1px solid ${COLORS.border}`, textAlign:"left" }}>Ancho</th>
-                <th style={{ padding:7, border:`1px solid ${COLORS.border}`, textAlign:"left" }}>Color</th>
-                <th style={{ padding:7, border:`1px solid ${COLORS.border}`, textAlign:"center" }}>Eliminar</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filas.map((fila, idx) => (
-                <tr key={idx}>
-                  <td style={{ padding:5, border:`1px solid ${COLORS.border}` }}><input type="number" value={fila.cantidad} onChange={e=>cambiarFila(idx,"cantidad",e.target.value)} style={inputStyle}/></td>
-                  <td style={{ padding:5, border:`1px solid ${COLORS.border}` }}><input value={fila.material} onChange={e=>cambiarFila(idx,"material",e.target.value)} style={inputStyle}/></td>
-                  <td style={{ padding:5, border:`1px solid ${COLORS.border}` }}><input value={fila.descripcion} onChange={e=>cambiarFila(idx,"descripcion",e.target.value)} style={inputStyle}/></td>
-                  <td style={{ padding:5, border:`1px solid ${COLORS.border}` }}><input type="number" value={fila.alto} onChange={e=>cambiarFila(idx,"alto",e.target.value)} style={inputStyle}/></td>
-                  <td style={{ padding:5, border:`1px solid ${COLORS.border}` }}><input type="number" value={fila.ancho} onChange={e=>cambiarFila(idx,"ancho",e.target.value)} style={inputStyle}/></td>
-                  <td style={{ padding:5, border:`1px solid ${COLORS.border}` }}><input value={fila.color} onChange={e=>cambiarFila(idx,"color",e.target.value)} style={inputStyle}/></td>
-                  <td style={{ padding:5, border:`1px solid ${COLORS.border}`, textAlign:"center" }}>
-                    <button onClick={()=>eliminarFila(idx)} disabled={filas.length===1} style={{ background:filas.length===1?COLORS.subtle:COLORS.danger, color:"#fff", border:"none", borderRadius:7, padding:"7px 9px", cursor:filas.length===1?"not-allowed":"pointer" }}>🗑</button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        <div style={{ display:"flex", justifyContent:"flex-end", gap:10, marginTop:16 }}>
-          <button onClick={onClose} style={{ padding:"10px 14px", borderRadius:8, border:`1px solid ${COLORS.border}`, background:COLORS.surface, color:COLORS.text, cursor:"pointer" }}>Cancelar</button>
-          <button onClick={guardar} style={{ padding:"10px 14px", borderRadius:8, border:"none", background:COLORS.success, color:"#fff", fontWeight:700, cursor:"pointer" }}>Guardar cambios</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function SobrantesLaminadoModal({ producto, sobrantes, onClose, onSave, onUsar }) {
   const [filas, setFilas] = useState([{ largo:"", ancho:"" }]);
   const [largoBuscado, setLargoBuscado] = useState("");
@@ -3092,9 +2907,9 @@ if (ok) {
     const notasFormateadas = dataNotas.map((n) => ({
       id: `supabase-${n.id}`,
       numero: String(n.numero),
-      cliente: n.cliente || n.cotizaciones?.cliente || "(sin cliente)",
+      cliente: n.cotizaciones?.cliente || n.cliente || "(sin cliente)",
       fecha: n.fecha?.split("T")[0] || new Date().toISOString().split("T")[0],
-     total: n.total || n.cotizaciones?.total || 0,
+     total: n.cotizaciones?.total || n.total || 0,
       cotizacion: n.cotizaciones?.numero ? String(n.cotizaciones.numero) : null,
       abono: n.abono || 0,
       estado_pago: n.estado_pago || "pendiente",
@@ -3211,7 +3026,6 @@ if (!errorAsientosContables) {
   const [abonosNV, setAbonosNV] = useState([]);
   const [modalCot, setModalCot] = useState(null);
   const [modalNV, setModalNV] = useState(null);
-  const [modalEditarNV, setModalEditarNV] = useState(null);
   const [modalProduccion, setModalProduccion] = useState(null);
   const [filtroProduccion, setFiltroProduccion] = useState("todos");
   const [busquedaCliente, setBusquedaCliente] = useState("")
@@ -3338,95 +3152,6 @@ const mesSeleccionadoTexto = nombreMes(mesFiltro);
     return `M ${p1.x} ${p1.y} A ${r2} ${r2} 0 ${e-s>180?1:0} 1 ${p2.x} ${p2.y}`;
   };
   const fillEnd=startA+sweepA*(rate/100);
-
-  const guardarEdicionCompletaNV = async ({ notaOriginal, notaEditada, detallesEditados }) => {
-    const idReal = Number(String(notaOriginal.id).replace("supabase-", ""));
-    const numeroAnterior = String(notaOriginal.numero || "");
-    const numeroNuevo = String(notaEditada.numero || "").trim();
-
-    const { error } = await supabase
-      .from("notas_venta")
-      .update({
-        numero: Number(numeroNuevo) || numeroNuevo,
-        cliente: notaEditada.cliente,
-        fecha: notaEditada.fecha,
-        total: Number(notaEditada.total || 0)
-      })
-      .eq("id", idReal);
-
-    if (error) {
-      console.error(error);
-      alert("No se pudo actualizar la Nota de Venta.");
-      return;
-    }
-
-    const { error: errorDeleteAnterior } = await supabase
-      .from("detalles_notas_venta_produccion")
-      .delete()
-      .eq("nota_venta_numero", numeroAnterior);
-
-    if (errorDeleteAnterior) {
-      console.error(errorDeleteAnterior);
-      alert("La NV se actualizó, pero no se pudo reemplazar el detalle anterior.");
-      return;
-    }
-
-    if (numeroNuevo !== numeroAnterior) {
-      await supabase
-        .from("detalles_notas_venta_produccion")
-        .delete()
-        .eq("nota_venta_numero", numeroNuevo);
-    }
-
-    const detallesParaGuardar = detallesEditados.map((d, idx) => ({
-      nota_venta_numero: numeroNuevo,
-      cotizacion_numero: String(notaEditada.cotizacion || ""),
-      cliente: notaEditada.cliente,
-      material: d.material,
-      cantidad: d.cantidad,
-      descripcion: d.descripcion,
-      alto: d.alto,
-      ancho: d.ancho,
-      color: d.color,
-      orden: idx + 1
-    }));
-
-    let detallesGuardados = [];
-
-    if (detallesParaGuardar.length > 0) {
-      const { data, error: errorInsert } = await supabase
-        .from("detalles_notas_venta_produccion")
-        .insert(detallesParaGuardar)
-        .select("*");
-
-      if (errorInsert) {
-        console.error(errorInsert);
-        alert("La NV se actualizó, pero hubo un error guardando el nuevo detalle.");
-        return;
-      }
-
-      detallesGuardados = data || detallesParaGuardar;
-    }
-
-    setNotas(prev => prev.map(n =>
-      n.id === notaOriginal.id
-        ? { ...n, ...notaEditada, numero: numeroNuevo, total: Number(notaEditada.total || 0) }
-        : n
-    ));
-
-    setDetallesNotasVenta(prev => [
-      ...prev.filter(d => String(d.nota_venta_numero) !== numeroAnterior && String(d.nota_venta_numero) !== numeroNuevo),
-      ...detallesGuardados
-    ]);
-
-    if (modalNV?.id === notaOriginal.id) {
-      setModalNV({ ...modalNV, ...notaEditada, numero: numeroNuevo, total: Number(notaEditada.total || 0) });
-    }
-
-    setModalEditarNV(null);
-    alert("Nota de Venta actualizada correctamente.");
-  };
-
   const guardarGestionNV = async (nvActualizada) => {
   const idReal = Number(String(nvActualizada.id).replace("supabase-", ""));
 
@@ -5097,9 +4822,28 @@ const maxRankingCantidad = Math.max(...rankingLaminas.map(r => r.cantidad), 1);
 
   {String(s.id).startsWith("supabase-") && (
     <button
-      onClick={(e) => {
-        e.stopPropagation();
-        setModalEditarNV(s);
+      onClick={async () => {
+        const nuevoNumero = prompt("Nuevo número de Nota de Venta:", s.numero);
+
+        if (!nuevoNumero) return;
+
+        const cotizacionRelacionada = cotizaciones.find(
+          (q) => String(q.numero) === String(s.cotizacion)
+        );
+
+        if (!cotizacionRelacionada) {
+          alert("No se encontró la cotización relacionada");
+          return;
+        }
+
+        const idRealCotizacion = String(cotizacionRelacionada.id).replace("supabase-", "");
+
+        const ok = await editarNumeroNotaVenta(idRealCotizacion, Number(nuevoNumero));
+
+        if (ok) {
+          alert("Número de Nota de Venta actualizado");
+          window.location.reload();
+        }
       }}
       style={{
         background: COLORS.subtle,
@@ -5115,8 +4859,7 @@ const maxRankingCantidad = Math.max(...rankingLaminas.map(r => r.cantidad), 1);
     </button>
   )}
   <button
-  onClick={async (e) => {
-    e.stopPropagation();
+  onClick={async () => {
     const confirmar = confirm(`¿Eliminar NV ${s.numero}?`);
 
     if (!confirmar) return;
@@ -6089,15 +5832,6 @@ const maxRankingCantidad = Math.max(...rankingLaminas.map(r => r.cantidad), 1);
   onClose={() => setModalProduccion(null)}
   onSave={guardarProduccion}
 />
-)}
-
-{modalEditarNV && (
-  <EditarNVCompletaModal
-    nota={modalEditarNV}
-    detalles={detallesNotasVenta.filter(d => String(d.nota_venta_numero) === String(modalEditarNV.numero))}
-    onClose={() => setModalEditarNV(null)}
-    onSave={guardarEdicionCompletaNV}
-  />
 )}
     {modalNV && (
   <GestionNVModal
