@@ -5719,13 +5719,6 @@ const maxRankingCantidad = Math.max(...rankingLaminas.map(r => r.cantidad), 1);
 
   return (
     <div style={{ minHeight:"100vh", background:COLORS.bg, color:COLORS.text, fontFamily:"'Trebuchet MS',sans-serif", paddingBottom:60 }}>
-      <style>{`
-        @media (max-width: 768px) {
-          .solo-pc {
-            display: none !important;
-          }
-        }
-      `}</style>
  <div className="solo-pc">
   <div
   style={{
@@ -5756,7 +5749,7 @@ const maxRankingCantidad = Math.max(...rankingLaminas.map(r => r.cantidad), 1);
     <input type="file" accept=".xlsx,.xls" multiple onChange={importarCotizacion} style={{ display:"none" }} />
   </label>
 
-  <label style={{ padding:"14px 16px", background:COLORS.warning || "#d6b45f", borderRadius:10, fontWeight:700, cursor:"pointer", color:"#fff", textAlign:"center" }}>
+  <label style={{ padding:"14px 16px", background:COLORS.warninging || COLORS.warning || "#d6b45f", borderRadius:10, fontWeight:700, cursor:"pointer", color:"#fff", textAlign:"center" }}>
     Agregar Venta Láminas
     <input type="file" accept=".xlsx,.xls" onChange={importarVentaLaminasExcel} style={{ display:"none" }} />
   </label>
