@@ -123,7 +123,7 @@ const STATUS_CONFIG = {
   urgente: { bg:"#2a1f0a", color:"#c8943a", border:"#5a3a10", label:"⚡ SEGUIMIENTO" },
   activa:  { bg:"#1a1f2a", color:"#5a8abe", border:"#2a3a5a", label:"● ACTIVA" },
 };
-const LEFT_COLOR = { vendida:COLORS.success, vencida:"#7a5a8a", urgente:COLORS.warninging, activa:"#5a8abe" };
+const LEFT_COLOR = { vendida:COLORS.success, vencida:"#7a5a8a", urgente:COLORS.warning, activa:"#5a8abe" };
 
 function StatusBadge({ status }) {
   const c = STATUS_CONFIG[status];
@@ -323,7 +323,6 @@ const guardarProduccionModal = () => {
     armado: nota.armado || false,
     pegado: nota.pegado || false,
     postformado: nota.postformado || false,
-    media_cana: nota.media_cana || false,
   });
 
   const ordenProcesos = [
@@ -333,7 +332,6 @@ const guardarProduccionModal = () => {
     "armado",
     "pegado",
     "postformado",
-    "media_cana",
   ];
 
   const nombresProcesos = {
@@ -343,7 +341,6 @@ const guardarProduccionModal = () => {
     armado: "Armado",
     pegado: "Pegado",
     postformado: "Postformado",
-    media_cana: "Media caña",
   };
 
   const toggleProceso = (key) => {
@@ -671,7 +668,7 @@ const guardarGestionNV = () => {
 </div>
         <p>
           <b>Saldo pendiente:</b>{" "}
-          <span style={{ color: saldo === 0 ? COLORS.success : COLORS.warninging }}>
+          <span style={{ color: saldo === 0 ? COLORS.success : COLORS.warning }}>
             {fmt(saldo)}
           </span>
         </p>
@@ -1551,8 +1548,8 @@ function PreviewOCModal({ productos, onClose, onConfirm }) {
             style={{
               padding:"8px 12px",
               borderRadius:8,
-              border:`1px solid ${estadoPago === "pendiente" ? COLORS.warning : COLORS.border}`,
-              background:estadoPago === "pendiente" ? COLORS.warning : COLORS.surface,
+              border:`1px solid ${estadoPago === "pendiente" ? COLORS.warn : COLORS.border}`,
+              background:estadoPago === "pendiente" ? COLORS.warn : COLORS.surface,
               color:estadoPago === "pendiente" ? "#111" : COLORS.text,
               fontWeight:700,
               cursor:"pointer"
@@ -1606,161 +1603,6 @@ function PreviewOCModal({ productos, onClose, onConfirm }) {
     </div>
   );
 }
-
-function FacturaXmlModal({ factura, onClose, onConfirm }) {
-  const [modo, setModo] = useState("inventario_contabilidad");
-  const [estadoPago, setEstadoPago] = useState("pagado");
-  const [cuentaCompra, setCuentaCompra] = useState("Compras");
-
-  useEffect(() => {
-    const cerrarConEsc = (e) => {
-      if (e.key === "Escape") onClose();
-    };
-
-    window.addEventListener("keydown", cerrarConEsc);
-    return () => window.removeEventListener("keydown", cerrarConEsc);
-  }, [onClose]);
-
-  const inputStyle = {
-    width:"100%",
-    padding:"9px 10px",
-    borderRadius:8,
-    border:`1px solid ${COLORS.border}`,
-    background:COLORS.surface,
-    color:COLORS.text,
-    boxSizing:"border-box"
-  };
-
-  const confirmar = () => {
-    onConfirm({ modo, estadoPago, cuentaCompra });
-  };
-
-  return (
-    <div
-      onClick={onClose}
-      style={{
-        position:"fixed",
-        inset:0,
-        background:"rgba(0,0,0,0.65)",
-        display:"flex",
-        alignItems:"flex-start",
-        justifyContent:"center",
-        zIndex:9999,
-        overflowY:"auto",
-        padding:"20px 10px"
-      }}
-    >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        style={{
-          background:COLORS.card,
-          border:`1px solid ${COLORS.border}`,
-          borderRadius:14,
-          padding:22,
-          width:"720px",
-          maxWidth:"95%",
-          maxHeight:"90vh",
-          overflowY:"auto",
-          color:COLORS.text,
-          boxSizing:"border-box"
-        }}
-      >
-        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:12, marginBottom:12 }}>
-          <div>
-            <h2 style={{ margin:"0 0 4px", color:COLORS.accent }}>Vista previa Factura XML</h2>
-            <div style={{ fontSize:12, color:COLORS.muted }}>
-              {factura.documento} · {factura.proveedor}
-            </div>
-          </div>
-          <button onClick={onClose} style={{ background:COLORS.danger, color:"#fff", border:"none", borderRadius:8, padding:"8px 11px", cursor:"pointer", fontWeight:700 }}>Cerrar</button>
-        </div>
-
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(160px, 1fr))", gap:10, marginBottom:14 }}>
-          <div style={{ background:COLORS.surface, border:`1px solid ${COLORS.border}`, borderRadius:10, padding:10 }}>
-            <div style={{ fontSize:11, color:COLORS.muted }}>Fecha</div>
-            <b>{factura.fecha}</b>
-          </div>
-          <div style={{ background:COLORS.surface, border:`1px solid ${COLORS.border}`, borderRadius:10, padding:10 }}>
-            <div style={{ fontSize:11, color:COLORS.muted }}>RUT proveedor</div>
-            <b>{factura.rutProveedor}</b>
-          </div>
-          <div style={{ background:COLORS.surface, border:`1px solid ${COLORS.border}`, borderRadius:10, padding:10 }}>
-            <div style={{ fontSize:11, color:COLORS.muted }}>Neto</div>
-            <b>{fmt(factura.neto)}</b>
-          </div>
-          <div style={{ background:COLORS.surface, border:`1px solid ${COLORS.border}`, borderRadius:10, padding:10 }}>
-            <div style={{ fontSize:11, color:COLORS.muted }}>IVA CF</div>
-            <b>{fmt(factura.iva)}</b>
-          </div>
-          <div style={{ background:COLORS.surface, border:`1px solid ${COLORS.border}`, borderRadius:10, padding:10 }}>
-            <div style={{ fontSize:11, color:COLORS.muted }}>Total</div>
-            <b style={{ color:COLORS.accent }}>{fmt(factura.total)}</b>
-          </div>
-        </div>
-
-        <div style={{ background:COLORS.surface, border:`1px solid ${COLORS.border}`, borderRadius:10, padding:12, marginBottom:14 }}>
-          <div style={{ fontSize:13, fontWeight:700, color:COLORS.accent, marginBottom:8 }}>¿Qué hacer con esta factura?</div>
-          <div style={{ display:"flex", gap:10, flexWrap:"wrap" }}>
-            <button
-              onClick={() => { setModo("inventario_contabilidad"); setCuentaCompra("Compras"); }}
-              style={{ padding:"9px 12px", borderRadius:8, border:`1px solid ${modo === "inventario_contabilidad" ? COLORS.success : COLORS.border}`, background:modo === "inventario_contabilidad" ? COLORS.success : COLORS.card, color:modo === "inventario_contabilidad" ? "#fff" : COLORS.text, fontWeight:700, cursor:"pointer" }}
-            >
-              Inventario + Contabilidad
-            </button>
-            <button
-              onClick={() => { setModo("solo_contabilidad"); setCuentaCompra("Gastos generales"); }}
-              style={{ padding:"9px 12px", borderRadius:8, border:`1px solid ${modo === "solo_contabilidad" ? COLORS.warninging : COLORS.border}`, background:modo === "solo_contabilidad" ? COLORS.warninging : COLORS.card, color:modo === "solo_contabilidad" ? "#111" : COLORS.text, fontWeight:700, cursor:"pointer" }}
-            >
-              Solo Contabilidad
-            </button>
-          </div>
-        </div>
-
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(180px, 1fr))", gap:10, marginBottom:14 }}>
-          <div>
-            <label style={{ fontSize:12, color:COLORS.muted }}>Estado de pago</label>
-            <select value={estadoPago} onChange={(e)=>setEstadoPago(e.target.value)} style={inputStyle}>
-              <option value="pagado">Pagada con banco</option>
-              <option value="caja">Pagada con caja</option>
-              <option value="pendiente">Pendiente proveedor</option>
-            </select>
-          </div>
-          <div>
-            <label style={{ fontSize:12, color:COLORS.muted }}>Cuenta contable</label>
-            <select value={cuentaCompra} onChange={(e)=>setCuentaCompra(e.target.value)} style={inputStyle}>
-              <option value="Compras">Compras / Materiales</option>
-              <option value="Materiales de oficina">Materiales de oficina</option>
-              <option value="Combustible">Combustible</option>
-              <option value="Servicios">Servicios</option>
-              <option value="Fletes">Fletes</option>
-              <option value="Arriendo">Arriendo</option>
-              <option value="Gastos generales">Gastos generales</option>
-            </select>
-          </div>
-        </div>
-
-        <div style={{ fontSize:13, fontWeight:700, color:COLORS.accent, marginBottom:8 }}>Detalle del XML</div>
-        <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-          {factura.detalles.map((p, index) => (
-            <div key={index} style={{ border:`1px solid ${COLORS.border}`, borderRadius:8, padding:10, background:COLORS.surface, display:"grid", gridTemplateColumns:"1fr auto auto", gap:10, alignItems:"center" }}>
-              <span>{p.nombre}</span>
-              <b style={{ color:COLORS.accent }}>{p.cantidad}</b>
-              <span style={{ color:COLORS.muted }}>{fmt(p.total)}</span>
-            </div>
-          ))}
-        </div>
-
-        <div style={{ display:"flex", gap:10, justifyContent:"flex-end", marginTop:16 }}>
-          <button onClick={onClose} style={{ padding:"9px 12px", borderRadius:8 }}>Cancelar</button>
-          <button onClick={confirmar} style={{ padding:"9px 14px", borderRadius:8, border:"none", background:COLORS.success, color:"#fff", fontWeight:700, cursor:"pointer" }}>
-            Confirmar importación
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function EditarProductoModal({ producto, onClose, onSave }) {
   const [nombre, setNombre] = useState(producto.nombre || "");
   const [categoria, setCategoria] = useState(producto.categoria || "Tableros");
@@ -2454,7 +2296,7 @@ function VentaLaminasModal({ venta, detalles = [], onClose, onSaveCosto }) {
 
         <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))", gap:10, marginBottom:16 }}>
           <StatCard label="Venta c/IVA" value={fmt(resumen.ventaTotal)} icon="💰" color={COLORS.success}/>
-          <StatCard label="Costo c/IVA" value={fmt(resumen.costoTotal)} icon="🧾" color={COLORS.warninging}/>
+          <StatCard label="Costo c/IVA" value={fmt(resumen.costoTotal)} icon="🧾" color={COLORS.warning}/>
           <StatCard label="Utilidad neta" value={fmt(resumen.utilidadNeta)} icon="📈" color={resumen.utilidadNeta >= 0 ? COLORS.success : COLORS.danger}/>
           <StatCard label="IVA a provisionar" value={fmt(resumen.ivaProvisionar)} icon="🏛️" color={resumen.ivaProvisionar >= 0 ? COLORS.accent : COLORS.danger}/>
         </div>
@@ -2907,7 +2749,7 @@ function ContabilidadModal({ asiento, onClose, onSave }) {
                 </div>
                 <div style={{ background:COLORS.surface, border:`1px solid ${COLORS.border}`, borderRadius:10, padding:"9px 12px" }}>
                   <div style={{ fontSize:10, color:COLORS.muted }}>Total Haber</div>
-                  <div style={{ fontWeight:700, color:COLORS.warninging }}>{fmt(totalHaber)}</div>
+                  <div style={{ fontWeight:700, color:COLORS.warning }}>{fmt(totalHaber)}</div>
                 </div>
                 <div style={{ background:COLORS.surface, border:`1px solid ${Math.abs(diferencia) === 0 ? COLORS.border : COLORS.danger}`, borderRadius:10, padding:"9px 12px" }}>
                   <div style={{ fontSize:10, color:COLORS.muted }}>Diferencia</div>
@@ -3150,7 +2992,7 @@ function GestionRapidaContabilidadModal({ tipo, onClose, onSave }) {
           <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))", gap:10, marginTop:12 }}>
             <StatCard label="Neto" value={fmt(neto)} icon="📄" color={COLORS.success}/>
             <StatCard label={tipo === "compra" ? "IVA CF" : "IVA DF"} value={fmt(iva)} icon="🧾" color={COLORS.accent}/>
-            <StatCard label="Total" value={fmt(total)} icon="💰" color={COLORS.warninging}/>
+            <StatCard label="Total" value={fmt(total)} icon="💰" color={COLORS.warning}/>
           </div>
         )}
 
@@ -3572,7 +3414,6 @@ export default function App() {
       armado: nuevoBarran.armado || false,
       pegado: nuevoBarran.pegado || false,
       postformado: nuevoBarran.postformado || false,
-      media_cana: nuevoBarran.media_cana || false,
       tipo_documento: "barran"
     }, ...prev]);
 
@@ -3650,7 +3491,6 @@ export default function App() {
       armado: n.armado || false,
       pegado: n.pegado || false,
       postformado: n.postformado || false,
-      media_cana: n.media_cana || false,
       tipo_documento: n.tipo_documento || "nv",
 }));
 
@@ -3754,8 +3594,6 @@ if (!errorAsientosContables) {
   const [filtroCategoriaInventario, setFiltroCategoriaInventario] = useState("todos");
   const [previewOC, setPreviewOC] = useState([]);
   const [modalPreviewOC, setModalPreviewOC] = useState(false);
-  const [previewFacturaXml, setPreviewFacturaXml] = useState(null);
-  const [modalFacturaXml, setModalFacturaXml] = useState(false);
   const [modalSobrantesLaminado, setModalSobrantesLaminado] = useState(null);
   const [busquedaLaminadoNombre, setBusquedaLaminadoNombre] = useState("");
   const [busquedaSobranteLargo, setBusquedaSobranteLargo] = useState("");
@@ -4216,7 +4054,6 @@ const guardarProduccion = async (notaActualizada) => {
       armado: notaActualizada.armado,
       pegado: notaActualizada.pegado,
       postformado: notaActualizada.postformado,
-      media_cana: notaActualizada.media_cana,
     })
     .eq("id", idReal);
 
@@ -4277,14 +4114,14 @@ const venceManana = (fecha) => {
   return entrega.getTime() === manana.getTime();
 };
 const estadoProduccion = (n) => {
-  if (estaAtrasada(n.fecha_entrega_estimada) && !n.media_cana) {
+  if (estaAtrasada(n.fecha_entrega_estimada) && !n.postformado) {
     return {
       texto: "🔴 Atrasada",
       color: COLORS.danger
     };
   }
 
-  if (n.media_cana) {
+  if (n.postformado) {
     return {
       texto: "🟢 Lista para entregar",
       color: COLORS.success
@@ -4296,8 +4133,7 @@ const estadoProduccion = (n) => {
     n.lamina_cortada ||
     n.tupizado ||
     n.armado ||
-    n.pegado ||
-    n.postformado
+    n.pegado
   ) {
     return {
       texto: "🔵 En proceso",
@@ -4307,7 +4143,7 @@ const estadoProduccion = (n) => {
 
   return {
     texto: "🟡 Sin iniciar",
-    color: COLORS.warninging
+    color: COLORS.warning
   };
 };
 const coincideFiltroProduccion = (n, filtro) => {
@@ -4315,8 +4151,8 @@ const coincideFiltroProduccion = (n, filtro) => {
 
   if (filtro === "todos") return true;
   if (filtro === "atrasadas") return estado.includes("Atrasada");
-  if (filtro === "hoy") return venceHoy(n.fecha_entrega_estimada) && !n.media_cana;
-  if (filtro === "manana") return venceManana(n.fecha_entrega_estimada) && !n.media_cana;
+  if (filtro === "hoy") return venceHoy(n.fecha_entrega_estimada) && !n.postformado;
+  if (filtro === "manana") return venceManana(n.fecha_entrega_estimada) && !n.postformado;
   if (filtro === "proceso") return estado.includes("En proceso");
   if (filtro === "sin_iniciar") return estado.includes("Sin iniciar");
   if (filtro === "listas") return estado.includes("Lista");
@@ -4325,9 +4161,9 @@ const coincideFiltroProduccion = (n, filtro) => {
 };
 
 const prioridadProduccion = (n) => {
-  if (estaAtrasada(n.fecha_entrega_estimada) && !n.media_cana) return 1;
-  if (venceHoy(n.fecha_entrega_estimada) && !n.media_cana) return 2;
-  if (venceManana(n.fecha_entrega_estimada) && !n.media_cana) return 3;
+  if (estaAtrasada(n.fecha_entrega_estimada) && !n.postformado) return 1;
+  if (venceHoy(n.fecha_entrega_estimada) && !n.postformado) return 2;
+  if (venceManana(n.fecha_entrega_estimada) && !n.postformado) return 3;
   if (estadoProduccion(n).texto.includes("En proceso")) return 4;
   if (estadoProduccion(n).texto.includes("Sin iniciar")) return 5;
   if (estadoProduccion(n).texto.includes("Lista")) return 6;
@@ -4348,7 +4184,7 @@ const estadoStockInventario = (producto) => {
   if (minimo > 0 && stock <= minimo) {
     return {
       texto: "🟡 Bajo stock",
-      color: COLORS.warninging
+      color: COLORS.warning
     };
   }
 
@@ -4604,16 +4440,16 @@ const guardarAsientosAutomaticos = async (asientos, opciones = {}) => {
   return true;
 };
 
-const crearAsientoCompraAutomatica = async ({ fecha, documento, proveedor, totalCompra, estadoPago, detalleBase, cuentaCompra = "Compras" }) => {
+const crearAsientoCompraAutomatica = async ({ fecha, documento, proveedor, totalCompra, estadoPago, detalleBase }) => {
   const { total, neto, iva } = calcularNetoIvaDesdeTotal(totalCompra);
   if (!total) return true;
 
   const doc = documento || `COMPRA-${Date.now()}`;
   const detalle = detalleBase || `Compra ${proveedor || "proveedor"}`;
-  const cuentaHaber = estadoPago === "pendiente" ? "Proveedores" : (estadoPago === "caja" ? "Caja" : "Banco");
+  const cuentaHaber = estadoPago === "pendiente" ? "Proveedores" : "Banco";
 
   return guardarAsientosAutomaticos([
-    { fecha, detalle, desglose:"Compra automática", documento:doc, definicion:cuentaCompra || "Compras", debe:neto, haber:0 },
+    { fecha, detalle, desglose:"Compra automática", documento:doc, definicion:"Compras", debe:neto, haber:0 },
     { fecha, detalle, desglose:"Compra automática", documento:doc, definicion:"IVA CF", debe:iva, haber:0 },
     { fecha, detalle, desglose:"Compra automática", documento:doc, definicion:cuentaHaber, debe:0, haber:total }
   ]);
@@ -4677,269 +4513,6 @@ const crearAsientoCostoVentaLaminasAutomatico = async ({ fecha, numero, cliente,
     reemplazarDocumento: documento,
     reemplazarDesglose: "Costo venta láminas"
   });
-};
-
-
-const normalizarClaveDocumento = (valor) => String(valor || "")
-  .trim()
-  .toUpperCase()
-  .replace(/\s+/g, "")
-  .replace(/[^A-Z0-9K\-]/g, "");
-
-const existeDocumentoImportado = async (clave) => {
-  if (!clave) return false;
-
-  const { data, error } = await supabase
-    .from("documentos_importados")
-    .select("id")
-    .eq("clave", clave)
-    .maybeSingle();
-
-  if (error) {
-    console.error(error);
-    alert("No se pudo verificar si el documento ya fue importado. Ejecuta primero el SQL de documentos_importados en Supabase.");
-    return true;
-  }
-
-  return !!data;
-};
-
-const registrarDocumentoImportado = async ({ clave, tipo, proveedor, documento, fecha, total, origen }) => {
-  if (!clave) return true;
-
-  const { error } = await supabase
-    .from("documentos_importados")
-    .insert([{
-      clave,
-      tipo: tipo || "documento",
-      proveedor: proveedor || "",
-      documento: documento || "",
-      fecha: fecha || new Date().toISOString().split("T")[0],
-      total: Number(total || 0),
-      origen: origen || "app"
-    }]);
-
-  if (error) {
-    console.error(error);
-    alert("La operación se guardó, pero no se pudo registrar el documento como importado. Revisa la tabla documentos_importados.");
-    return false;
-  }
-
-  return true;
-};
-
-const subirProductosAInventarioDesdeDocumento = async (productos, origen = "documento_compra") => {
-  for (const item of productos) {
-    const nombre = String(item.nombre || "").trim().toUpperCase();
-    const cantidad = Number(item.cantidad || 0);
-
-    if (!nombre || cantidad <= 0) continue;
-
-    const productoExistente = productosInventario.find(
-      p => String(p.nombre || "").trim().toUpperCase() === nombre
-    );
-
-    if (productoExistente) {
-      const stockAnterior = Number(productoExistente.stock_actual || 0);
-      const stockNuevo = stockAnterior + cantidad;
-
-      const { data, error } = await supabase
-        .from("inventario_productos")
-        .update({ stock_actual: stockNuevo })
-        .eq("id", productoExistente.id)
-        .select();
-
-      if (error) {
-        console.error(error);
-        alert(`Error actualizando ${nombre}`);
-        return false;
-      }
-
-      await supabase
-        .from("inventario_movimientos")
-        .insert([{
-          producto_id: productoExistente.id,
-          tipo: "entrada",
-          cantidad,
-          stock_anterior: stockAnterior,
-          stock_nuevo: stockNuevo,
-          origen
-        }]);
-
-      setProductosInventario(prev =>
-        prev.map(p => p.id === productoExistente.id ? data[0] : p)
-      );
-    } else {
-      const categoria = detectarCategoriaProducto(nombre);
-      const unidad = detectarUnidadProducto(nombre);
-      const esLaminado = categoria === "Laminados";
-
-      const { data, error } = await supabase
-        .from("inventario_productos")
-        .insert([{
-          nombre,
-          categoria,
-          unidad,
-          stock_actual: cantidad,
-          stock_minimo: 0,
-          proveedor: "",
-          es_laminado: esLaminado,
-          activo: true
-        }])
-        .select();
-
-      if (error) {
-        console.error(error);
-        alert(`Error creando ${nombre}`);
-        return false;
-      }
-
-      const nuevoProducto = data[0];
-
-      await supabase
-        .from("inventario_movimientos")
-        .insert([{
-          producto_id: nuevoProducto.id,
-          tipo: "entrada",
-          cantidad,
-          stock_anterior: 0,
-          stock_nuevo: cantidad,
-          origen
-        }]);
-
-      setProductosInventario(prev =>
-        [...prev, nuevoProducto].sort((a,b) => a.nombre.localeCompare(b.nombre))
-      );
-    }
-  }
-
-  return true;
-};
-
-const textoXml = (xmlDoc, tag) => {
-  const el = xmlDoc.getElementsByTagName(tag)?.[0];
-  return String(el?.textContent || "").trim();
-};
-
-const leerFacturaXml = async (file) => {
-  const texto = await file.text();
-  const xmlDoc = new DOMParser().parseFromString(texto, "text/xml");
-
-  if (xmlDoc.getElementsByTagName("parsererror").length) {
-    throw new Error("El XML no se pudo leer correctamente.");
-  }
-
-  const tipoDte = textoXml(xmlDoc, "TipoDTE");
-  const folio = textoXml(xmlDoc, "Folio");
-  const fecha = textoXml(xmlDoc, "FchEmis") || new Date().toISOString().split("T")[0];
-  const rutProveedor = textoXml(xmlDoc, "RUTEmisor");
-  const proveedor = textoXml(xmlDoc, "RznSoc") || "Proveedor";
-  const neto = Number(textoXml(xmlDoc, "MntNeto") || 0);
-  const iva = Number(textoXml(xmlDoc, "IVA") || 0);
-  const total = Number(textoXml(xmlDoc, "MntTotal") || 0);
-
-  if (!tipoDte || !folio || !rutProveedor || !total) {
-    throw new Error("No se pudo leer tipo DTE, folio, proveedor o total del XML.");
-  }
-
-  const detalles = Array.from(xmlDoc.getElementsByTagName("Detalle"))
-    .map((d) => ({
-      nombre: String(d.getElementsByTagName("NmbItem")?.[0]?.textContent || "").trim().toUpperCase(),
-      cantidad: Number(d.getElementsByTagName("QtyItem")?.[0]?.textContent || 0),
-      precio: Number(d.getElementsByTagName("PrcItem")?.[0]?.textContent || 0),
-      total: Number(d.getElementsByTagName("MontoItem")?.[0]?.textContent || 0)
-    }))
-    .filter(d => d.nombre && d.cantidad > 0);
-
-  if (detalles.length === 0) {
-    throw new Error("El XML no trae productos/detalle legible.");
-  }
-
-  return {
-    tipoDte,
-    folio,
-    fecha,
-    rutProveedor,
-    proveedor,
-    neto,
-    iva,
-    total,
-    detalles,
-    clave: `${tipoDte}-${normalizarClaveDocumento(rutProveedor)}-${normalizarClaveDocumento(folio)}`,
-    documento: `DTE-${tipoDte}-${folio}`,
-    archivo: file.name
-  };
-};
-
-const importarFacturaXml = async (event) => {
-  const file = event.target.files?.[0];
-  if (!file) return;
-
-  try {
-    const factura = await leerFacturaXml(file);
-    const yaExiste = await existeDocumentoImportado(factura.clave);
-
-    if (yaExiste) {
-      alert(`Esta factura XML ya fue importada anteriormente.\n\nDocumento: ${factura.documento}\nProveedor: ${factura.proveedor}`);
-      event.target.value = "";
-      return;
-    }
-
-    setPreviewFacturaXml(factura);
-    setModalFacturaXml(true);
-  } catch (error) {
-    console.error(error);
-    alert(error.message || "No se pudo leer la factura XML.");
-  }
-
-  event.target.value = "";
-};
-
-const confirmarImportacionFacturaXml = async ({ modo, estadoPago, cuentaCompra }) => {
-  if (!previewFacturaXml) return;
-
-  const factura = previewFacturaXml;
-  const yaExiste = await existeDocumentoImportado(factura.clave);
-
-  if (yaExiste) {
-    alert(`Esta factura ya fue importada anteriormente.\n\n${factura.documento} · ${factura.proveedor}`);
-    setModalFacturaXml(false);
-    setPreviewFacturaXml(null);
-    return;
-  }
-
-  if (modo === "inventario_contabilidad") {
-    const okInventario = await subirProductosAInventarioDesdeDocumento(
-      factura.detalles,
-      "factura_xml"
-    );
-
-    if (!okInventario) return;
-  }
-
-  await crearAsientoCompraAutomatica({
-    fecha: factura.fecha,
-    documento: factura.documento,
-    proveedor: factura.proveedor,
-    totalCompra: factura.total,
-    estadoPago: estadoPago || "pagado",
-    cuentaCompra: cuentaCompra || (modo === "inventario_contabilidad" ? "Compras" : "Gastos generales"),
-    detalleBase: `Factura XML ${factura.folio} ${factura.proveedor}`.trim()
-  });
-
-  await registrarDocumentoImportado({
-    clave: factura.clave,
-    tipo: `DTE-${factura.tipoDte}`,
-    proveedor: factura.proveedor,
-    documento: factura.documento,
-    fecha: factura.fecha,
-    total: factura.total,
-    origen: modo === "inventario_contabilidad" ? "xml_inventario_contabilidad" : "xml_contabilidad"
-  });
-
-  setPreviewFacturaXml(null);
-  setModalFacturaXml(false);
-  alert("Factura XML importada correctamente.");
 };
 
 const leerProductosDesdeOC = async (file) => {
@@ -5080,21 +4653,6 @@ const detectarUnidadProducto = (nombre) => {
 const confirmarImportacionOC = async (datosCompra = {}) => {
   if (previewOC.length === 0) return;
 
-  const documentoCompra = String(datosCompra.documento || "").trim();
-  const proveedorCompra = String(datosCompra.proveedor || "").trim();
-  const claveDocumento = documentoCompra
-    ? `OC-${normalizarClaveDocumento(proveedorCompra || "SIN_PROVEEDOR")}-${normalizarClaveDocumento(documentoCompra)}`
-    : "";
-
-  if (claveDocumento) {
-    const yaExiste = await existeDocumentoImportado(claveDocumento);
-
-    if (yaExiste) {
-      alert(`Esta OC / factura ya fue importada anteriormente.\n\nDocumento: ${documentoCompra}\nProveedor: ${proveedorCompra || "sin proveedor"}`);
-      return;
-    }
-  }
-
   for (const item of previewOC) {
     const nombre = item.nombre.trim().toUpperCase();
     const cantidad = Number(item.cantidad) || 0;
@@ -5186,18 +4744,6 @@ const confirmarImportacionOC = async (datosCompra = {}) => {
       totalCompra: datosCompra.totalCompra,
       estadoPago: datosCompra.estadoPago || "pagado",
       detalleBase: `Compra OC ${datosCompra.documento || "sin documento"} ${datosCompra.proveedor || ""}`.trim()
-    });
-  }
-
-  if (claveDocumento) {
-    await registrarDocumentoImportado({
-      clave: claveDocumento,
-      tipo: "OC",
-      proveedor: proveedorCompra,
-      documento: documentoCompra,
-      fecha: datosCompra.fecha || new Date().toISOString().split("T")[0],
-      total: Number(datosCompra.totalCompra || 0),
-      origen: "oc_excel"
     });
   }
 
@@ -5744,7 +5290,7 @@ const maxRankingCantidad = Math.max(...rankingLaminas.map(r => r.cantidad), 1);
 <label
   style={{
     padding: "10px 18px",
-    background: COLORS.warninging,
+    background: COLORS.warning,
     borderRadius: 8,
     fontWeight: 700,
     cursor: "pointer",
@@ -5777,20 +5323,20 @@ const maxRankingCantidad = Math.max(...rankingLaminas.map(r => r.cantidad), 1);
               <StatCard label="Conversión" value={`${rate}%`} sub={`${vendidas.length} de ${cotizaciones.length}`} icon="🎯" color={COLORS.accent}/>
               <StatCard label="Vendidas" value={vendidas.length} sub={fmt(totalSold)} icon="✅" color={COLORS.success}/>
               <StatCard label="Activas" value={activas.length} sub={fmt(totalActiva)} icon="●" color="#5a8abe"/>
-              <StatCard label="Seguimiento" value={urgentes.length} sub="7-10 días hábiles" icon="⚡" color={COLORS.warninging}/>
+              <StatCard label="Seguimiento" value={urgentes.length} sub="7-10 días hábiles" icon="⚡" color={COLORS.warning}/>
               <StatCard label="Vencidas" value={vencidas.length} sub={fmt(totalVencida)} icon="✕" color="#9a7aaa"/>
               <StatCard label="Total Vendido" value={fmt(totalSold)} sub="30 notas" icon="💰" color={COLORS.success}/>
             </div>
 
             {urgentes.length>0 && (
-              <div style={{ background:"#1e1500", border:`1px solid ${COLORS.warninging}`, borderRadius:10, padding:"12px 16px", marginBottom:16 }}>
-                <div style={{ fontSize:12, fontWeight:700, color:COLORS.warninging, marginBottom:8 }}>⚡ {urgentes.length} cotizaciones requieren seguimiento urgente</div>
+              <div style={{ background:"#1e1500", border:`1px solid ${COLORS.warning}`, borderRadius:10, padding:"12px 16px", marginBottom:16 }}>
+                <div style={{ fontSize:12, fontWeight:700, color:COLORS.warning, marginBottom:8 }}>⚡ {urgentes.length} cotizaciones requieren seguimiento urgente</div>
                 {urgentes.map(q=>(
                   <div key={q.id} style={{ fontSize:12, color:COLORS.text, marginBottom:4, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
                     <span><span style={{ color:COLORS.accent }}>#{q.numero}</span> {q.cliente} — {fmt(q.total)}</span>
                     <div style={{ display:"flex", alignItems:"center", gap:8 }}>
                       <span style={{ color:COLORS.muted, fontSize:11 }}>{businessDaysSince(q.fecha)} días háb.</span>
-                      <button onClick={()=>setModalCot(q)} style={{ background:COLORS.warninging, border:"none", borderRadius:6, padding:"3px 10px", color:"#0f0e0c", fontWeight:700, cursor:"pointer", fontSize:11 }}>+ Nota</button>
+                      <button onClick={()=>setModalCot(q)} style={{ background:COLORS.warning, border:"none", borderRadius:6, padding:"3px 10px", color:"#0f0e0c", fontWeight:700, cursor:"pointer", fontSize:11 }}>+ Nota</button>
                    <button
     onClick={() => setModalEditarCotizacion(q)}
     style={{
@@ -5817,12 +5363,12 @@ const maxRankingCantidad = Math.max(...rankingLaminas.map(r => r.cantidad), 1);
                 <span style={{ fontSize:11, color:COLORS.muted, textTransform:"uppercase", letterSpacing:1, marginBottom:4 }}>Conversión</span>
                 <svg width="160" height="92" viewBox="0 0 160 92">
                   <path d={arcPath(startA,startA+sweepA)} stroke={COLORS.subtle} strokeWidth="11" fill="none" strokeLinecap="round"/>
-                  <path d={arcPath(startA,fillEnd)} stroke={Number(rate)>=40?COLORS.success:COLORS.warninging} strokeWidth="11" fill="none" strokeLinecap="round"/>
+                  <path d={arcPath(startA,fillEnd)} stroke={Number(rate)>=40?COLORS.success:COLORS.warning} strokeWidth="11" fill="none" strokeLinecap="round"/>
                 </svg>
                 <div style={{ fontSize:38, fontWeight:800, color:COLORS.accent, fontFamily:"Georgia,serif", lineHeight:1, marginTop:-10 }}>{rate}%</div>
                 <div style={{ fontSize:11, color:COLORS.muted, marginTop:4, textAlign:"center" }}>{vendidas.length} vendidas · {vencidas.length} vencidas</div>
                 <div style={{ marginTop:10, width:"100%", display:"flex", flexDirection:"column", gap:5 }}>
-                  {[["✓ Vendidas",vendidas.length,COLORS.success],["● Activas",activas.length,"#5a8abe"],["⚡ Seguimiento",urgentes.length,COLORS.warninging],["✕ Vencidas",vencidas.length,"#9a7aaa"]].map(([l,c,col])=>(
+                  {[["✓ Vendidas",vendidas.length,COLORS.success],["● Activas",activas.length,"#5a8abe"],["⚡ Seguimiento",urgentes.length,COLORS.warning],["✕ Vencidas",vencidas.length,"#9a7aaa"]].map(([l,c,col])=>(
                     <div key={l} style={{ display:"flex", justifyContent:"space-between" }}>
                       <span style={{ fontSize:11, color:col }}>{l}</span><span style={{ fontSize:11, color:COLORS.muted }}>{c}</span>
                     </div>
@@ -5971,7 +5517,7 @@ const maxRankingCantidad = Math.max(...rankingLaminas.map(r => r.cantidad), 1);
         : q.status === "vencida"
         ? COLORS.danger
         : q.status === "urgente"
-        ? COLORS.warninging
+        ? COLORS.warning
         : COLORS.text,
     cursor:"pointer",
     textDecoration:"underline"
@@ -6040,13 +5586,13 @@ const maxRankingCantidad = Math.max(...rankingLaminas.map(r => r.cantidad), 1);
                 <div
                 key={s.id}
                 onClick={() => setModalNV(s)}
-                style={{background:COLORS.card, border:`1px solid ${s.cotizacion?"#2d5040":COLORS.border}`, borderLeft:`4px solid ${s.cotizacion?COLORS.success:COLORS.warninging}`, borderRadius:10, padding:"11px 14px", display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:8 }}>
+                style={{background:COLORS.card, border:`1px solid ${s.cotizacion?"#2d5040":COLORS.border}`, borderLeft:`4px solid ${s.cotizacion?COLORS.success:COLORS.warning}`, borderRadius:10, padding:"11px 14px", display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:8 }}>
                   <div>
   <div>
     <span style={{ fontWeight:700, color:COLORS.success, marginRight:8 }}>NV#{s.numero}</span>
     <span style={{ color:COLORS.text }}>{s.cliente}</span>
     {s.cotizacion ? <span style={{ marginLeft:8, fontSize:11, color:COLORS.muted, background:COLORS.subtle, borderRadius:4, padding:"2px 7px" }}>← COT#{s.cotizacion}</span>
-      : <span style={{ marginLeft:8, fontSize:11, color:COLORS.warninging, background:"#2a1f0a", borderRadius:4, padding:"2px 7px", border:`1px solid ${COLORS.warninging}` }}>sin cotización</span>}
+      : <span style={{ marginLeft:8, fontSize:11, color:COLORS.warning, background:"#2a1f0a", borderRadius:4, padding:"2px 7px", border:`1px solid ${COLORS.warning}` }}>sin cotización</span>}
     <span style={{ color:COLORS.muted, marginLeft:8, fontSize:11 }}>{s.fecha}</span>
   </div>
 
@@ -6183,13 +5729,13 @@ const maxRankingCantidad = Math.max(...rankingLaminas.map(r => r.cantidad), 1);
                 <div
                 key={s.id}
                 onClick={() => setModalNV(s)}
-                style={{background:COLORS.card, border:`1px solid ${s.cotizacion?"#2d5040":COLORS.border}`, borderLeft:`4px solid ${s.cotizacion?COLORS.success:COLORS.warninging}`, borderRadius:10, padding:"11px 14px", display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:8 }}>
+                style={{background:COLORS.card, border:`1px solid ${s.cotizacion?"#2d5040":COLORS.border}`, borderLeft:`4px solid ${s.cotizacion?COLORS.success:COLORS.warning}`, borderRadius:10, padding:"11px 14px", display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:8 }}>
                   <div>
   <div>
     <span style={{ fontWeight:700, color:COLORS.success, marginRight:8 }}>Barrán #{s.numero}</span>
     <span style={{ color:COLORS.text }}>{s.cliente}</span>
     {s.cotizacion ? <span style={{ marginLeft:8, fontSize:11, color:COLORS.muted, background:COLORS.subtle, borderRadius:4, padding:"2px 7px" }}>← COT#{s.cotizacion}</span>
-      : <span style={{ marginLeft:8, fontSize:11, color:COLORS.warninging, background:"#2a1f0a", borderRadius:4, padding:"2px 7px", border:`1px solid ${COLORS.warninging}` }}>barrán interno</span>}
+      : <span style={{ marginLeft:8, fontSize:11, color:COLORS.warning, background:"#2a1f0a", borderRadius:4, padding:"2px 7px", border:`1px solid ${COLORS.warning}` }}>barrán interno</span>}
     <span style={{ color:COLORS.muted, marginLeft:8, fontSize:11 }}>{s.fecha}</span>
   </div>
 
@@ -6366,7 +5912,7 @@ const maxRankingCantidad = Math.max(...rankingLaminas.map(r => r.cantidad), 1);
             border: estaAtrasada(n.fecha_entrega_estimada)
   ? `1px solid ${COLORS.danger}`
   : venceHoy(n.fecha_entrega_estimada)
-  ? `1px solid ${COLORS.warninging}`
+  ? `1px solid ${COLORS.warning}`
   : `1px solid ${COLORS.border}`,
             borderRadius:12,
             padding:14
@@ -6398,7 +5944,7 @@ const maxRankingCantidad = Math.max(...rankingLaminas.map(r => r.cantidad), 1);
   <b style={{ color:COLORS.danger }}>(Atrasada)</b>
 )}
 {venceHoy(n.fecha_entrega_estimada) && (
-  <b style={{ color:COLORS.warninging }}>(Para hoy)</b>
+  <b style={{ color:COLORS.warning }}>(Para hoy)</b>
 )}
 {venceManana(n.fecha_entrega_estimada) && (
   <b style={{ color:"#60a5fa" }}>(Para mañana)</b>
@@ -6417,11 +5963,10 @@ const maxRankingCantidad = Math.max(...rankingLaminas.map(r => r.cantidad), 1);
               {n.armado && <span>✅ Armado</span>}
               {n.pegado && <span>✅ Pegado</span>}
               {n.postformado && <span>✅ Postformado</span>}
-              {n.media_cana && <span>✅ Media caña</span>}
             </div>
 
             {n.produccion_observaciones && (
-              <p style={{ marginTop:10, color:COLORS.warninging }}>
+              <p style={{ marginTop:10, color:COLORS.warning }}>
                 Obs: {n.produccion_observaciones}
               </p>
             )}
@@ -6491,28 +6036,6 @@ const maxRankingCantidad = Math.max(...rankingLaminas.map(r => r.cantidad), 1);
     accept=".xls,.xlsx"
     multiple
     onChange={importarOrdenCompraExcel}
-    style={{ display:"none" }}
-  />
-</label>
-<label
-  style={{
-    display:"inline-block",
-    marginLeft:8,
-    marginBottom:14,
-    padding:"9px 12px",
-    borderRadius:8,
-    border:`1px solid ${COLORS.border}`,
-    background:COLORS.surface,
-    color:COLORS.text,
-    fontWeight:700,
-    cursor:"pointer"
-  }}
->
-  📄 Importar Factura XML
-  <input
-    type="file"
-    accept=".xml,text/xml,application/xml"
-    onChange={importarFacturaXml}
     style={{ display:"none" }}
   />
 </label>
@@ -7002,7 +6525,7 @@ const maxRankingCantidad = Math.max(...rankingLaminas.map(r => r.cantidad), 1);
 
             <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))", gap:12, marginBottom:18 }}>
               <StatCard label="Ventas del mes" value={fmt(resumenVentasLaminasMes.venta)} sub={`${ventasLaminasDelMes.length} registros`} icon="💰" color={COLORS.success}/>
-              <StatCard label="Costos del mes" value={fmt(resumenVentasLaminasMes.costo)} icon="🧾" color={COLORS.warninging}/>
+              <StatCard label="Costos del mes" value={fmt(resumenVentasLaminasMes.costo)} icon="🧾" color={COLORS.warning}/>
               <StatCard label="Utilidad neta" value={fmt(resumenVentasLaminasMes.utilidad)} icon="📈" color={resumenVentasLaminasMes.utilidad >= 0 ? COLORS.success : COLORS.danger}/>
               <StatCard label="IVA a provisionar" value={fmt(resumenVentasLaminasMes.iva)} icon="🏛️" color={resumenVentasLaminasMes.iva >= 0 ? COLORS.accent : COLORS.danger}/>
             </div>
@@ -7118,18 +6641,18 @@ const maxRankingCantidad = Math.max(...rankingLaminas.map(r => r.cantidad), 1);
 
             <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))", gap:12, marginBottom:14 }}>
               <StatCard label="Debe total" value={fmt(resumenContabilidad.debe)} icon="⬅️" color={COLORS.success}/>
-              <StatCard label="Haber total" value={fmt(resumenContabilidad.haber)} icon="➡️" color={COLORS.warninging}/>
+              <StatCard label="Haber total" value={fmt(resumenContabilidad.haber)} icon="➡️" color={COLORS.warning}/>
               <StatCard label="Diferencia" value={fmt(diferenciaContabilidad)} sub={Math.abs(diferenciaContabilidad) === 0 ? "Cuadrado" : "No cuadrado"} icon="⚖️" color={Math.abs(diferenciaContabilidad) === 0 ? COLORS.success : COLORS.danger}/>
               <StatCard label="IVA CF" value={fmt(resumenContabilidad.ivaCf)} icon="🧾" color={COLORS.accent}/>
               <StatCard label="IVA DF" value={fmt(resumenContabilidad.ivaDf)} icon="🏛️" color={COLORS.accent}/>
-              <StatCard label="IVA a pagar" value={fmt(resumenContabilidad.ivaDf - resumenContabilidad.ivaCf)} icon="📌" color={(resumenContabilidad.ivaDf - resumenContabilidad.ivaCf) >= 0 ? COLORS.warninging : COLORS.success}/>
+              <StatCard label="IVA a pagar" value={fmt(resumenContabilidad.ivaDf - resumenContabilidad.ivaCf)} icon="📌" color={(resumenContabilidad.ivaDf - resumenContabilidad.ivaCf) >= 0 ? COLORS.warning : COLORS.success}/>
             </div>
 
             <div
   onClick={() => setModalCxcClientes(true)}
   style={{ cursor: "pointer" }}
 >
-  <StatCard label="CxC Clientes" value={fmt(totalCxcNotas)} icon="👥" color={COLORS.warninging}/>
+  <StatCard label="CxC Clientes" value={fmt(totalCxcNotas)} icon="👥" color={COLORS.warning}/>
 </div>
 
             <div style={{ background:COLORS.card, border:`1px solid ${COLORS.border}`, borderRadius:12, padding:14 }}>
@@ -7169,7 +6692,7 @@ const maxRankingCantidad = Math.max(...rankingLaminas.map(r => r.cantidad), 1);
                           <td style={{ padding:"8px", borderBottom:`1px solid ${COLORS.border}` }}>{a.documento}</td>
                           <td style={{ padding:"8px", borderBottom:`1px solid ${COLORS.border}` }}>{a.definicion}</td>
                           <td style={{ padding:"8px", borderBottom:`1px solid ${COLORS.border}`, textAlign:"right", color:COLORS.success, fontWeight:700 }}>{Number(a.debe || 0) > 0 ? fmt(a.debe) : "-"}</td>
-                          <td style={{ padding:"8px", borderBottom:`1px solid ${COLORS.border}`, textAlign:"right", color:COLORS.warninging, fontWeight:700 }}>{Number(a.haber || 0) > 0 ? fmt(a.haber) : "-"}</td>
+                          <td style={{ padding:"8px", borderBottom:`1px solid ${COLORS.border}`, textAlign:"right", color:COLORS.warning, fontWeight:700 }}>{Number(a.haber || 0) > 0 ? fmt(a.haber) : "-"}</td>
                           <td style={{ padding:"8px", borderBottom:`1px solid ${COLORS.border}`, textAlign:"right" }}>
                             <button onClick={() => setModalContabilidad(a)} style={{ marginRight:6, background:COLORS.surface, color:COLORS.text, border:`1px solid ${COLORS.border}`, borderRadius:7, padding:"5px 8px", cursor:"pointer" }}>Editar</button>
                             <button onClick={() => eliminarAsientoContable(a)} style={{ background:COLORS.danger, color:"#fff", border:"none", borderRadius:7, padding:"5px 8px", cursor:"pointer" }}>Eliminar</button>
@@ -7242,13 +6765,6 @@ const maxRankingCantidad = Math.max(...rankingLaminas.map(r => r.cantidad), 1);
     onClose={() => setModalSobrantesLaminado(null)}
     onSave={guardarSobrantesLaminado}
     onUsar={marcarSobranteUsado}
-  />
-)}
-{modalFacturaXml && previewFacturaXml && (
-  <FacturaXmlModal
-    factura={previewFacturaXml}
-    onClose={() => { setModalFacturaXml(false); setPreviewFacturaXml(null); }}
-    onConfirm={confirmarImportacionFacturaXml}
   />
 )}
 {modalPreviewOC && (
