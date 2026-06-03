@@ -3184,66 +3184,35 @@ export default function App() {
     defval: ""
   });
 
-  const normalizar = (txt) => String(txt || "")
-    .toUpperCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .trim();
-
-  const esNumeroUtil = (v) => {
-    const n = Number(v);
-    return Number.isFinite(n) && n > 0;
-  };
-
-  const obtenerIndex = (encabezados, palabras) => {
-    for (let i = 0; i < encabezados.length; i++) {
-      const h = normalizar(encabezados[i]);
-      if (palabras.some(p => h === p || h.includes(p))) return i;
-    }
-    return -1;
-  };
-
   let inicioDetalle = -1;
-  let columnas = null;
 
   for (let i = 0; i < filas.length; i++) {
-    const fila = filas[i];
-    const textoFila = fila.map(normalizar).join(" ");
+    const textoFila = filas[i].join(" ").toUpperCase();
 
     if (
       textoFila.includes("MATERIAL") &&
       textoFila.includes("CANTIDAD") &&
-      (textoFila.includes("DESCRIPCION") || textoFila.includes("DESCRIPCIÓN")) &&
+      textoFila.includes("DESCRIPCIÓN") &&
       textoFila.includes("COLOR")
     ) {
-      const materialIdx = obtenerIndex(fila, ["MATERIAL"]);
-      const cantidadIdx = obtenerIndex(fila, ["CANTIDAD", "UNIDAD"]);
-      const descripcionIdx = obtenerIndex(fila, ["DESCRIPCION", "DESCRIPCIÓN", "TIPO"]);
-      const altoIdx = obtenerIndex(fila, ["ALTO", "LARGO"]);
-      const anchoIdx = obtenerIndex(fila, ["ANCHO"]);
-      const colorIdx = obtenerIndex(fila, ["COLOR"]);
-
-      if (cantidadIdx >= 0 && descripcionIdx >= 0 && altoIdx >= 0 && anchoIdx >= 0) {
-        inicioDetalle = i + 1;
-        columnas = { materialIdx, cantidadIdx, descripcionIdx, altoIdx, anchoIdx, colorIdx };
-        break;
-      }
+      inicioDetalle = i + 1;
+      break;
     }
   }
 
-  if (inicioDetalle === -1 || !columnas) return [];
+  if (inicioDetalle === -1) return [];
 
   const detalles = [];
 
   for (let i = inicioDetalle; i < filas.length; i++) {
     const fila = filas[i];
 
-    const material = columnas.materialIdx >= 0 ? String(fila[columnas.materialIdx] || "").trim() : "";
-    const cantidad = fila[columnas.cantidadIdx];
-    const descripcion = String(fila[columnas.descripcionIdx] || "").trim();
-    const alto = fila[columnas.altoIdx];
-    const ancho = fila[columnas.anchoIdx];
-    const color = columnas.colorIdx >= 0 ? String(fila[columnas.colorIdx] || "").trim() : "";
+    const material = String(fila[0] || "").trim();
+    const cantidad = fila[1];
+    const descripcion = String(fila[2] || "").trim();
+    const alto = fila[3];
+    const ancho = fila[4];
+    const color = String(fila[5] || "").trim();
 
     const filaVacia =
       !material &&
@@ -3254,19 +3223,6 @@ export default function App() {
       !color;
 
     if (filaVacia) break;
-
-    const descripcionNorm = normalizar(descripcion);
-
-    if (
-      descripcionNorm.includes("DESPACHO") ||
-      descripcionNorm.includes("FLETE") ||
-      descripcionNorm.includes("TRASLADO")
-    ) {
-      continue;
-    }
-
-    if (!esNumeroUtil(cantidad) && !descripcion) continue;
-    if (!esNumeroUtil(alto) && !esNumeroUtil(ancho)) continue;
 
     detalles.push({
       material,
@@ -5719,44 +5675,96 @@ const maxRankingCantidad = Math.max(...rankingLaminas.map(r => r.cantidad), 1);
 
   return (
     <div style={{ minHeight:"100vh", background:COLORS.bg, color:COLORS.text, fontFamily:"'Trebuchet MS',sans-serif", paddingBottom:60 }}>
- 
-  <div
+ <div style={{ margin:20, padding:16, background:COLORS.card, border:`1px solid ${COLORS.border}`, borderRadius:12, display:"flex", gap:10, flexWrap:"wrap" }}>
+  
+
+  <label
   style={{
-    margin: "16px auto",
-    padding: 16,
-    background: COLORS.card,
-    border: `1px solid ${COLORS.border}`,
-    borderRadius: 12,
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-    gap: 12,
-    maxWidth: 720,
-    width: "calc(100% - 32px)"
+    padding: "10px 18px",
+    background: COLORS.success,
+    border: "none",
+    borderRadius: 8,
+    fontWeight: 700,
+    cursor: "pointer",
+    color: "#fff"
   }}
 >
-  <label style={{ padding:"14px 16px", background:COLORS.success, borderRadius:10, fontWeight:700, cursor:"pointer", color:"#fff", textAlign:"center" }}>
-    Agregar NV
-    <input type="file" accept=".xlsx,.xls" multiple onChange={importarExcel} style={{ display:"none" }} />
-  </label>
-
-  <label style={{ padding:"14px 16px", background:"#8b5cf6", borderRadius:10, fontWeight:700, cursor:"pointer", color:"#fff", textAlign:"center" }}>
-    Agregar Barranes
-    <input type="file" accept=".xlsx,.xls" multiple onChange={importarBarranesExcel} style={{ display:"none" }} />
-  </label>
-
-  <label style={{ padding:"14px 16px", background:COLORS.accent, borderRadius:10, fontWeight:700, cursor:"pointer", color:"#fff", textAlign:"center" }}>
-    Agregar Cotización
-    <input type="file" accept=".xlsx,.xls" multiple onChange={importarCotizacion} style={{ display:"none" }} />
-  </label>
-
-  <label style={{ padding:"14px 16px", background:COLORS.warninging || COLORS.warning || "#d6b45f", borderRadius:10, fontWeight:700, cursor:"pointer", color:"#fff", textAlign:"center" }}>
-    Agregar Venta Láminas
-    <input type="file" accept=".xlsx,.xls" onChange={importarVentaLaminasExcel} style={{ display:"none" }} />
-  </label>
+  Importar NV
+  <input
+    type="file"
+    accept=".xlsx,.xls"
+    multiple
+    onChange={importarExcel}
+    style={{ display: "none" }}
+  />
+</label>
+<label
+  style={{
+    padding: "10px 18px",
+    background: "#8b5cf6",
+    border: "none",
+    borderRadius: 8,
+    fontWeight: 700,
+    cursor: "pointer",
+    color: "#fff",
+    display: "inline-block",
+    marginLeft: 10
+  }}
+>
+  Importar Barrán
+  <input
+    type="file"
+    accept=".xlsx,.xls"
+    multiple
+    onChange={importarBarranesExcel}
+    style={{ display: "none" }}
+  />
+</label>
+<label
+  style={{
+    padding: "10px 18px",
+    background: COLORS.accent,
+    borderRadius: 8,
+    fontWeight: 700,
+    cursor: "pointer",
+    color: "#fff",
+    display: "inline-block",
+    marginLeft: 10
+  }}
+>
+  Importar Cotización
+  <input
+    type="file"
+    accept=".xlsx,.xls"
+    multiple
+    onChange={importarCotizacion}
+    style={{ display: "none" }}
+  />
+</label>
+<label
+  style={{
+    padding: "10px 18px",
+    background: COLORS.warninging,
+    borderRadius: 8,
+    fontWeight: 700,
+    cursor: "pointer",
+    color: "#111",
+    display: "inline-block",
+    marginLeft: 10
+  }}
+>
+  Importar Venta Láminas
+  <input
+    type="file"
+    accept=".xlsx,.xls"
+    onChange={importarVentaLaminasExcel}
+    style={{ display: "none" }}
+  />
+</label>
 </div>
       
 
-      <div style={{ display:"flex", gap:2, padding:"12px 12px 0", borderBottom:`1px solid ${COLORS.border}`, overflowX:"auto", WebkitOverflowScrolling:"touch" }}>
+      <div style={{ display:"flex", gap:2, padding:"12px 24px 0", borderBottom:`1px solid ${COLORS.border}`, overflowX:"auto" }}>
         {tabs.map(t=>(
           <button key={t.key} onClick={()=>setTab(t.key)} style={{ background:tab===t.key?COLORS.card:"transparent", border:`1px solid ${tab===t.key?COLORS.border:"transparent"}`, borderBottom:tab===t.key?`2px solid ${COLORS.accent}`:"2px solid transparent", borderRadius:"8px 8px 0 0", padding:"8px 16px", color:tab===t.key?COLORS.accent:COLORS.muted, cursor:"pointer", fontSize:12, fontWeight:tab===t.key?700:400, whiteSpace:"nowrap" }}>{t.label}</button>
         ))}
