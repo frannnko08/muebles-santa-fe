@@ -3777,7 +3777,7 @@ if (!errorAsientosContables) {
 
   cargarDatos();
 }, []);
-  const [tab, setTab] = useState("dashboard");
+  const [tab, setTab] = useState("produccion");
   const [filter, setFilter] = useState("");
   const [fechaDesde, setFechaDesde] = useState("");
   const [fechaHasta, setFechaHasta] = useState("");
@@ -5707,14 +5707,14 @@ const rankingLaminas = Object.values(
 const maxRankingCantidad = Math.max(...rankingLaminas.map(r => r.cantidad), 1);
 
   const tabs=[
-    {key:"dashboard",label:"📊 Resumen"},
+    {key:"produccion",label:`🏭 Producción`},
+    {key:"inventario",label:`📦 Inventario`},
     {key:"quotes",label:`📋 Cotizaciones (${filteredQuotes.length})`},
     {key:"sales",label:`✅ Notas de Venta (${filteredNotas.length})`},
     {key:"barranes",label:`🧾 Barranes (${filteredBarranes.length})`},
-    {key:"produccion",label:`🏭 Producción`},
-    {key:"inventario",label:`📦 Inventario`},
     {key:"venta_laminas",label:`🧾 Venta de Láminas (${ventasLaminasDelMes.length})`},
     {key:"contabilidad",label:`📚 Contabilidad (${asientosContablesFiltrados.length})`},
+    {key:"dashboard",label:"📊 Resumen"},
   ];
 
   return (
