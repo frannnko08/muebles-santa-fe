@@ -3812,7 +3812,6 @@ if (!errorAsientosContables) {
   const [modalEditarNV, setModalEditarNV] = useState(null);
   const [modalProduccion, setModalProduccion] = useState(null);
   const [filtroProduccion, setFiltroProduccion] = useState("todos");
-  const [ordenProduccion, setOrdenProduccion] = useState("correlativo");
   const [busquedaCliente, setBusquedaCliente] = useState("")
   const [ventasLaminas, setVentasLaminas] = useState([]);
   const [detallesVentasLaminas, setDetallesVentasLaminas] = useState([]);
@@ -5707,148 +5706,6 @@ const rankingLaminas = Object.values(
 
 const maxRankingCantidad = Math.max(...rankingLaminas.map(r => r.cantidad), 1);
 
-
-const numeroProduccion = (n) => {
-  const texto = String(n?.numero || "");
-  const match = texto.match(/\d+/);
-  return match ? Number(match[0]) : 0;
-};
-
-const ordenarProduccion = (items) => {
-  const lista = [...items];
-
-  if (ordenProduccion === "fecha_entrega") {
-    return lista.sort((a,b) => {
-      const prioridadA = prioridadProduccion(a);
-      const prioridadB = prioridadProduccion(b);
-
-      if (prioridadA !== prioridadB) return prioridadA - prioridadB;
-
-      if (!a.fecha_entrega_estimada && !b.fecha_entrega_estimada) {
-        return numeroProduccion(b) - numeroProduccion(a);
-      }
-      if (!a.fecha_entrega_estimada) return 1;
-      if (!b.fecha_entrega_estimada) return -1;
-
-      const diferenciaFecha = new Date(a.fecha_entrega_estimada) - new Date(b.fecha_entrega_estimada);
-      if (diferenciaFecha !== 0) return diferenciaFecha;
-
-      return numeroProduccion(b) - numeroProduccion(a);
-    });
-  }
-
-  return lista.sort((a,b) => {
-    const diferenciaNumero = numeroProduccion(b) - numeroProduccion(a);
-    if (diferenciaNumero !== 0) return diferenciaNumero;
-    return String(b.numero || "").localeCompare(String(a.numero || ""), "es-CL", { numeric:true });
-  });
-};
-
-const trabajosProduccionBase = notas
-  .filter(n => n.proceso !== "entregado")
-  .filter(n => coincideFiltroProduccion(n, filtroProduccion));
-
-const trabajosProduccionNV = ordenarProduccion(
-  trabajosProduccionBase.filter(n => (n.tipo_documento || "nv") !== "barran")
-);
-
-const trabajosProduccionBarranes = ordenarProduccion(
-  trabajosProduccionBase.filter(n => (n.tipo_documento || "nv") === "barran")
-);
-
-const renderTarjetaProduccion = (n) => (
-  <div
-    key={n.id}
-    onClick={() => setModalProduccion(n)}
-    style={{
-      cursor:"pointer",
-      background:COLORS.card,
-      border: estaAtrasada(n.fecha_entrega_estimada)
-        ? `1px solid ${COLORS.danger}`
-        : venceHoy(n.fecha_entrega_estimada)
-        ? `1px solid ${COLORS.warninging}`
-        : `1px solid ${COLORS.border}`,
-      borderRadius:12,
-      padding:14
-    }}
-  >
-    <div style={{ display:"flex", justifyContent:"space-between", gap:12, flexWrap:"wrap" }}>
-      <div>
-        <b style={{ color:COLORS.success }}>{(n.tipo_documento || "nv") === "barran" ? "Barrán #" : "NV#"}{n.numero}</b>
-        <span style={{ marginLeft:8 }}>{n.cliente}</span>
-
-        <span style={{
-          marginLeft:10,
-          padding:"3px 8px",
-          borderRadius:999,
-          fontSize:11,
-          fontWeight:700,
-          background:estadoProduccion(n).color + "22",
-          color:estadoProduccion(n).color,
-          border:`1px solid ${estadoProduccion(n).color}`
-        }}>
-          {estadoProduccion(n).texto}
-        </span>
-      </div>
-
-      <span style={{ color:COLORS.muted }}>
-        Entrega estimada: {n.fecha_entrega_estimada || "Sin fecha"}
-        {" "}
-        {estaAtrasada(n.fecha_entrega_estimada) && (
-          <b style={{ color:COLORS.danger }}>(Atrasada)</b>
-        )}
-        {venceHoy(n.fecha_entrega_estimada) && (
-          <b style={{ color:COLORS.warninging }}>(Para hoy)</b>
-        )}
-        {venceManana(n.fecha_entrega_estimada) && (
-          <b style={{ color:"#60a5fa" }}>(Para mañana)</b>
-        )}
-      </span>
-    </div>
-
-    <div style={{ marginTop:8, color:COLORS.muted, fontSize:13 }}>
-      Proceso: <b style={{ color:COLORS.text }}>{n.proceso}</b>
-    </div>
-
-    <div style={{ marginTop:10, display:"flex", gap:8, flexWrap:"wrap", fontSize:13 }}>
-      {n.mdf_cortado && <span>✅ MDF cortado</span>}
-      {n.lamina_cortada && <span>✅ Lámina cortada</span>}
-      {n.tupizado && <span>✅ Tupizado</span>}
-      {n.armado && <span>✅ Armado</span>}
-      {n.pegado && <span>✅ Pegado</span>}
-      {n.postformado && <span>✅ Postformado</span>}
-      {n.media_cana && <span>✅ Media caña</span>}
-    </div>
-
-    {n.produccion_observaciones && (
-      <p style={{ marginTop:10, color:COLORS.warninging }}>
-        Obs: {n.produccion_observaciones}
-      </p>
-    )}
-
-    <div style={{ marginTop:12, display:"flex", justifyContent:"flex-end" }}>
-      <button
-        onClick={(e) => {
-          e.stopPropagation();
-          marcarComoEntregadaProduccion(n);
-        }}
-        style={{
-          background: COLORS.success,
-          color: "#fff",
-          border: "none",
-          borderRadius: 8,
-          padding: "7px 11px",
-          fontWeight: 700,
-          cursor: "pointer",
-          fontSize: 12
-        }}
-      >
-        Entregada
-      </button>
-    </div>
-  </div>
-);
-
   const tabs=[
     {key:"produccion",label:`🏭 Producción`},
     {key:"inventario",label:`📦 Inventario`},
@@ -6454,100 +6311,143 @@ const renderTarjetaProduccion = (n) => (
     <h2 style={{ margin:"0 0 14px", fontFamily:"Georgia,serif", color:COLORS.accent, fontSize:17 }}>
       🏭 Producción
     </h2>
+<div style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:14 }}>
+  {[
+    ["todos", "Todos"],
+    ["atrasadas", "Atrasadas"],
+    ["hoy", "Para hoy"],
+    ["manana", "Para mañana"],
+    ["proceso", "En proceso"],
+    ["sin_iniciar", "Sin iniciar"],
+    ["listas", "Listas"]
+  ].map(([valor, texto]) => (
+    <button
+      key={valor}
+      onClick={() => setFiltroProduccion(valor)}
+      style={{
+        border:`1px solid ${filtroProduccion === valor ? COLORS.accent : COLORS.border}`,
+        background:filtroProduccion === valor ? COLORS.accent : COLORS.card,
+        color:filtroProduccion === valor ? "#111" : COLORS.text,
+        borderRadius:999,
+        padding:"6px 10px",
+        cursor:"pointer",
+        fontSize:12,
+        fontWeight:700
+      }}
+    >
+      {texto}
+    </button>
+  ))}
+</div>
+    <div style={{ display:"grid", gap:12 }}>
+      {notas
+  .filter(n => n.proceso !== "entregado")
+  .filter(n => coincideFiltroProduccion(n, filtroProduccion))
+  .sort((a,b) => {
+    const prioridadA = prioridadProduccion(a);
+    const prioridadB = prioridadProduccion(b);
 
-    <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:14 }}>
-      {[
-        ["todos", "Todos"],
-        ["atrasadas", "Atrasadas"],
-        ["hoy", "Para hoy"],
-        ["manana", "Para mañana"],
-        ["proceso", "En proceso"],
-        ["sin_iniciar", "Sin iniciar"],
-        ["listas", "Listas"]
-      ].map(([valor, texto]) => (
-        <button
-          key={valor}
-          onClick={() => setFiltroProduccion(valor)}
-          style={{
-            border:`1px solid ${filtroProduccion === valor ? COLORS.accent : COLORS.border}`,
-            background:filtroProduccion === valor ? COLORS.accent : COLORS.card,
-            color:filtroProduccion === valor ? "#111" : COLORS.text,
-            borderRadius:999,
-            padding:"6px 10px",
+    if (prioridadA !== prioridadB) {
+      return prioridadA - prioridadB;
+    }
+
+    if (!a.fecha_entrega_estimada) return 1;
+    if (!b.fecha_entrega_estimada) return -1;
+
+    return new Date(a.fecha_entrega_estimada) - new Date(b.fecha_entrega_estimada);
+  })
+  .map(n => (
+          <div
+           key={n.id}
+            onClick={() => setModalProduccion(n)}
+           style={{
             cursor:"pointer",
-            fontSize:12,
-            fontWeight:700
+            background:COLORS.card,
+            border: estaAtrasada(n.fecha_entrega_estimada)
+  ? `1px solid ${COLORS.danger}`
+  : venceHoy(n.fecha_entrega_estimada)
+  ? `1px solid ${COLORS.warninging}`
+  : `1px solid ${COLORS.border}`,
+            borderRadius:12,
+            padding:14
           }}
-        >
-          {texto}
-        </button>
-      ))}
-    </div>
+          >
+            <div style={{ display:"flex", justifyContent:"space-between", gap:12, flexWrap:"wrap" }}>
+              <div>
+  <b style={{ color:COLORS.success }}>{(n.tipo_documento || "nv") === "barran" ? "Barrán #" : "NV#"}{n.numero}</b>
+  <span style={{ marginLeft:8 }}>{n.cliente}</span>
 
-    <div style={{ display:"flex", gap:8, flexWrap:"wrap", alignItems:"center", marginBottom:14 }}>
-      <span style={{ fontSize:12, color:COLORS.muted, fontWeight:700 }}>Ordenar por:</span>
-      <button
-        onClick={() => setOrdenProduccion("correlativo")}
-        style={{
-          border:`1px solid ${ordenProduccion === "correlativo" ? COLORS.success : COLORS.border}`,
-          background:ordenProduccion === "correlativo" ? COLORS.success : COLORS.card,
-          color:ordenProduccion === "correlativo" ? "#fff" : COLORS.text,
-          borderRadius:8,
-          padding:"7px 10px",
-          cursor:"pointer",
-          fontSize:12,
-          fontWeight:700
-        }}
-      >
-        Nº mayor a menor
-      </button>
-      <button
-        onClick={() => setOrdenProduccion("fecha_entrega")}
-        style={{
-          border:`1px solid ${ordenProduccion === "fecha_entrega" ? COLORS.success : COLORS.border}`,
-          background:ordenProduccion === "fecha_entrega" ? COLORS.success : COLORS.card,
-          color:ordenProduccion === "fecha_entrega" ? "#fff" : COLORS.text,
-          borderRadius:8,
-          padding:"7px 10px",
-          cursor:"pointer",
-          fontSize:12,
-          fontWeight:700
-        }}
-      >
-        Fecha de entrega
-      </button>
-    </div>
+  <span style={{
+    marginLeft:10,
+    padding:"3px 8px",
+    borderRadius:999,
+    fontSize:11,
+    fontWeight:700,
+    background:estadoProduccion(n).color + "22",
+    color:estadoProduccion(n).color,
+    border:`1px solid ${estadoProduccion(n).color}`
+  }}>
+    {estadoProduccion(n).texto}
+  </span>
+</div>
 
-    <div style={{ marginBottom:18 }}>
-      <h3 style={{ margin:"0 0 10px", color:COLORS.success, fontSize:15 }}>
-        Notas de Venta ({trabajosProduccionNV.length})
-      </h3>
+              <span style={{ color:COLORS.muted }}>
+                Entrega estimada: {n.fecha_entrega_estimada || "Sin fecha"}
+{" "}
+{estaAtrasada(n.fecha_entrega_estimada) && (
+  <b style={{ color:COLORS.danger }}>(Atrasada)</b>
+)}
+{venceHoy(n.fecha_entrega_estimada) && (
+  <b style={{ color:COLORS.warninging }}>(Para hoy)</b>
+)}
+{venceManana(n.fecha_entrega_estimada) && (
+  <b style={{ color:"#60a5fa" }}>(Para mañana)</b>
+)}
+              </span>
+            </div>
 
-      {trabajosProduccionNV.length === 0 ? (
-        <div style={{ background:COLORS.card, border:`1px solid ${COLORS.border}`, borderRadius:12, padding:14, color:COLORS.muted }}>
-          No hay notas de venta para mostrar con este filtro.
-        </div>
-      ) : (
-        <div style={{ display:"grid", gap:12 }}>
-          {trabajosProduccionNV.map(renderTarjetaProduccion)}
-        </div>
-      )}
-    </div>
+            <div style={{ marginTop:8, color:COLORS.muted, fontSize:13 }}>
+              Proceso: <b style={{ color:COLORS.text }}>{n.proceso}</b>
+            </div>
 
-    <div style={{ marginTop:20 }}>
-      <h3 style={{ margin:"0 0 10px", color:"#8b5cf6", fontSize:15 }}>
-        Barranes ({trabajosProduccionBarranes.length})
-      </h3>
+            <div style={{ marginTop:10, display:"flex", gap:8, flexWrap:"wrap", fontSize:13 }}>
+              {n.mdf_cortado && <span>✅ MDF cortado</span>}
+              {n.lamina_cortada && <span>✅ Lámina cortada</span>}
+              {n.tupizado && <span>✅ Tupizado</span>}
+              {n.armado && <span>✅ Armado</span>}
+              {n.pegado && <span>✅ Pegado</span>}
+              {n.postformado && <span>✅ Postformado</span>}
+              {n.media_cana && <span>✅ Media caña</span>}
+            </div>
 
-      {trabajosProduccionBarranes.length === 0 ? (
-        <div style={{ background:COLORS.card, border:`1px solid ${COLORS.border}`, borderRadius:12, padding:14, color:COLORS.muted }}>
-          No hay barranes para mostrar con este filtro.
-        </div>
-      ) : (
-        <div style={{ display:"grid", gap:12 }}>
-          {trabajosProduccionBarranes.map(renderTarjetaProduccion)}
-        </div>
-      )}
+            {n.produccion_observaciones && (
+              <p style={{ marginTop:10, color:COLORS.warninging }}>
+                Obs: {n.produccion_observaciones}
+              </p>
+            )}
+
+            <div style={{ marginTop:12, display:"flex", justifyContent:"flex-end" }}>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  marcarComoEntregadaProduccion(n);
+                }}
+                style={{
+                  background: COLORS.success,
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: 8,
+                  padding: "7px 11px",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  fontSize: 12
+                }}
+              >
+                Entregada
+              </button>
+            </div>
+          </div>
+        ))}
     </div>
   </div>
 )}
