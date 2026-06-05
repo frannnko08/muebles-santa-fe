@@ -1434,9 +1434,10 @@ function SobrantesLaminadoModal({ producto, sobrantes, onClose, onSave, onUsar }
     </div>
   );
 }
-function PreviewOCModal({ productos, documentos = [], onClose, onConfirm }) {
+function PreviewOCModal({ productos, onClose, onConfirm }) {
   const hoy = new Date().toISOString().split("T")[0];
   const [fecha, setFecha] = useState(hoy);
+  const [documento, setDocumento] = useState("");
   const [proveedor, setProveedor] = useState("");
   const [totalCompra, setTotalCompra] = useState("");
   const [estadoPago, setEstadoPago] = useState("pagado");
@@ -1463,11 +1464,10 @@ function PreviewOCModal({ productos, documentos = [], onClose, onConfirm }) {
     boxSizing:"border-box"
   };
 
-  const documentoPrincipal = documentos.length === 1 ? documentos[0]?.documento : "OC MASIVA";
-
   const confirmar = () => {
     onConfirm({
       fecha,
+      documento: documento.trim(),
       proveedor: proveedor.trim(),
       totalCompra: Number(totalCompra || 0),
       estadoPago
@@ -1496,7 +1496,7 @@ function PreviewOCModal({ productos, documentos = [], onClose, onConfirm }) {
           border:`1px solid ${COLORS.border}`,
           borderRadius:14,
           padding:22,
-          width:"680px",
+          width:"620px",
           maxWidth:"92%",
           maxHeight:"90vh",
           overflowY:"auto",
@@ -1509,47 +1509,25 @@ function PreviewOCModal({ productos, documentos = [], onClose, onConfirm }) {
         </h2>
 
         <p style={{ color:COLORS.muted, fontSize:13 }}>
-          La app detectó automáticamente el número de OC desde la celda F13 de cada archivo. Si alguna OC ya fue importada, se omite para no duplicar stock.
+          Revisa los productos antes de ingresarlos al inventario. Si ingresas el total de la compra, la app también creará el asiento contable automáticamente.
         </p>
-
-        <div style={{
-          background:COLORS.surface,
-          border:`1px solid ${COLORS.border}`,
-          borderRadius:10,
-          padding:12,
-          margin:"12px 0"
-        }}>
-          <div style={{ display:"flex", justifyContent:"space-between", gap:10, alignItems:"center", marginBottom:8 }}>
-            <b style={{ color:COLORS.text }}>Documentos detectados</b>
-            <span style={{ color:COLORS.accent, fontWeight:800 }}>{documentos.length}</span>
-          </div>
-
-          {documentos.length === 0 ? (
-            <div style={{ color:COLORS.muted, fontSize:13 }}>No hay documentos detectados.</div>
-          ) : (
-            <div style={{ display:"grid", gap:6, maxHeight:130, overflowY:"auto" }}>
-              {documentos.map((doc, idx) => (
-                <div key={idx} style={{ display:"grid", gridTemplateColumns:"90px 1fr", gap:8, fontSize:13 }}>
-                  <b style={{ color:COLORS.accent }}>{doc.documento}</b>
-                  <span style={{ color:COLORS.muted, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{doc.archivo}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
 
         <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(160px, 1fr))", gap:10, margin:"12px 0" }}>
           <div>
-            <label style={{ fontSize:12, color:COLORS.muted }}>Fecha contable</label>
+            <label style={{ fontSize:12, color:COLORS.muted }}>Fecha</label>
             <input type="date" value={fecha} onChange={(e)=>setFecha(e.target.value)} style={inputStyle} />
           </div>
           <div>
-            <label style={{ fontSize:12, color:COLORS.muted }}>Proveedor opcional</label>
+            <label style={{ fontSize:12, color:COLORS.muted }}>Factura / OC</label>
+            <input value={documento} onChange={(e)=>setDocumento(e.target.value)} placeholder="Ej: F-12345" style={inputStyle} />
+          </div>
+          <div>
+            <label style={{ fontSize:12, color:COLORS.muted }}>Proveedor</label>
             <input value={proveedor} onChange={(e)=>setProveedor(e.target.value)} placeholder="Ej: Imperial" style={inputStyle} />
           </div>
           <div>
             <label style={{ fontSize:12, color:COLORS.muted }}>Total compra IVA incluido</label>
-            <input type="number" value={totalCompra} onChange={(e)=>setTotalCompra(e.target.value)} placeholder={documentos.length > 1 ? "Opcional" : "Ej: 119000"} style={inputStyle} />
+            <input type="number" value={totalCompra} onChange={(e)=>setTotalCompra(e.target.value)} placeholder="Ej: 119000" style={inputStyle} />
           </div>
         </div>
 
@@ -3795,14 +3773,6 @@ const { data: dataAsientosContables, error: errorAsientosContables } = await sup
 if (!errorAsientosContables) {
   setAsientosContables(dataAsientosContables || []);
 }
-const { data: dataDocumentosImportados, error: errorDocumentosImportados } = await supabase
-  .from("documentos_importados")
-  .select("*")
-  .order("created_at", { ascending: false });
-
-if (!errorDocumentosImportados) {
-  setDocumentosImportados(dataDocumentosImportados || []);
-}
   }
 
   cargarDatos();
@@ -3827,9 +3797,7 @@ if (!errorDocumentosImportados) {
   const [busquedaInventario, setBusquedaInventario] = useState("");
   const [filtroCategoriaInventario, setFiltroCategoriaInventario] = useState("todos");
   const [previewOC, setPreviewOC] = useState([]);
-  const [previewOCDocumentos, setPreviewOCDocumentos] = useState([]);
   const [modalPreviewOC, setModalPreviewOC] = useState(false);
-  const [documentosImportados, setDocumentosImportados] = useState([]);
   const [previewFacturaXml, setPreviewFacturaXml] = useState(null);
   const [modalFacturaXml, setModalFacturaXml] = useState(false);
   const [modalSobrantesLaminado, setModalSobrantesLaminado] = useState(null);
@@ -4447,25 +4415,6 @@ const productosInventarioFiltrados = productosInventario.filter((p) => {
 
   return p.activo !== false && coincideBusqueda && coincideCategoria;
 });
-
-const numeroDocumentoOrden = (valor) => {
-  const match = String(valor || "").match(/\d+/g);
-  if (!match) return 0;
-  return Number(match.join("")) || 0;
-};
-
-const ordenesCompraImportadas = documentosImportados
-  .filter(d => {
-    const tipo = String(d.tipo || "").toUpperCase();
-    const origen = String(d.origen || "").toLowerCase();
-    return tipo === "OC" || origen === "oc_excel";
-  })
-  .sort((a, b) => {
-    const numeroA = numeroDocumentoOrden(a.documento || a.folio || a.clave);
-    const numeroB = numeroDocumentoOrden(b.documento || b.folio || b.clave);
-    if (numeroB !== numeroA) return numeroB - numeroA;
-    return new Date(b.created_at || b.fecha || 0) - new Date(a.created_at || a.fecha || 0);
-  });
 const sobrantesGlobalesCompatibles = sobrantesLaminados
   .filter(s => !s.usado)
   .map(s => {
@@ -4800,24 +4749,6 @@ const existeDocumentoImportado = async (clave) => {
   return !!data;
 };
 
-
-const existeOCImportadaLocal = (documento) => {
-  const docNormalizado = normalizarClaveDocumento(documento);
-  if (!docNormalizado) return false;
-
-  return documentosImportados.some(d => {
-    const tipo = String(d.tipo || "").toUpperCase();
-    const origen = String(d.origen || "").toLowerCase();
-    const esOC = tipo === "OC" || origen === "oc_excel";
-    if (!esOC) return false;
-
-    const docGuardado = normalizarClaveDocumento(d.documento || d.folio || "");
-    const claveGuardada = normalizarClaveDocumento(d.clave || "");
-
-    return docGuardado === docNormalizado || claveGuardada === `OC-${docNormalizado}` || claveGuardada.endsWith(`-${docNormalizado}`);
-  });
-};
-
 const registrarDocumentoImportado = async ({ clave, tipo, proveedor, documento, fecha, total, origen }) => {
   if (!clave) return true;
 
@@ -4838,19 +4769,6 @@ const registrarDocumentoImportado = async ({ clave, tipo, proveedor, documento, 
     alert("La operación se guardó, pero no se pudo registrar el documento como importado. Revisa la tabla documentos_importados.");
     return false;
   }
-
-  const nuevoDocumento = {
-    clave,
-    tipo: tipo || "documento",
-    proveedor: proveedor || "",
-    documento: documento || "",
-    fecha: fecha || new Date().toISOString().split("T")[0],
-    total: Number(total || 0),
-    origen: origen || "app",
-    created_at: new Date().toISOString()
-  };
-
-  setDocumentosImportados(prev => [nuevoDocumento, ...prev]);
 
   return true;
 };
@@ -5081,12 +4999,6 @@ const leerProductosDesdeOC = async (file) => {
     defval: ""
   });
 
-  const documentoDetectado = String(hoja?.["F13"]?.v || "").trim() || String(file.name || "").split(" ")[0];
-
-  if (!documentoDetectado) {
-    throw new Error(`No se pudo leer el número de OC en F13 de ${file.name}`);
-  }
-
   let filaEncabezado = -1;
   let colCantidad = -1;
   let colProducto = -1;
@@ -5123,9 +5035,7 @@ const leerProductosDesdeOC = async (file) => {
 
     productosEncontrados.push({
       nombre,
-      cantidad,
-      documento_origen: documentoDetectado,
-      archivo_origen: file.name
+      cantidad
     });
   }
 
@@ -5133,18 +5043,7 @@ const leerProductosDesdeOC = async (file) => {
     throw new Error(`No se encontraron productos válidos en ${file.name}`);
   }
 
-  const proveedorDetectado = String(file.name || "")
-    .replace(/\.[^.]+$/, "")
-    .replace(documentoDetectado, "")
-    .trim();
-
-  return {
-    documento: documentoDetectado,
-    proveedor: proveedorDetectado,
-    archivo: file.name,
-    productos: productosEncontrados,
-    clave: `OC-${normalizarClaveDocumento(documentoDetectado)}`
-  };
+  return productosEncontrados;
 };
 
 const importarOrdenCompraExcel = async (e) => {
@@ -5152,26 +5051,12 @@ const importarOrdenCompraExcel = async (e) => {
   if (files.length === 0) return;
 
   const productosTodos = [];
-  const documentosValidos = [];
   const errores = [];
-  const duplicados = [];
 
   for (const file of files) {
     try {
-      const oc = await leerProductosDesdeOC(file);
-
-      if (existeOCImportadaLocal(oc.documento) || await existeDocumentoImportado(oc.clave)) {
-        duplicados.push(`${oc.documento} (${file.name})`);
-        continue;
-      }
-
-      productosTodos.push(...oc.productos);
-      documentosValidos.push({
-        documento: oc.documento,
-        proveedor: oc.proveedor,
-        archivo: oc.archivo,
-        clave: oc.clave
-      });
+      const productosArchivo = await leerProductosDesdeOC(file);
+      productosTodos.push(...productosArchivo);
     } catch (error) {
       console.error(error);
       errores.push(`${file.name}: ${error.message || "Error desconocido"}`);
@@ -5181,8 +5066,7 @@ const importarOrdenCompraExcel = async (e) => {
   if (productosTodos.length === 0) {
     alert(
       `No se pudo importar ninguna orden de compra.` +
-      (duplicados.length ? `\n\nDuplicadas:\n${duplicados.slice(0, 8).join("\n")}` : "") +
-      (errores.length ? `\n\nErrores:\n${errores.slice(0, 8).join("\n")}` : "")
+      (errores.length ? `\n\nErrores:\n${errores.slice(0, 5).join("\n")}` : "")
     );
     e.target.value = "";
     return;
@@ -5200,21 +5084,18 @@ const importarOrdenCompraExcel = async (e) => {
     return acc;
   }, []);
 
-  if (errores.length || duplicados.length) {
+  if (errores.length) {
     alert(
-      `Se leyeron ${documentosValidos.length} OC nueva(s).` +
-      (duplicados.length ? `\n\nDuplicadas omitidas:\n${duplicados.slice(0, 8).join("\n")}` : "") +
-      (errores.length ? `\n\nCon error:\n${errores.slice(0, 8).join("\n")}` : "")
+      `Se leyeron ${files.length - errores.length} archivo(s) correctamente y ${errores.length} con error.\n\n` +
+      `Se abrirá la vista previa con los productos válidos.\n\nErrores:\n${errores.slice(0, 5).join("\n")}`
     );
   }
 
   setPreviewOC(agrupados);
-  setPreviewOCDocumentos(documentosValidos);
   setModalPreviewOC(true);
 
   e.target.value = "";
 };
-
 const detectarCategoriaProducto = (nombre) => {
   const n = nombre.toUpperCase();
 
@@ -5244,14 +5125,17 @@ const detectarUnidadProducto = (nombre) => {
 const confirmarImportacionOC = async (datosCompra = {}) => {
   if (previewOC.length === 0) return;
 
-  if (previewOCDocumentos.length === 0) {
-    alert("No hay OC detectadas para registrar. Vuelve a importar los archivos.");
-    return;
-  }
+  const documentoCompra = String(datosCompra.documento || "").trim();
+  const proveedorCompra = String(datosCompra.proveedor || "").trim();
+  const claveDocumento = documentoCompra
+    ? `OC-${normalizarClaveDocumento(proveedorCompra || "SIN_PROVEEDOR")}-${normalizarClaveDocumento(documentoCompra)}`
+    : "";
 
-  for (const doc of previewOCDocumentos) {
-    if (existeOCImportadaLocal(doc.documento) || await existeDocumentoImportado(doc.clave)) {
-      alert(`La OC ${doc.documento} ya fue importada anteriormente. Se canceló el ingreso para evitar duplicar stock.`);
+  if (claveDocumento) {
+    const yaExiste = await existeDocumentoImportado(claveDocumento);
+
+    if (yaExiste) {
+      alert(`Esta OC / factura ya fue importada anteriormente.\n\nDocumento: ${documentoCompra}\nProveedor: ${proveedorCompra || "sin proveedor"}`);
       return;
     }
   }
@@ -5339,37 +5223,32 @@ const confirmarImportacionOC = async (datosCompra = {}) => {
     }
   }
 
-  const documentoContable = previewOCDocumentos.length === 1
-    ? previewOCDocumentos[0].documento
-    : `OC-MASIVA-${new Date().toISOString().slice(0,10)}`;
-
   if (Number(datosCompra.totalCompra || 0) > 0) {
     await crearAsientoCompraAutomatica({
       fecha: datosCompra.fecha || new Date().toISOString().split("T")[0],
-      documento: documentoContable,
-      proveedor: datosCompra.proveedor || (previewOCDocumentos[0]?.proveedor || "Proveedor"),
+      documento: datosCompra.documento || `OC-${Date.now()}`,
+      proveedor: datosCompra.proveedor || "Proveedor",
       totalCompra: datosCompra.totalCompra,
       estadoPago: datosCompra.estadoPago || "pagado",
-      detalleBase: `Compra ${documentoContable} ${datosCompra.proveedor || previewOCDocumentos[0]?.proveedor || ""}`.trim()
+      detalleBase: `Compra OC ${datosCompra.documento || "sin documento"} ${datosCompra.proveedor || ""}`.trim()
     });
   }
 
-  for (const doc of previewOCDocumentos) {
+  if (claveDocumento) {
     await registrarDocumentoImportado({
-      clave: doc.clave,
+      clave: claveDocumento,
       tipo: "OC",
-      proveedor: datosCompra.proveedor || doc.proveedor || "",
-      documento: doc.documento,
+      proveedor: proveedorCompra,
+      documento: documentoCompra,
       fecha: datosCompra.fecha || new Date().toISOString().split("T")[0],
-      total: previewOCDocumentos.length === 1 ? Number(datosCompra.totalCompra || 0) : 0,
+      total: Number(datosCompra.totalCompra || 0),
       origen: "oc_excel"
     });
   }
 
   setPreviewOC([]);
-  setPreviewOCDocumentos([]);
   setModalPreviewOC(false);
-  alert("Orden(es) de compra importada(s) correctamente.");
+  alert("Orden de compra importada correctamente.");
 };
 
 const excelDateToISO = (value) => {
@@ -6792,12 +6671,20 @@ const renderTarjetaProduccion = (n) => (
   </div>
 </div>
     <div style={{
-      display:"grid",
-      gridTemplateColumns:window.innerWidth <= 900 ? "1fr" : "minmax(0, 1fr) minmax(260px, 320px)",
-      gap:16,
-      alignItems:"start"
+      background:COLORS.card,
+      border:`1px solid ${COLORS.border}`,
+      borderRadius:12,
+      padding:14,
+      marginBottom:18
     }}>
-      <div>
+      <p style={{ margin:"0 0 6px", color:COLORS.text, fontWeight:700 }}>
+        Inventario general
+      </p>
+      <p style={{ margin:0, color:COLORS.muted, fontSize:13 }}>
+        Aquí se controlarán MDF, Melamil, pegamentos, cartón, film, tornillos, herrajes y otros productos.
+      </p>
+    </div>
+
     <h3 style={{ color:COLORS.success, fontSize:15, margin:"0 0 10px" }}>
       Productos generales
     </h3>
@@ -7192,63 +7079,6 @@ const renderTarjetaProduccion = (n) => (
           })
       )}
     </div>
-
-      </div>
-
-      <aside style={{
-        background:COLORS.card,
-        border:`1px solid ${COLORS.border}`,
-        borderRadius:12,
-        padding:14,
-        position:window.innerWidth <= 900 ? "static" : "sticky",
-        top:12,
-        maxHeight:"calc(100vh - 120px)",
-        overflowY:"auto"
-      }}>
-        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:10, marginBottom:10 }}>
-          <div>
-            <p style={{ margin:"0 0 4px", color:COLORS.text, fontWeight:700 }}>
-              OC importadas
-            </p>
-            <p style={{ margin:0, color:COLORS.muted, fontSize:12 }}>
-              Ordenadas de mayor a menor
-            </p>
-          </div>
-          <span style={{ color:COLORS.accent, fontWeight:800 }}>
-            {ordenesCompraImportadas.length}
-          </span>
-        </div>
-
-        {ordenesCompraImportadas.length === 0 ? (
-          <div style={{ color:COLORS.muted, fontSize:13 }}>
-            Todavía no hay OC registradas.
-          </div>
-        ) : (
-          <div style={{ display:"grid", gap:8 }}>
-            {ordenesCompraImportadas.map((doc, idx) => (
-              <div
-                key={doc.id || doc.clave || idx}
-                style={{
-                  display:"grid",
-                  gridTemplateColumns:"70px 1fr",
-                  gap:8,
-                  alignItems:"center",
-                  padding:"8px 0",
-                  borderBottom:idx === ordenesCompraImportadas.length - 1 ? "none" : `1px solid ${COLORS.border}`
-                }}
-              >
-                <b style={{ color:COLORS.accent, fontSize:13 }}>
-                  {doc.documento || doc.folio || "S/N"}
-                </b>
-                <span style={{ color:COLORS.muted, fontSize:11, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
-                  {fmtDate(String(doc.fecha || "").split("T")[0])}
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
-      </aside>
-    </div>
   </div>
 )}
 
@@ -7524,8 +7354,7 @@ const renderTarjetaProduccion = (n) => (
 {modalPreviewOC && (
   <PreviewOCModal
     productos={previewOC}
-    documentos={previewOCDocumentos}
-    onClose={() => { setModalPreviewOC(false); setPreviewOCDocumentos([]); }}
+    onClose={() => setModalPreviewOC(false)}
     onConfirm={confirmarImportacionOC}
   />
 )}
