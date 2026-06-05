@@ -117,6 +117,46 @@ function fmtDate(iso) {
   return `${d}/${m}/${y}`;
 }
 
+function estadoProduccionDesdeNota(n) {
+  if ((n?.proceso || "").toLowerCase() === "entregado") {
+    return { texto: "🚚 Entregada", color: COLORS.success, clave: "entregada" };
+  }
+
+  if (n?.media_cana) {
+    return { texto: "✅ Terminada", color: COLORS.success, clave: "terminada" };
+  }
+
+  const tieneAvance = Boolean(
+    n?.mdf_cortado ||
+    n?.lamina_cortada ||
+    n?.tupizado ||
+    n?.armado ||
+    n?.pegado ||
+    n?.postformado
+  );
+
+  if (tieneAvance || String(n?.proceso || "").toLowerCase() === "en producción") {
+    return { texto: "🔵 En proceso", color: "#60a5fa", clave: "en_proceso" };
+  }
+
+  return { texto: "🟡 Pendiente", color: COLORS.warning, clave: "pendiente" };
+}
+
+function calcularProcesoDesdeAvance(n) {
+  if ((n?.proceso || "").toLowerCase() === "entregado") return "entregado";
+  if (n?.media_cana) return "terminado";
+  if (
+    n?.mdf_cortado ||
+    n?.lamina_cortada ||
+    n?.tupizado ||
+    n?.armado ||
+    n?.pegado ||
+    n?.postformado
+  ) return "en producción";
+  return "en espera";
+}
+
+
 const STATUS_CONFIG = {
   vendida: { bg:"#1a3325", color:"#5a9e6f", border:"#2d5040", label:"✓ VENDIDA" },
   vencida: { bg:"#1e1525", color:"#9a7aaa", border:"#4a2a5a", label:"✕ VENCIDA" },
@@ -530,7 +570,7 @@ boxSizing:"border-box"
     </div>
   );
 }
-function GestionNVModal({ nota, abonos = [], onClose, onSave }) {
+function GestionNVModal({ nota, abonos = [], detalles = [], onClose, onSave }) {
   const [nuevoAbono, setNuevoAbono] = useState("");
   const [observacionAbono, setObservacionAbono] = useState("");
   useEffect(() => {
@@ -562,6 +602,7 @@ const guardarGestionNV = () => {
   const total = Number(nota.total) || 0;
   const totalAbonado = abonos.reduce((sum, a) => sum + Number(a.monto || 0), 0);
   const saldo = Math.max(total - totalAbonado, 0);
+  const estadoProd = estadoProduccionDesdeNota(nota);
 
   return (
     <div
@@ -599,6 +640,62 @@ const guardarGestionNV = () => {
 
         <p><b>Cliente:</b> {nota.cliente}</p>
         <p><b>Total:</b> {fmt(total)}</p>
+        <div style={{
+          margin:"10px 0 14px",
+          padding:10,
+          borderRadius:10,
+          border:`1px solid ${estadoProd.color}`,
+          background:estadoProd.color + "18",
+          color:estadoProd.color,
+          fontWeight:800
+        }}>
+          Estado producción: {estadoProd.texto}
+        </div>
+
+        <div style={{
+          background:COLORS.surface,
+          border:`1px solid ${COLORS.border}`,
+          borderRadius:10,
+          padding:12,
+          margin:"10px 0 14px"
+        }}>
+          <h3 style={{ margin:"0 0 10px", color:COLORS.accent, fontSize:15 }}>
+            Detalle del pedido
+          </h3>
+
+          {detalles.length === 0 ? (
+            <p style={{ margin:0, color:COLORS.muted, fontSize:13 }}>
+              Esta nota de venta no tiene detalle importado.
+            </p>
+          ) : (
+            <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+              {detalles.map((d) => (
+                <div key={d.id || d.orden} style={{
+                  border:`1px solid ${COLORS.border}`,
+                  borderRadius:8,
+                  padding:10,
+                  background:COLORS.card
+                }}>
+                  <div style={{ fontWeight:700, color:COLORS.text }}>
+                    {d.cantidad || 0} x {d.descripcion || "Sin descripción"}
+                  </div>
+
+                  <div style={{ fontSize:13, color:COLORS.muted, marginTop:4 }}>
+                    Material: <b style={{ color:COLORS.text }}>{d.material || "-"}</b>
+                  </div>
+
+                  <div style={{ fontSize:13, color:COLORS.muted, marginTop:4 }}>
+                    Medida: <b style={{ color:COLORS.text }}>{d.alto || 0} x {d.ancho || 0}</b>
+                  </div>
+
+                  <div style={{ fontSize:13, color:COLORS.muted, marginTop:4 }}>
+                    Color: <b style={{ color:COLORS.text }}>{d.color || "-"}</b>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
 
         <label>Nuevo abono</label>
 <input
@@ -4281,6 +4378,7 @@ const marcarComoEntregadaProduccion = async (nota) => {
 
 const guardarProduccion = async (notaActualizada) => {
   const idReal = Number(String(notaActualizada.id).replace("supabase-", ""));
+  const procesoAutomatico = calcularProcesoDesdeAvance(notaActualizada);
 
   const { error } = await supabase
     .from("notas_venta")
@@ -4294,6 +4392,7 @@ const guardarProduccion = async (notaActualizada) => {
       pegado: notaActualizada.pegado,
       postformado: notaActualizada.postformado,
       media_cana: notaActualizada.media_cana,
+      proceso: procesoAutomatico,
     })
     .eq("id", idReal);
 
@@ -4305,7 +4404,7 @@ const guardarProduccion = async (notaActualizada) => {
 
   setNotas(notas.map(n =>
     n.id === notaActualizada.id
-      ? { ...n, ...notaActualizada }
+      ? { ...n, ...notaActualizada, proceso: procesoAutomatico }
       : n
   ));
 
@@ -4354,38 +4453,16 @@ const venceManana = (fecha) => {
   return entrega.getTime() === manana.getTime();
 };
 const estadoProduccion = (n) => {
-  if (estaAtrasada(n.fecha_entrega_estimada) && !n.media_cana) {
+  const estadoBase = estadoProduccionDesdeNota(n);
+
+  if (estadoBase.clave !== "terminada" && estadoBase.clave !== "entregada" && estaAtrasada(n.fecha_entrega_estimada)) {
     return {
       texto: "🔴 Atrasada",
       color: COLORS.danger
     };
   }
 
-  if (n.media_cana) {
-    return {
-      texto: "🟢 Lista para entregar",
-      color: COLORS.success
-    };
-  }
-
-  if (
-    n.mdf_cortado ||
-    n.lamina_cortada ||
-    n.tupizado ||
-    n.armado ||
-    n.pegado ||
-    n.postformado
-  ) {
-    return {
-      texto: "🔵 En proceso",
-      color: "#60a5fa"
-    };
-  }
-
-  return {
-    texto: "🟡 Sin iniciar",
-    color: COLORS.warninging
-  };
+  return estadoBase;
 };
 const coincideFiltroProduccion = (n, filtro) => {
   const estado = estadoProduccion(n).texto;
@@ -6345,13 +6422,11 @@ const renderTarjetaProduccion = (n) => (
       borderRadius:999,
       fontSize:11,
       fontWeight:700,
-      background:"rgba(59,130,246,.15)",
-      color:"#60a5fa"
+      background:estadoProduccionDesdeNota(s).color + "22",
+      color:estadoProduccionDesdeNota(s).color,
+      border:`1px solid ${estadoProduccionDesdeNota(s).color}`
     }}>
-      {s.proceso === "en espera" && "⏳ En espera"}
-      {s.proceso === "en producción" && "📦 En producción"}
-      {s.proceso === "terminado" && "✅ Terminado"}
-      {s.proceso === "entregado" && "🚚 Entregado"}
+      {estadoProduccionDesdeNota(s).texto}
     </span>
 
     <span style={{
@@ -6488,13 +6563,11 @@ const renderTarjetaProduccion = (n) => (
       borderRadius:999,
       fontSize:11,
       fontWeight:700,
-      background:"rgba(59,130,246,.15)",
-      color:"#60a5fa"
+      background:estadoProduccionDesdeNota(s).color + "22",
+      color:estadoProduccionDesdeNota(s).color,
+      border:`1px solid ${estadoProduccionDesdeNota(s).color}`
     }}>
-      {s.proceso === "en espera" && "⏳ En espera"}
-      {s.proceso === "en producción" && "📦 En producción"}
-      {s.proceso === "terminado" && "✅ Terminado"}
-      {s.proceso === "entregado" && "🚚 Entregado"}
+      {estadoProduccionDesdeNota(s).texto}
     </span>
 
     <span style={{
@@ -7575,6 +7648,7 @@ const renderTarjetaProduccion = (n) => (
   <GestionNVModal
   nota={modalNV}
   abonos={abonosNV.filter(a => a.nota_venta_id === Number(String(modalNV.id).replace("supabase-", "")))}
+  detalles={detallesNotasVenta.filter(d => String(d.nota_venta_numero) === String(modalNV.numero))}
   onClose={() => setModalNV(null)}
   onSave={guardarGestionNV}
 />
