@@ -573,8 +573,6 @@ boxSizing:"border-box"
 function GestionNVModal({ nota, abonos = [], detalles = [], onClose, onSave }) {
   const [nuevoAbono, setNuevoAbono] = useState("");
   const [observacionAbono, setObservacionAbono] = useState("");
-  const [fechaAbono, setFechaAbono] = useState(new Date().toISOString().split("T")[0]);
-  const [medioPagoAbono, setMedioPagoAbono] = useState("transferencia");
   useEffect(() => {
   const cerrarConEsc = (e) => {
     if (e.key === "Escape") onClose();
@@ -592,8 +590,6 @@ const guardarGestionNV = () => {
     ...nota,
     nuevoAbono,
     observacionAbono,
-    fechaAbono,
-    medioPagoAbono,
     materiales,
     proceso,
     observaciones
@@ -718,47 +714,6 @@ const guardarGestionNV = () => {
   }}
 />
 
-<div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
-  <label>Fecha abono
-    <input
-      type="date"
-      value={fechaAbono}
-      onChange={(e) => setFechaAbono(e.target.value)}
-      style={{
-        width:"100%",
-        padding:10,
-        margin:"6px 0 12px",
-        borderRadius:8,
-        border:`1px solid ${COLORS.border}`,
-        background:COLORS.surface,
-        color:COLORS.text,
-        boxSizing:"border-box"
-      }}
-    />
-  </label>
-
-  <label>Forma de pago
-    <select
-      value={medioPagoAbono}
-      onChange={(e) => setMedioPagoAbono(e.target.value)}
-      style={{
-        width:"100%",
-        padding:10,
-        margin:"6px 0 12px",
-        borderRadius:8,
-        border:`1px solid ${COLORS.border}`,
-        background:COLORS.surface,
-        color:COLORS.text,
-        boxSizing:"border-box"
-      }}
-    >
-      <option value="transferencia">Transferencia</option>
-      <option value="efectivo">Efectivo</option>
-      <option value="cheque">Cheque</option>
-    </select>
-  </label>
-</div>
-
 <label>Observación del abono</label>
 <input
   type="text"
@@ -804,8 +759,7 @@ const guardarGestionNV = () => {
           <span>{a.fecha}</span>
           <span style={{ fontWeight:700 }}>{fmt(a.monto)}</span>
           <span style={{ color:COLORS.muted }}>
-            {a.medio_pago ? `${String(a.medio_pago).charAt(0).toUpperCase()}${String(a.medio_pago).slice(1)}` : "Sin medio"}
-            {a.observacion ? ` · ${a.observacion}` : ""}
+            {a.observacion || "Sin observación"}
           </span>
         </div>
       ))}
@@ -3446,12 +3400,6 @@ export default function App() {
 
   return detalles;
 };
-  const obtenerFechaEntregaDesdeResumen = (sheet) => {
-    // En las NV/Barranes actuales, la fecha límite de entrega viene en G11.
-    const valorG11 = sheet?.["G11"]?.v;
-    return valorG11 ? excelDateToISO(valorG11) : "";
-  };
-
   const procesarCotizacionArchivo = async (file) => {
   const data = await file.arrayBuffer();
   const workbook = XLSX.read(data);
@@ -3589,7 +3537,6 @@ export default function App() {
     const cliente = sheet['C2']?.v;
     const fecha = sheet['D2']?.v;
     const total = sheet['E2']?.v;
-    const fechaEntrega = obtenerFechaEntregaDesdeResumen(sheet);
 
     if (!notaVenta || !total) {
       throw new Error(`No se pudo leer número o total de NV en ${file.name}`);
@@ -3608,10 +3555,7 @@ export default function App() {
     if (ok) {
       await supabase
         .from("notas_venta")
-        .update({
-          tipo_documento: "nv",
-          fecha_entrega_estimada: fechaEntrega || null
-        })
+        .update({ tipo_documento: "nv" })
         .eq("numero", notaVenta);
 
       await supabase
@@ -3698,7 +3642,6 @@ export default function App() {
     const cliente = sheet["C2"]?.v;
     const fecha = sheet["D2"]?.v;
     const total = sheet["E2"]?.v;
-    const fechaEntrega = obtenerFechaEntregaDesdeResumen(sheet);
 
     if (!barran || !total) {
       throw new Error(`No se pudo leer número o total de Barrán en ${file.name}`);
@@ -3731,8 +3674,7 @@ export default function App() {
         tipo_documento: "barran",
         estado_pago: "pendiente",
         materiales: "falta",
-        proceso: "en espera",
-        fecha_entrega_estimada: fechaEntrega || null
+        proceso: "en espera"
       })
       .select("*")
       .single();
@@ -3958,51 +3900,6 @@ const { data: dataDocumentosImportados, error: errorDocumentosImportados } = awa
 if (!errorDocumentosImportados) {
   setDocumentosImportados(dataDocumentosImportados || []);
 }
-
-const { data: dataCartolaBancaria, error: errorCartolaBancaria } = await supabase
-  .from("cartola_bancaria")
-  .select("*")
-  .order("fecha", { ascending: false })
-  .order("created_at", { ascending: false });
-
-if (!errorCartolaBancaria) {
-  setCartolaMovimientos(dataCartolaBancaria || []);
-}
-const { data: dataCuentasPagar, error: errorCuentasPagar } = await supabase
-  .from("cuentas_pagar")
-  .select("*")
-  .order("fecha_vencimiento", { ascending: true });
-
-if (!errorCuentasPagar) {
-  setCuentasPagar(dataCuentasPagar || []);
-}
-
-const { data: dataAbonosCuentas, error: errorAbonosCuentas } = await supabase
-  .from("cuentas_pagar_abonos")
-  .select("*")
-  .order("fecha", { ascending: false });
-
-if (!errorAbonosCuentas) {
-  setAbonosCuentasPagar(dataAbonosCuentas || []);
-}
-
-const { data: dataTrabajadores, error: errorTrabajadores } = await supabase
-  .from("trabajadores")
-  .select("*")
-  .order("nombre", { ascending: true });
-
-if (!errorTrabajadores) {
-  setTrabajadores(dataTrabajadores || []);
-}
-
-const { data: dataDocumentosTrabajadores, error: errorDocumentosTrabajadores } = await supabase
-  .from("trabajador_documentos")
-  .select("*")
-  .order("created_at", { ascending: false });
-
-if (!errorDocumentosTrabajadores) {
-  setDocumentosTrabajadores(dataDocumentosTrabajadores || []);
-}
   }
 
   cargarDatos();
@@ -4057,18 +3954,6 @@ if (!errorDocumentosTrabajadores) {
   const [modalGestionContable, setModalGestionContable] = useState(null);
   const [mesContabilidad, setMesContabilidad] = useState(new Date().toISOString().slice(0, 7));
   const [busquedaContabilidad, setBusquedaContabilidad] = useState("");
-  const [cartolaMovimientos, setCartolaMovimientos] = useState([]);
-  const [mesCartola, setMesCartola] = useState(new Date().toISOString().slice(0, 7));
-  const [busquedaCartola, setBusquedaCartola] = useState("");
-  const [mesCalendario, setMesCalendario] = useState(new Date().toISOString().slice(0, 7));
-  const [cuentasPagar, setCuentasPagar] = useState([]);
-  const [abonosCuentasPagar, setAbonosCuentasPagar] = useState([]);
-  const [modalCuentaPagar, setModalCuentaPagar] = useState(false);
-  const [modalAbonoCuentaPagar, setModalAbonoCuentaPagar] = useState(null);
-  const [trabajadores, setTrabajadores] = useState([]);
-  const [documentosTrabajadores, setDocumentosTrabajadores] = useState([]);
-  const [modalTrabajador, setModalTrabajador] = useState(false);
-  const [trabajadorArchivo, setTrabajadorArchivo] = useState(null);
   
 
   // Load seguimiento from localStorage
@@ -4383,8 +4268,6 @@ const mesSeleccionadoTexto = nombreMes(mesFiltro);
   const idReal = Number(String(nvActualizada.id).replace("supabase-", ""));
 
   const nuevoAbono = Number(nvActualizada.nuevoAbono) || 0;
-  const fechaAbono = nvActualizada.fechaAbono || new Date().toISOString().split("T")[0];
-  const medioPagoAbono = nvActualizada.medioPagoAbono || "transferencia";
 
   if (nuevoAbono > 0) {
     const { error: errorInsert } = await supabase
@@ -4392,8 +4275,7 @@ const mesSeleccionadoTexto = nombreMes(mesFiltro);
       .insert({
         nota_venta_id: idReal,
         monto: nuevoAbono,
-        fecha: fechaAbono,
-        medio_pago: medioPagoAbono,
+        fecha: new Date().toISOString().split("T")[0],
         observacion: nvActualizada.observacionAbono || ""
       });
 
@@ -4460,12 +4342,10 @@ const mesSeleccionadoTexto = nombreMes(mesFiltro);
 
   if (nuevoAbono > 0) {
     await crearAsientoAbonoNVAutomatico({
-      fecha: fechaAbono,
+      fecha: new Date().toISOString().split("T")[0],
       numero: nvActualizada.numero,
       cliente: nvActualizada.cliente,
-      monto: nuevoAbono,
-      medioPago: medioPagoAbono,
-      tipoDocumento: nvActualizada.tipo_documento || "nv"
+      monto: nuevoAbono
     });
   }
 
@@ -4530,472 +4410,6 @@ const guardarProduccion = async (notaActualizada) => {
 
   setModalProduccion(null);
 };
-
-const guardarCuentaPorPagar = async (e) => {
-  e.preventDefault();
-  const form = new FormData(e.currentTarget);
-  const montoTotal = Number(form.get("monto_total") || 0);
-  const montoCuota = Number(form.get("monto_cuota") || 0);
-  const payload = {
-    nombre: String(form.get("nombre") || "").trim(),
-    tipo: String(form.get("tipo") || "proveedor"),
-    detalle: String(form.get("detalle") || "").trim(),
-    monto_total: montoTotal,
-    monto_cuota: montoCuota || montoTotal,
-    fecha_vencimiento: String(form.get("fecha_vencimiento") || new Date().toISOString().split("T")[0]),
-    cuota_actual: Number(form.get("cuota_actual") || 1),
-    cuotas_totales: Number(form.get("cuotas_totales") || 1),
-    estado: "pendiente"
-  };
-
-  if (!payload.nombre || !payload.monto_total) {
-    alert("Debes ingresar nombre y monto.");
-    return;
-  }
-
-  const { data, error } = await supabase
-    .from("cuentas_pagar")
-    .insert(payload)
-    .select("*")
-    .single();
-
-  if (error) {
-    console.error(error);
-    alert("No se pudo guardar la cuenta por pagar.");
-    return;
-  }
-
-  setCuentasPagar(prev => [data, ...prev]);
-  setModalCuentaPagar(false);
-};
-
-const guardarAbonoCuentaPagar = async (e) => {
-  e.preventDefault();
-  if (!modalAbonoCuentaPagar) return;
-  const form = new FormData(e.currentTarget);
-  const monto = Number(form.get("monto") || 0);
-  const fecha = String(form.get("fecha") || new Date().toISOString().split("T")[0]);
-  const medioPago = String(form.get("medio_pago") || "transferencia");
-  const observacion = String(form.get("observacion") || "").trim();
-
-  if (!monto) {
-    alert("Debes ingresar un monto de abono.");
-    return;
-  }
-
-  const { data, error } = await supabase
-    .from("cuentas_pagar_abonos")
-    .insert({ cuenta_pagar_id: modalAbonoCuentaPagar.id, monto, fecha, medio_pago: medioPago, observacion })
-    .select("*")
-    .single();
-
-  if (error) {
-    console.error(error);
-    alert("No se pudo guardar el abono.");
-    return;
-  }
-
-  const abonosDeCuenta = [...abonosCuentasPagar.filter(a => a.cuenta_pagar_id === modalAbonoCuentaPagar.id), data];
-  const totalAbonado = abonosDeCuenta.reduce((sum, a) => sum + Number(a.monto || 0), 0);
-  const estado = totalAbonado >= Number(modalAbonoCuentaPagar.monto_total || 0) ? "pagado" : "pendiente";
-
-  await supabase
-    .from("cuentas_pagar")
-    .update({ estado })
-    .eq("id", modalAbonoCuentaPagar.id);
-
-  const cuentaHaber = medioPago === "efectivo" ? "Caja" : medioPago === "cheque" ? "Cheques por pagar" : "Banco";
-  const documentoPagoCxp = `PAGO-CXP-${modalAbonoCuentaPagar.id}-${Date.now()}`;
-  await guardarAsientosAutomaticos([
-    {
-      fecha,
-      detalle: `Abono cuenta por pagar - ${modalAbonoCuentaPagar.nombre}`,
-      desglose: "Pago cuenta por pagar",
-      documento: documentoPagoCxp,
-      definicion: "Proveedores",
-      debe: monto,
-      haber: 0
-    },
-    {
-      fecha,
-      detalle: `Abono cuenta por pagar - ${modalAbonoCuentaPagar.nombre}`,
-      desglose: "Pago cuenta por pagar",
-      documento: documentoPagoCxp,
-      definicion: cuentaHaber,
-      debe: 0,
-      haber: monto
-    }
-  ]);
-
-  setAbonosCuentasPagar(prev => [data, ...prev]);
-  setCuentasPagar(prev => prev.map(c => c.id === modalAbonoCuentaPagar.id ? { ...c, estado } : c));
-  setModalAbonoCuentaPagar(null);
-};
-
-
-const limpiarNumeroCartola = (valor) => {
-  if (valor === null || valor === undefined || valor === "") return 0;
-  if (typeof valor === "number") return Math.round(valor);
-  const texto = String(valor)
-    .replace(/\$/g, "")
-    .replace(/\s/g, "")
-    .replace(/\./g, "")
-    .replace(/,/g, ".")
-    .replace(/[^0-9.-]/g, "");
-  const numero = Number(texto || 0);
-  return Number.isFinite(numero) ? Math.round(numero) : 0;
-};
-
-const normalizarTextoCartola = (valor) => String(valor || "")
-  .normalize("NFD")
-  .replace(/[\u0300-\u036f]/g, "")
-  .toLowerCase()
-  .trim();
-
-const convertirFechaCartola = (valor) => {
-  if (!valor) return new Date().toISOString().split("T")[0];
-  if (typeof valor === "number") {
-    const parsed = XLSX.SSF.parse_date_code(valor);
-    if (parsed) {
-      return `${parsed.y}-${String(parsed.m).padStart(2, "0")}-${String(parsed.d).padStart(2, "0")}`;
-    }
-  }
-  const texto = String(valor).trim();
-  const iso = texto.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
-  if (iso) return `${iso[1]}-${String(iso[2]).padStart(2, "0")}-${String(iso[3]).padStart(2, "0")}`;
-  const chilena = texto.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})/);
-  if (chilena) {
-    const year = chilena[3].length === 2 ? `20${chilena[3]}` : chilena[3];
-    return `${year}-${String(chilena[2]).padStart(2, "0")}-${String(chilena[1]).padStart(2, "0")}`;
-  }
-  return new Date().toISOString().split("T")[0];
-};
-
-const clasificarMovimientoCartola = ({ descripcion, cargo, abono }) => {
-  const desc = normalizarTextoCartola(descripcion);
-  if (abono > 0) {
-    if (desc.includes("deposito") || desc.includes("transferencia") || desc.includes("abono")) return "Ingreso por revisar";
-    return "Ingreso por revisar";
-  }
-  if (desc.includes("previred") || desc.includes("afp") || desc.includes("fonasa") || desc.includes("isapre")) return "Imposiciones";
-  if (desc.includes("sueldo") || desc.includes("remuneracion") || desc.includes("anticipo")) return "Remuneraciones";
-  if (desc.includes("arriendo")) return "Arriendo";
-  if (desc.includes("bencina") || desc.includes("combustible") || desc.includes("copec") || desc.includes("shell") || desc.includes("petrobras")) return "Combustible";
-  if (desc.includes("luz") || desc.includes("agua") || desc.includes("internet") || desc.includes("entel") || desc.includes("wom") || desc.includes("claro") || desc.includes("movistar")) return "Servicios";
-  if (desc.includes("cheque")) return "Cheque por revisar";
-  if (cargo > 0) return "Egreso por revisar";
-  return "Por revisar";
-};
-
-const importarCartolaBancaria = async (event) => {
-  const files = Array.from(event.target.files || []);
-  event.target.value = "";
-  if (files.length === 0) return;
-
-  const movimientosDetectados = [];
-
-  for (const file of files) {
-    const buffer = await file.arrayBuffer();
-    const wb = XLSX.read(buffer, { type:"array", cellDates:false });
-    const ws = wb.Sheets[wb.SheetNames[0]];
-    const rows = XLSX.utils.sheet_to_json(ws, { header:1, defval:"" });
-    if (!rows.length) continue;
-
-    let headerIndex = rows.findIndex(row => {
-      const normalizadas = row.map(normalizarTextoCartola);
-      return normalizadas.some(c => c.includes("fecha")) &&
-        normalizadas.some(c => c.includes("descripcion") || c.includes("detalle") || c.includes("glosa") || c.includes("movimiento"));
-    });
-
-    if (headerIndex < 0) headerIndex = 0;
-
-    const headers = rows[headerIndex].map(normalizarTextoCartola);
-    const buscarCol = (opciones) => headers.findIndex(h => opciones.some(op => h.includes(op)));
-
-    const colFecha = buscarCol(["fecha"]);
-    const colDescripcion = buscarCol(["descripcion", "detalle", "glosa", "movimiento"]);
-    let colCargo = buscarCol(["cargo", "egreso", "retiro", "debe", "salida"]);
-    let colAbono = buscarCol(["abono", "ingreso", "deposito", "haber", "entrada"]);
-    const colMonto = buscarCol(["monto", "importe", "valor"]);
-    const colSaldo = buscarCol(["saldo"]);
-
-    for (const row of rows.slice(headerIndex + 1)) {
-      const fecha = convertirFechaCartola(colFecha >= 0 ? row[colFecha] : row[0]);
-      const descripcion = String(colDescripcion >= 0 ? row[colDescripcion] : row[1] || "").trim();
-      if (!descripcion) continue;
-
-      let cargo = colCargo >= 0 ? Math.abs(limpiarNumeroCartola(row[colCargo])) : 0;
-      let abono = colAbono >= 0 ? Math.abs(limpiarNumeroCartola(row[colAbono])) : 0;
-
-      if (cargo === 0 && abono === 0 && colMonto >= 0) {
-        const monto = limpiarNumeroCartola(row[colMonto]);
-        if (monto < 0) cargo = Math.abs(monto);
-        if (monto > 0) abono = Math.abs(monto);
-      }
-
-      if (cargo === 0 && abono === 0) continue;
-
-      const saldo = colSaldo >= 0 ? limpiarNumeroCartola(row[colSaldo]) : null;
-      const categoria = clasificarMovimientoCartola({ descripcion, cargo, abono });
-
-      movimientosDetectados.push({
-        fecha,
-        descripcion,
-        cargo,
-        abono,
-        saldo,
-        categoria,
-        estado:"por_revisar",
-        archivo_origen:file.name
-      });
-    }
-  }
-
-  if (movimientosDetectados.length === 0) {
-    alert("No se detectaron movimientos en la cartola. Revisa que el archivo tenga fecha, descripción y cargos/abonos.");
-    return;
-  }
-
-  const { data, error } = await supabase
-    .from("cartola_bancaria")
-    .insert(movimientosDetectados)
-    .select("*");
-
-  if (error) {
-    console.error(error);
-    alert("No se pudo guardar la cartola. Revisa si ejecutaste el SQL de cartola_bancaria.");
-    return;
-  }
-
-  setCartolaMovimientos(prev => [...(data || []), ...prev]);
-  setMesCartola(movimientosDetectados[0]?.fecha?.slice(0, 7) || mesCartola);
-  alert(`Cartola importada: ${movimientosDetectados.length} movimientos detectados.`);
-};
-
-const actualizarMovimientoCartola = async (movimiento, cambios) => {
-  const { data, error } = await supabase
-    .from("cartola_bancaria")
-    .update(cambios)
-    .eq("id", movimiento.id)
-    .select("*")
-    .single();
-
-  if (error) {
-    console.error(error);
-    alert("No se pudo actualizar el movimiento de cartola.");
-    return null;
-  }
-
-  setCartolaMovimientos(prev => prev.map(m => m.id === movimiento.id ? data : m));
-  return data;
-};
-
-const registrarCartolaComoAbonoNV = async (movimiento) => {
-  const monto = Number(movimiento.abono || 0);
-  if (!monto) {
-    alert("Este movimiento no tiene abono/ingreso para asociar a una NV.");
-    return;
-  }
-
-  const numero = window.prompt("Escribe el número de NV o Barrán al que corresponde este abono:");
-  if (!numero) return;
-
-  const nota = notas.find(n => String(n.numero) === String(numero).trim());
-  if (!nota) {
-    alert("No encontré esa NV/Barrán en la app.");
-    return;
-  }
-
-  const idReal = Number(String(nota.id).replace("supabase-", ""));
-  const observacion = `Abono registrado desde cartola bancaria. ${movimiento.descripcion || ""}`;
-
-  const { error: errorInsert } = await supabase
-    .from("abonos_nv")
-    .insert({
-      nota_venta_id:idReal,
-      monto,
-      fecha:movimiento.fecha,
-      medio_pago:"transferencia",
-      observacion
-    });
-
-  if (errorInsert) {
-    console.error(errorInsert);
-    alert("No se pudo registrar el abono en la NV/Barrán.");
-    return;
-  }
-
-  const { data: abonosActualizados } = await supabase
-    .from("abonos_nv")
-    .select("*")
-    .eq("nota_venta_id", idReal);
-
-  const totalAbonado = (abonosActualizados || []).reduce((sum, a) => sum + Number(a.monto || 0), 0);
-  const total = Number(nota.total || 0);
-  const estadoPago = totalAbonado >= total && total > 0 ? "pagada" : totalAbonado > 0 ? "abonada" : "pendiente";
-
-  await supabase
-    .from("notas_venta")
-    .update({ abono:totalAbonado, estado_pago:estadoPago })
-    .eq("id", idReal);
-
-  await crearAsientoAbonoNVAutomatico({
-    fecha:movimiento.fecha,
-    numero:nota.numero,
-    cliente:nota.cliente,
-    monto,
-    medioPago:"transferencia",
-    tipoDocumento:nota.tipo_documento || "nv"
-  });
-
-  setAbonosNV(prev => [...prev.filter(a => a.nota_venta_id !== idReal), ...(abonosActualizados || [])]);
-  setNotas(prev => prev.map(n => n.id === nota.id ? { ...n, abono:totalAbonado, estado_pago:estadoPago } : n));
-  await actualizarMovimientoCartola(movimiento, { estado:"conciliado", categoria:"Abono cliente", nota_venta_id:idReal });
-};
-
-const registrarCartolaComoPagoCuenta = async (movimiento) => {
-  const monto = Number(movimiento.cargo || 0);
-  if (!monto) {
-    alert("Este movimiento no tiene cargo/egreso para asociar a una cuenta por pagar.");
-    return;
-  }
-
-  const texto = window.prompt("Escribe el nombre o ID de la cuenta por pagar:");
-  if (!texto) return;
-
-  const busqueda = normalizarTextoCartola(texto);
-  const cuenta = cuentasPagar.find(c => String(c.id) === String(texto).trim()) ||
-    cuentasPagar.find(c => normalizarTextoCartola(c.nombre).includes(busqueda));
-
-  if (!cuenta) {
-    alert("No encontré esa cuenta por pagar.");
-    return;
-  }
-
-  const { data, error } = await supabase
-    .from("cuentas_pagar_abonos")
-    .insert({ cuenta_pagar_id:cuenta.id, monto, fecha:movimiento.fecha, medio_pago:"transferencia", observacion:`Pago desde cartola. ${movimiento.descripcion || ""}` })
-    .select("*")
-    .single();
-
-  if (error) {
-    console.error(error);
-    alert("No se pudo guardar el abono de la cuenta por pagar.");
-    return;
-  }
-
-  const abonosDeCuenta = [...abonosCuentasPagar.filter(a => String(a.cuenta_pagar_id) === String(cuenta.id)), data];
-  const totalAbonado = abonosDeCuenta.reduce((sum, a) => sum + Number(a.monto || 0), 0);
-  const estado = totalAbonado >= Number(cuenta.monto_total || 0) ? "pagado" : "pendiente";
-
-  await supabase.from("cuentas_pagar").update({ estado }).eq("id", cuenta.id);
-
-  const documentoPagoCxp = `CARTOLA-CXP-${movimiento.id}-${Date.now()}`;
-  await guardarAsientosAutomaticos([
-    { fecha:movimiento.fecha, detalle:`Pago cuenta por pagar - ${cuenta.nombre}`, desglose:"Pago desde cartola bancaria", documento:documentoPagoCxp, definicion:"Proveedores", debe:monto, haber:0 },
-    { fecha:movimiento.fecha, detalle:`Pago cuenta por pagar - ${cuenta.nombre}`, desglose:"Pago desde cartola bancaria", documento:documentoPagoCxp, definicion:"Banco", debe:0, haber:monto }
-  ]);
-
-  setAbonosCuentasPagar(prev => [data, ...prev]);
-  setCuentasPagar(prev => prev.map(c => c.id === cuenta.id ? { ...c, estado } : c));
-  await actualizarMovimientoCartola(movimiento, { estado:"conciliado", categoria:"Pago cuenta por pagar", cuenta_pagar_id:cuenta.id });
-};
-
-const registrarCartolaComoMovimientoContable = async (movimiento) => {
-  const montoCargo = Number(movimiento.cargo || 0);
-  const montoAbono = Number(movimiento.abono || 0);
-  const cuenta = window.prompt("Cuenta contable para este movimiento:", movimiento.categoria || (montoCargo > 0 ? "Gastos generales" : "Ingresos por revisar"));
-  if (!cuenta) return;
-
-  const documento = `CARTOLA-${movimiento.id}-${Date.now()}`;
-
-  if (montoCargo > 0) {
-    await guardarAsientosAutomaticos([
-      { fecha:movimiento.fecha, detalle:movimiento.descripcion, desglose:"Cartola bancaria", documento, definicion:cuenta, debe:montoCargo, haber:0 },
-      { fecha:movimiento.fecha, detalle:movimiento.descripcion, desglose:"Cartola bancaria", documento, definicion:"Banco", debe:0, haber:montoCargo }
-    ]);
-  } else if (montoAbono > 0) {
-    await guardarAsientosAutomaticos([
-      { fecha:movimiento.fecha, detalle:movimiento.descripcion, desglose:"Cartola bancaria", documento, definicion:"Banco", debe:montoAbono, haber:0 },
-      { fecha:movimiento.fecha, detalle:movimiento.descripcion, desglose:"Cartola bancaria", documento, definicion:cuenta, debe:0, haber:montoAbono }
-    ]);
-  }
-
-  await actualizarMovimientoCartola(movimiento, { estado:"conciliado", categoria:cuenta, asiento_documento:documento });
-};
-
-const guardarTrabajador = async (e) => {
-  e.preventDefault();
-  const form = new FormData(e.currentTarget);
-  const payload = {
-    nombre: String(form.get("nombre") || "").trim(),
-    rut: String(form.get("rut") || "").trim(),
-    cargo: String(form.get("cargo") || "").trim(),
-    fecha_ingreso: String(form.get("fecha_ingreso") || "") || null,
-    sueldo_base: Number(form.get("sueldo_base") || 0),
-    estado: String(form.get("estado") || "activo")
-  };
-
-  if (!payload.nombre) {
-    alert("Debes ingresar el nombre del trabajador.");
-    return;
-  }
-
-  const { data, error } = await supabase
-    .from("trabajadores")
-    .insert(payload)
-    .select("*")
-    .single();
-
-  if (error) {
-    console.error(error);
-    alert("No se pudo guardar el trabajador.");
-    return;
-  }
-
-  setTrabajadores(prev => [data, ...prev]);
-  setModalTrabajador(false);
-};
-
-const subirDocumentoTrabajador = async (e) => {
-  e.preventDefault();
-  if (!trabajadorArchivo?.trabajador || !trabajadorArchivo?.file) return;
-
-  const form = new FormData(e.currentTarget);
-  const tipo = String(form.get("tipo") || "documento");
-  const trabajador = trabajadorArchivo.trabajador;
-  const file = trabajadorArchivo.file;
-  const cleanName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-  const path = `${trabajador.id}/${Date.now()}_${cleanName}`;
-
-  const { error: uploadError } = await supabase.storage
-    .from("rrhh")
-    .upload(path, file, { upsert:false });
-
-  if (uploadError) {
-    console.error(uploadError);
-    alert("No se pudo subir el archivo. Revisa que exista el bucket rrhh en Supabase Storage.");
-    return;
-  }
-
-  const { data: publicData } = supabase.storage.from("rrhh").getPublicUrl(path);
-
-  const { data, error } = await supabase
-    .from("trabajador_documentos")
-    .insert({ trabajador_id: trabajador.id, tipo, nombre_archivo: file.name, storage_path: path, url_publica: publicData?.publicUrl || "" })
-    .select("*")
-    .single();
-
-  if (error) {
-    console.error(error);
-    alert("El archivo subió, pero no se pudo registrar en la ficha del trabajador.");
-    return;
-  }
-
-  setDocumentosTrabajadores(prev => [data, ...prev]);
-  setTrabajadorArchivo(null);
-};
-
 const fechaLocal = (fecha) => {
   if (!fecha) return null;
 
@@ -5394,20 +4808,15 @@ const crearAsientoVentaNVAutomatica = async ({ fecha, numero, cliente, totalVent
   });
 };
 
-const crearAsientoAbonoNVAutomatico = async ({ fecha, numero, cliente, monto, medioPago = "transferencia", tipoDocumento = "nv" }) => {
+const crearAsientoAbonoNVAutomatico = async ({ fecha, numero, cliente, monto }) => {
   const total = Math.round(Number(monto || 0));
   if (!total) return true;
 
-  const medio = String(medioPago || "transferencia").toLowerCase();
-  const cuentaDebe = medio === "efectivo" ? "Caja" : medio === "cheque" ? "Cheques por cobrar" : "Banco";
-  const etiquetaDocumento = String(tipoDocumento || "nv").toLowerCase() === "barran" ? "Barrán" : "NV";
-  const prefijoDocumento = String(tipoDocumento || "nv").toLowerCase() === "barran" ? "ABONO-BARRAN" : "ABONO-NV";
-  const documento = `${prefijoDocumento}-${numero}-${Date.now()}`;
-  const detalle = `Abono ${etiquetaDocumento} ${numero} - ${cliente || "cliente"} (${cuentaDebe})`;
+  const documento = `ABONO-NV-${numero}-${Date.now()}`;
 
   return guardarAsientosAutomaticos([
-    { fecha, detalle, desglose:"Abono cliente", documento, definicion:cuentaDebe, debe:total, haber:0 },
-    { fecha, detalle, desglose:"Abono cliente", documento, definicion:"Clientes", debe:0, haber:total }
+    { fecha, detalle:`Abono NV ${numero} - ${cliente || "cliente"}`, desglose:"Abono cliente", documento, definicion:"Banco", debe:total, haber:0 },
+    { fecha, detalle:`Abono NV ${numero} - ${cliente || "cliente"}`, desglose:"Abono cliente", documento, definicion:"Clientes", debe:0, haber:total }
   ]);
 };
 
@@ -6638,70 +6047,15 @@ const renderTarjetaProduccion = (n) => (
   </div>
 );
 
-
-  const cambiarMesCalendario = (delta) => {
-    const [year, month] = mesCalendario.split("-").map(Number);
-    const fecha = new Date(year, month - 1 + delta, 1);
-    setMesCalendario(`${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, "0")}`);
-  };
-
-  const obtenerAbonosCuenta = (cuentaId) => abonosCuentasPagar.filter(a => String(a.cuenta_pagar_id) === String(cuentaId));
-  const saldoCuentaPagar = (cuenta) => Math.max(Number(cuenta.monto_total || 0) - obtenerAbonosCuenta(cuenta.id).reduce((sum, a) => sum + Number(a.monto || 0), 0), 0);
-
-  const eventosCalendario = [
-    ...notas
-      .filter(n => n.fecha_entrega_estimada && String(n.proceso || "").toLowerCase() !== "entregado")
-      .map(n => ({
-        fecha: n.fecha_entrega_estimada,
-        tipo: (n.tipo_documento || "nv") === "barran" ? "Barrán" : "NV",
-        titulo: `${(n.tipo_documento || "nv") === "barran" ? "Barrán" : "NV"} ${n.numero}`,
-        subtitulo: n.cliente,
-        color: (n.tipo_documento || "nv") === "barran" ? COLORS.success : "#60a5fa",
-        onClick: () => setModalProduccion(n)
-      })),
-    ...cuentasPagar
-      .filter(c => c.fecha_vencimiento && saldoCuentaPagar(c) > 0)
-      .map(c => ({
-        fecha: c.fecha_vencimiento,
-        tipo: "Pago",
-        titulo: `${c.tipo || "Cuenta"}: ${c.nombre}`,
-        subtitulo: `${fmt(saldoCuentaPagar(c))} pendiente`,
-        color: COLORS.warning,
-        onClick: () => setModalAbonoCuentaPagar(c)
-      }))
-  ];
-
-  const [calYear, calMonth] = mesCalendario.split("-").map(Number);
-  const diasMesCalendario = new Date(calYear, calMonth, 0).getDate();
-  const primerDiaCalendario = new Date(calYear, calMonth - 1, 1).getDay();
-  const celdasVaciasInicio = primerDiaCalendario === 0 ? 6 : primerDiaCalendario - 1;
-  const eventosDelMes = eventosCalendario.filter(e => String(e.fecha || "").startsWith(mesCalendario));
-  const pagosPendientesMes = cuentasPagar.filter(c => String(c.fecha_vencimiento || "").startsWith(mesCalendario) && saldoCuentaPagar(c) > 0);
-  const totalPagosPendientesMes = pagosPendientesMes.reduce((sum, c) => sum + saldoCuentaPagar(c), 0);
-  const entregasPendientesMes = notas.filter(n => String(n.fecha_entrega_estimada || "").startsWith(mesCalendario) && String(n.proceso || "").toLowerCase() !== "entregado");
-  const cartolaFiltrada = cartolaMovimientos.filter(m => {
-    const coincideMes = !mesCartola || String(m.fecha || "").startsWith(mesCartola);
-    const texto = `${m.descripcion || ""} ${m.categoria || ""} ${m.estado || ""}`.toLowerCase();
-    const coincideBusqueda = !busquedaCartola || texto.includes(busquedaCartola.toLowerCase());
-    return coincideMes && coincideBusqueda;
-  });
-  const cartolaPorRevisar = cartolaFiltrada.filter(m => (m.estado || "por_revisar") !== "conciliado");
-  const totalIngresosCartola = cartolaFiltrada.reduce((sum, m) => sum + Number(m.abono || 0), 0);
-  const totalEgresosCartola = cartolaFiltrada.reduce((sum, m) => sum + Number(m.cargo || 0), 0);
-
   const tabs=[
     {key:"produccion",label:`🏭 Producción`},
     {key:"inventario",label:`📦 Inventario`},
-    {key:"calendario",label:`📅 Calendario (${eventosDelMes.length})`},
     {key:"quotes",label:`📋 Cotizaciones (${filteredQuotes.length})`},
     {key:"sales",label:`✅ Notas de Venta (${filteredNotas.length})`},
     {key:"barranes",label:`🧾 Barranes (${filteredBarranes.length})`},
     {key:"venta_laminas",label:`🧾 Venta de Láminas (${ventasLaminasDelMes.length})`},
-    {key:"cuentas_pagar",label:`💸 Cuentas por pagar (${pagosPendientesMes.length})`},
-    {key:"cartola",label:`🏦 Cartola (${cartolaPorRevisar.length})`},
     {key:"contabilidad",label:`📚 Contabilidad (${asientosContablesFiltrados.length})`},
     {key:"dashboard",label:"📊 Resumen"},
-    {key:"rrhh",label:`👷 RRHH (${trabajadores.length})`},
   ];
 
   return (
@@ -6747,18 +6101,13 @@ const renderTarjetaProduccion = (n) => (
     Agregar Venta Láminas
     <input type="file" accept=".xlsx,.xls" onChange={importarVentaLaminasExcel} style={{ display:"none" }} />
   </label>
-
-  <label style={{ display:"none" }}>
-    Importar cartola bancaria
-    <input id="importar-cartola-bancaria" type="file" accept=".xlsx,.xls,.csv" multiple onChange={importarCartolaBancaria} style={{ display:"none" }} />
-  </label>
 </div>
 </div>
       
 
       <div style={{ display:"flex", gap:2, padding:"12px 12px 0", borderBottom:`1px solid ${COLORS.border}`, overflowX:"auto", WebkitOverflowScrolling:"touch" }}>
         {tabs.map(t=>(
-          <button key={t.key} onClick={()=>setTab(t.key)} style={{ background:tab===t.key?COLORS.card:"transparent", border:`1px solid ${tab===t.key?COLORS.border:"transparent"}`, borderBottom:tab===t.key?`2px solid ${COLORS.accent}`:"2px solid transparent", borderRadius:"8px 8px 0 0", padding:"8px 16px", color:tab===t.key?COLORS.accent:COLORS.muted, cursor:"pointer", fontSize:15, fontWeight:tab===t.key?700:400, whiteSpace:"nowrap" }}>{t.label}</button>
+          <button key={t.key} onClick={()=>setTab(t.key)} style={{ background:tab===t.key?COLORS.card:"transparent", border:`1px solid ${tab===t.key?COLORS.border:"transparent"}`, borderBottom:tab===t.key?`2px solid ${COLORS.accent}`:"2px solid transparent", borderRadius:"8px 8px 0 0", padding:"8px 16px", color:tab===t.key?COLORS.accent:COLORS.muted, cursor:"pointer", fontSize:12, fontWeight:tab===t.key?700:400, whiteSpace:"nowrap" }}>{t.label}</button>
         ))}
       </div>
 
@@ -8079,225 +7428,6 @@ const renderTarjetaProduccion = (n) => (
         )}
 
 
-
-        {tab==="calendario" && (
-          <div>
-            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:12, flexWrap:"wrap", marginBottom:16 }}>
-              <div>
-                <h2 style={{ margin:"0 0 6px", fontFamily:"Georgia,serif", color:COLORS.accent, fontSize:17 }}>📅 Calendario</h2>
-                <p style={{ margin:0, fontSize:12, color:COLORS.muted }}>Entregas de NV/Barranes y pagos comprometidos del mes.</p>
-              </div>
-              <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}>
-                <button onClick={() => cambiarMesCalendario(-1)} style={{ background:COLORS.surface, color:COLORS.text, border:`1px solid ${COLORS.border}`, borderRadius:8, padding:"9px 12px", cursor:"pointer" }}>← Mes anterior</button>
-                <input type="month" value={mesCalendario} onChange={e=>setMesCalendario(e.target.value)} style={{ background:COLORS.surface, border:`1px solid ${COLORS.border}`, color:COLORS.text, borderRadius:8, padding:"9px 12px" }}/>
-                <button onClick={() => cambiarMesCalendario(1)} style={{ background:COLORS.surface, color:COLORS.text, border:`1px solid ${COLORS.border}`, borderRadius:8, padding:"9px 12px", cursor:"pointer" }}>Mes siguiente →</button>
-              </div>
-            </div>
-
-            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))", gap:12, marginBottom:14 }}>
-              <StatCard label="Entregas del mes" value={entregasPendientesMes.length} icon="🚚" color="#60a5fa" />
-              <StatCard label="Pagos pendientes" value={pagosPendientesMes.length} icon="💸" color={COLORS.warning} />
-              <StatCard label="Comprometido por pagar" value={fmt(totalPagosPendientesMes)} icon="📌" color={COLORS.danger} />
-            </div>
-
-            <div style={{ display:"grid", gridTemplateColumns:"repeat(7, minmax(130px, 1fr))", gap:6, overflowX:"auto" }}>
-              {["Lun","Mar","Mié","Jue","Vie","Sáb","Dom"].map(d => (
-                <div key={d} style={{ minWidth:130, color:COLORS.muted, fontSize:12, fontWeight:700, padding:"6px 8px", textAlign:"center" }}>{d}</div>
-              ))}
-              {Array.from({ length:celdasVaciasInicio }).map((_, i) => <div key={`empty-${i}`} style={{ minWidth:130, minHeight:95 }} />)}
-              {Array.from({ length:diasMesCalendario }).map((_, idx) => {
-                const dia = idx + 1;
-                const fechaDia = `${mesCalendario}-${String(dia).padStart(2, "0")}`;
-                const eventosDia = eventosDelMes.filter(e => e.fecha === fechaDia);
-                return (
-                  <div key={fechaDia} style={{ minWidth:130, minHeight:115, background:COLORS.card, border:`1px solid ${COLORS.border}`, borderRadius:10, padding:8 }}>
-                    <div style={{ display:"flex", justifyContent:"space-between", marginBottom:6 }}>
-                      <b style={{ color:COLORS.accent }}>{dia}</b>
-                      {eventosDia.length > 0 && <span style={{ fontSize:11, color:COLORS.muted }}>{eventosDia.length}</span>}
-                    </div>
-                    <div style={{ display:"grid", gap:5 }}>
-                      {eventosDia.map((ev, i) => (
-                        <button key={`${fechaDia}-${i}`} onClick={ev.onClick} style={{ textAlign:"left", background:ev.color + "22", border:`1px solid ${ev.color}`, color:COLORS.text, borderRadius:7, padding:"5px 6px", cursor:"pointer", fontSize:11 }}>
-                          <b style={{ color:ev.color }}>{ev.titulo}</b><br />
-                          <span style={{ color:COLORS.muted }}>{ev.subtitulo}</span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {tab==="cuentas_pagar" && (
-          <div>
-            <div style={{ display:"flex", justifyContent:"space-between", gap:12, alignItems:"flex-end", flexWrap:"wrap", marginBottom:16 }}>
-              <div>
-                <h2 style={{ margin:"0 0 6px", fontFamily:"Georgia,serif", color:COLORS.accent, fontSize:17 }}>💸 Cuentas por pagar</h2>
-                <p style={{ margin:0, fontSize:12, color:COLORS.muted }}>Deudas, cuotas, proveedores, imposiciones y compromisos visibles en el Calendario.</p>
-              </div>
-              <button onClick={() => setModalCuentaPagar(true)} style={{ background:COLORS.accent, color:"#111", border:"none", borderRadius:8, padding:"10px 12px", fontWeight:700, cursor:"pointer" }}>+ Nueva cuenta</button>
-            </div>
-
-            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))", gap:12, marginBottom:14 }}>
-              <StatCard label="Pendiente total" value={fmt(cuentasPagar.reduce((sum, c) => sum + saldoCuentaPagar(c), 0))} icon="📌" color={COLORS.danger} />
-              <StatCard label="Por pagar este mes" value={fmt(totalPagosPendientesMes)} icon="📅" color={COLORS.warning} />
-              <StatCard label="Cuentas activas" value={cuentasPagar.filter(c => saldoCuentaPagar(c) > 0).length} icon="💸" color={COLORS.accent} />
-            </div>
-
-            <div style={{ display:"grid", gap:10 }}>
-              {cuentasPagar.length === 0 ? (
-                <div style={{ color:COLORS.muted, background:COLORS.card, border:`1px solid ${COLORS.border}`, borderRadius:10, padding:14 }}>No hay cuentas por pagar registradas.</div>
-              ) : cuentasPagar.map(c => {
-                const abonos = obtenerAbonosCuenta(c.id);
-                const abonado = abonos.reduce((sum, a) => sum + Number(a.monto || 0), 0);
-                const saldo = saldoCuentaPagar(c);
-                return (
-                  <div key={c.id} style={{ background:COLORS.card, border:`1px solid ${saldo === 0 ? COLORS.success : COLORS.border}`, borderRadius:12, padding:14 }}>
-                    <div style={{ display:"flex", justifyContent:"space-between", gap:10, flexWrap:"wrap" }}>
-                      <div>
-                        <b style={{ color:COLORS.accent }}>{c.nombre}</b>
-                        <div style={{ fontSize:12, color:COLORS.muted }}>{c.tipo} · Vence {fmtDate(c.fecha_vencimiento)} · Cuota {c.cuota_actual || 1}/{c.cuotas_totales || 1}</div>
-                        {c.detalle && <div style={{ fontSize:12, marginTop:5 }}>{c.detalle}</div>}
-                      </div>
-                      <div style={{ textAlign:"right" }}>
-                        <div><b>Total:</b> {fmt(c.monto_total)}</div>
-                        <div><b>Abonado:</b> {fmt(abonado)}</div>
-                        <div style={{ color:saldo === 0 ? COLORS.success : COLORS.warning, fontWeight:800 }}><b>Saldo:</b> {fmt(saldo)}</div>
-                      </div>
-                    </div>
-                    <div style={{ marginTop:10, display:"flex", gap:8, flexWrap:"wrap" }}>
-                      <button onClick={() => setModalAbonoCuentaPagar(c)} disabled={saldo === 0} style={{ background:saldo === 0 ? COLORS.subtle : COLORS.success, color:"#fff", border:"none", borderRadius:8, padding:"8px 10px", fontWeight:700, cursor:saldo === 0 ? "not-allowed" : "pointer" }}>Registrar abono</button>
-                    </div>
-                    {abonos.length > 0 && (
-                      <div style={{ marginTop:10, fontSize:12, color:COLORS.muted }}>
-                        Historial: {abonos.map(a => `${fmtDate(a.fecha)} ${fmt(a.monto)} ${a.medio_pago || ""}`).join(" · ")}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {tab==="rrhh" && (
-          <div>
-            <div style={{ display:"flex", justifyContent:"space-between", gap:12, alignItems:"flex-end", flexWrap:"wrap", marginBottom:16 }}>
-              <div>
-                <h2 style={{ margin:"0 0 6px", fontFamily:"Georgia,serif", color:COLORS.accent, fontSize:17 }}>👷 Recursos Humanos</h2>
-                <p style={{ margin:0, fontSize:12, color:COLORS.muted }}>Fichas básicas de trabajadores. Los documentos se guardan fuera de la app para no gastar almacenamiento de Supabase.</p>
-              </div>
-              <button onClick={() => setModalTrabajador(true)} style={{ background:COLORS.accent, color:"#111", border:"none", borderRadius:8, padding:"10px 12px", fontWeight:700, cursor:"pointer" }}>+ Trabajador</button>
-            </div>
-
-            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))", gap:12 }}>
-              {trabajadores.length === 0 ? (
-                <div style={{ color:COLORS.muted, background:COLORS.card, border:`1px solid ${COLORS.border}`, borderRadius:10, padding:14 }}>No hay trabajadores registrados.</div>
-              ) : trabajadores.map(t => {
-                const docs = documentosTrabajadores.filter(d => String(d.trabajador_id) === String(t.id));
-                return (
-                  <div key={t.id} style={{ background:COLORS.card, border:`1px solid ${COLORS.border}`, borderRadius:12, padding:14 }}>
-                    <div style={{ display:"flex", justifyContent:"space-between", gap:10 }}>
-                      <div>
-                        <b style={{ color:COLORS.accent }}>{t.nombre}</b>
-                        <div style={{ fontSize:12, color:COLORS.muted }}>{t.rut || "Sin RUT"} · {t.cargo || "Sin cargo"}</div>
-                        <div style={{ fontSize:12, color:COLORS.muted }}>Ingreso: {t.fecha_ingreso ? fmtDate(t.fecha_ingreso) : "-"} · Estado: {t.estado || "activo"}</div>
-                      </div>
-                      <div style={{ fontWeight:800, color:t.estado === "finiquitado" ? COLORS.danger : COLORS.success }}>{t.estado || "activo"}</div>
-                    </div>
-
-                    <div style={{ marginTop:10, fontSize:12, color:COLORS.muted }}>
-                      Documentos: guardar en carpeta externa / Drive / correo. La app no sube archivos para ahorrar Storage.
-                    </div>
-
-                    <div style={{ marginTop:12, display:"grid", gap:6 }}>
-                      {docs.length === 0 ? <div style={{ fontSize:12, color:COLORS.muted }}>Sin documentos.</div> : docs.map(d => (
-                        <a key={d.id} href={d.url_publica} target="_blank" rel="noreferrer" style={{ color:COLORS.text, background:COLORS.surface, border:`1px solid ${COLORS.border}`, borderRadius:8, padding:"7px 8px", fontSize:12, textDecoration:"none" }}>
-                          📄 {d.tipo} · {d.nombre_archivo}
-                        </a>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {tab==="cartola" && (
-          <section style={{ maxWidth:1200, margin:"0 auto" }}>
-            <h2 style={{ color:COLORS.accent, fontFamily:"Georgia,serif", marginBottom:6 }}>🏦 Cartola bancaria</h2>
-            <p style={{ color:COLORS.muted, marginTop:0, fontSize:13 }}>Importa Excel/CSV del banco, revisa cada movimiento y conviértelo en abono, pago o asiento contable.</p>
-            <div style={{ background:COLORS.card, border:`1px solid ${COLORS.border}`, borderRadius:12, padding:14, marginBottom:14 }}>
-              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-end", gap:10, flexWrap:"wrap", marginBottom:12 }}>
-                <div>
-                  <div style={{ fontSize:13, fontWeight:700, color:COLORS.accent }}>🏦 Cartola bancaria</div>
-                  <div style={{ color:COLORS.muted, fontSize:12 }}>Importa Excel/CSV del banco, revisa movimientos y conviértelos en abonos, pagos o asientos.</div>
-                </div>
-                <div style={{ display:"flex", gap:8, flexWrap:"wrap", alignItems:"flex-end" }}>
-                  <div>
-                    <label style={{ display:"block", fontSize:10, color:COLORS.muted, marginBottom:5 }}>Mes cartola</label>
-                    <input type="month" value={mesCartola} onChange={e=>setMesCartola(e.target.value)} style={{ background:COLORS.surface, border:`1px solid ${COLORS.border}`, color:COLORS.text, borderRadius:8, padding:"8px 10px" }} />
-                  </div>
-                  <button onClick={() => document.getElementById("importar-cartola-bancaria")?.click()} style={{ background:COLORS.success, color:"#fff", border:"none", borderRadius:8, padding:"10px 12px", fontWeight:700, cursor:"pointer" }}>Importar cartola</button>
-                </div>
-              </div>
-
-              <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))", gap:10, marginBottom:12 }}>
-                <StatCard label="Ingresos cartola" value={fmt(totalIngresosCartola)} icon="⬆️" color={COLORS.success}/>
-                <StatCard label="Egresos cartola" value={fmt(totalEgresosCartola)} icon="⬇️" color={COLORS.danger}/>
-                <StatCard label="Por revisar" value={cartolaPorRevisar.length} icon="🔎" color={cartolaPorRevisar.length ? COLORS.warning : COLORS.success}/>
-              </div>
-
-              <div style={{ display:"flex", justifyContent:"space-between", gap:10, flexWrap:"wrap", alignItems:"center", marginBottom:10 }}>
-                <input value={busquedaCartola} onChange={e=>setBusquedaCartola(e.target.value)} placeholder="Buscar en cartola..." style={{ minWidth:220, flex:"0 1 320px", background:COLORS.surface, border:`1px solid ${COLORS.border}`, color:COLORS.text, borderRadius:8, padding:"8px 10px" }} />
-                <span style={{ color:COLORS.muted, fontSize:12 }}>{cartolaFiltrada.length} movimientos</span>
-              </div>
-
-              {cartolaFiltrada.length === 0 ? (
-                <div style={{ color:COLORS.muted, fontSize:12 }}>Todavía no hay cartola importada para este mes.</div>
-              ) : (
-                <div style={{ overflowX:"auto", maxHeight:360, overflowY:"auto" }}>
-                  <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12, minWidth:900 }}>
-                    <thead>
-                      <tr style={{ color:COLORS.muted, textAlign:"left" }}>
-                        <th style={{ padding:"8px", borderBottom:`1px solid ${COLORS.border}` }}>Fecha</th>
-                        <th style={{ padding:"8px", borderBottom:`1px solid ${COLORS.border}` }}>Descripción</th>
-                        <th style={{ padding:"8px", borderBottom:`1px solid ${COLORS.border}`, textAlign:"right" }}>Cargo</th>
-                        <th style={{ padding:"8px", borderBottom:`1px solid ${COLORS.border}`, textAlign:"right" }}>Abono</th>
-                        <th style={{ padding:"8px", borderBottom:`1px solid ${COLORS.border}` }}>Categoría</th>
-                        <th style={{ padding:"8px", borderBottom:`1px solid ${COLORS.border}` }}>Estado</th>
-                        <th style={{ padding:"8px", borderBottom:`1px solid ${COLORS.border}` }}>Acciones</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {cartolaFiltrada.slice(0, 80).map(m => (
-                        <tr key={m.id}>
-                          <td style={{ padding:"8px", borderBottom:`1px solid ${COLORS.border}` }}>{fmtDate(m.fecha)}</td>
-                          <td style={{ padding:"8px", borderBottom:`1px solid ${COLORS.border}`, color:COLORS.text, fontWeight:700 }}>{m.descripcion}</td>
-                          <td style={{ padding:"8px", borderBottom:`1px solid ${COLORS.border}`, textAlign:"right", color:COLORS.danger }}>{Number(m.cargo || 0) ? fmt(m.cargo) : "-"}</td>
-                          <td style={{ padding:"8px", borderBottom:`1px solid ${COLORS.border}`, textAlign:"right", color:COLORS.success }}>{Number(m.abono || 0) ? fmt(m.abono) : "-"}</td>
-                          <td style={{ padding:"8px", borderBottom:`1px solid ${COLORS.border}` }}>{m.categoria || "Por revisar"}</td>
-                          <td style={{ padding:"8px", borderBottom:`1px solid ${COLORS.border}`, color:m.estado === "conciliado" ? COLORS.success : COLORS.warning }}>{m.estado === "conciliado" ? "Conciliado" : "Por revisar"}</td>
-                          <td style={{ padding:"8px", borderBottom:`1px solid ${COLORS.border}` }}>
-                            <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
-                              {Number(m.abono || 0) > 0 && <button onClick={() => registrarCartolaComoAbonoNV(m)} style={{ background:COLORS.success, color:"#fff", border:"none", borderRadius:7, padding:"6px 8px", cursor:"pointer", fontSize:11 }}>Abono NV</button>}
-                              {Number(m.cargo || 0) > 0 && <button onClick={() => registrarCartolaComoPagoCuenta(m)} style={{ background:COLORS.warning, color:"#111", border:"none", borderRadius:7, padding:"6px 8px", cursor:"pointer", fontSize:11 }}>Pago CxP</button>}
-                              <button onClick={() => registrarCartolaComoMovimientoContable(m)} style={{ background:COLORS.surface, color:COLORS.text, border:`1px solid ${COLORS.border}`, borderRadius:7, padding:"6px 8px", cursor:"pointer", fontSize:11 }}>Asiento</button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          </section>
-        )}
-
         {tab==="contabilidad" && (
           <div>
             <div style={{ display:"flex", justifyContent:"space-between", gap:12, alignItems:"flex-end", flexWrap:"wrap", marginBottom:16 }}>
@@ -8344,72 +7474,6 @@ const renderTarjetaProduccion = (n) => (
 >
   <StatCard label="CxC Clientes" value={fmt(totalCxcNotas)} icon="👥" color={COLORS.warninging}/>
 </div>
-
-            <div style={{ background:COLORS.card, border:`1px solid ${COLORS.border}`, borderRadius:12, padding:14, marginBottom:14 }}>
-              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-end", gap:10, flexWrap:"wrap", marginBottom:12 }}>
-                <div>
-                  <div style={{ fontSize:13, fontWeight:700, color:COLORS.accent }}>🏦 Cartola bancaria</div>
-                  <div style={{ color:COLORS.muted, fontSize:12 }}>Importa Excel/CSV del banco, revisa movimientos y conviértelos en abonos, pagos o asientos.</div>
-                </div>
-                <div style={{ display:"flex", gap:8, flexWrap:"wrap", alignItems:"flex-end" }}>
-                  <div>
-                    <label style={{ display:"block", fontSize:10, color:COLORS.muted, marginBottom:5 }}>Mes cartola</label>
-                    <input type="month" value={mesCartola} onChange={e=>setMesCartola(e.target.value)} style={{ background:COLORS.surface, border:`1px solid ${COLORS.border}`, color:COLORS.text, borderRadius:8, padding:"8px 10px" }} />
-                  </div>
-                  <button onClick={() => document.getElementById("importar-cartola-bancaria")?.click()} style={{ background:COLORS.success, color:"#fff", border:"none", borderRadius:8, padding:"10px 12px", fontWeight:700, cursor:"pointer" }}>Importar cartola</button>
-                </div>
-              </div>
-
-              <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))", gap:10, marginBottom:12 }}>
-                <StatCard label="Ingresos cartola" value={fmt(totalIngresosCartola)} icon="⬆️" color={COLORS.success}/>
-                <StatCard label="Egresos cartola" value={fmt(totalEgresosCartola)} icon="⬇️" color={COLORS.danger}/>
-                <StatCard label="Por revisar" value={cartolaPorRevisar.length} icon="🔎" color={cartolaPorRevisar.length ? COLORS.warning : COLORS.success}/>
-              </div>
-
-              <div style={{ display:"flex", justifyContent:"space-between", gap:10, flexWrap:"wrap", alignItems:"center", marginBottom:10 }}>
-                <input value={busquedaCartola} onChange={e=>setBusquedaCartola(e.target.value)} placeholder="Buscar en cartola..." style={{ minWidth:220, flex:"0 1 320px", background:COLORS.surface, border:`1px solid ${COLORS.border}`, color:COLORS.text, borderRadius:8, padding:"8px 10px" }} />
-                <span style={{ color:COLORS.muted, fontSize:12 }}>{cartolaFiltrada.length} movimientos</span>
-              </div>
-
-              {cartolaFiltrada.length === 0 ? (
-                <div style={{ color:COLORS.muted, fontSize:12 }}>Todavía no hay cartola importada para este mes.</div>
-              ) : (
-                <div style={{ overflowX:"auto", maxHeight:360, overflowY:"auto" }}>
-                  <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12, minWidth:900 }}>
-                    <thead>
-                      <tr style={{ color:COLORS.muted, textAlign:"left" }}>
-                        <th style={{ padding:"8px", borderBottom:`1px solid ${COLORS.border}` }}>Fecha</th>
-                        <th style={{ padding:"8px", borderBottom:`1px solid ${COLORS.border}` }}>Descripción</th>
-                        <th style={{ padding:"8px", borderBottom:`1px solid ${COLORS.border}`, textAlign:"right" }}>Cargo</th>
-                        <th style={{ padding:"8px", borderBottom:`1px solid ${COLORS.border}`, textAlign:"right" }}>Abono</th>
-                        <th style={{ padding:"8px", borderBottom:`1px solid ${COLORS.border}` }}>Categoría</th>
-                        <th style={{ padding:"8px", borderBottom:`1px solid ${COLORS.border}` }}>Estado</th>
-                        <th style={{ padding:"8px", borderBottom:`1px solid ${COLORS.border}` }}>Acciones</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {cartolaFiltrada.slice(0, 80).map(m => (
-                        <tr key={m.id}>
-                          <td style={{ padding:"8px", borderBottom:`1px solid ${COLORS.border}` }}>{fmtDate(m.fecha)}</td>
-                          <td style={{ padding:"8px", borderBottom:`1px solid ${COLORS.border}`, color:COLORS.text, fontWeight:700 }}>{m.descripcion}</td>
-                          <td style={{ padding:"8px", borderBottom:`1px solid ${COLORS.border}`, textAlign:"right", color:COLORS.danger }}>{Number(m.cargo || 0) ? fmt(m.cargo) : "-"}</td>
-                          <td style={{ padding:"8px", borderBottom:`1px solid ${COLORS.border}`, textAlign:"right", color:COLORS.success }}>{Number(m.abono || 0) ? fmt(m.abono) : "-"}</td>
-                          <td style={{ padding:"8px", borderBottom:`1px solid ${COLORS.border}` }}>{m.categoria || "Por revisar"}</td>
-                          <td style={{ padding:"8px", borderBottom:`1px solid ${COLORS.border}`, color:m.estado === "conciliado" ? COLORS.success : COLORS.warning }}>{m.estado === "conciliado" ? "Conciliado" : "Por revisar"}</td>
-                          <td style={{ padding:"8px", borderBottom:`1px solid ${COLORS.border}` }}>
-                            <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
-                              {Number(m.abono || 0) > 0 && <button onClick={() => registrarCartolaComoAbonoNV(m)} style={{ background:COLORS.success, color:"#fff", border:"none", borderRadius:7, padding:"6px 8px", cursor:"pointer", fontSize:11 }}>Abono NV</button>}
-                              {Number(m.cargo || 0) > 0 && <button onClick={() => registrarCartolaComoPagoCuenta(m)} style={{ background:COLORS.warning, color:"#111", border:"none", borderRadius:7, padding:"6px 8px", cursor:"pointer", fontSize:11 }}>Pago CxP</button>}
-                              <button onClick={() => registrarCartolaComoMovimientoContable(m)} style={{ background:COLORS.surface, color:COLORS.text, border:`1px solid ${COLORS.border}`, borderRadius:7, padding:"6px 8px", cursor:"pointer", fontSize:11 }}>Asiento</button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
 
             <div style={{ background:COLORS.card, border:`1px solid ${COLORS.border}`, borderRadius:12, padding:14 }}>
               <div style={{ display:"flex", justifyContent:"space-between", gap:10, flexWrap:"wrap", alignItems:"center", marginBottom:12 }}>
@@ -8464,70 +7528,6 @@ const renderTarjetaProduccion = (n) => (
         )}
 
       </div>
-
-
-      {modalCuentaPagar && (
-        <div onClick={() => setModalCuentaPagar(false)} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.65)", display:"flex", alignItems:"flex-start", justifyContent:"center", zIndex:9999, overflowY:"auto", padding:"20px 10px" }}>
-          <form onSubmit={guardarCuentaPorPagar} onClick={e=>e.stopPropagation()} style={{ background:COLORS.card, border:`1px solid ${COLORS.border}`, borderRadius:14, padding:20, width:"460px", maxWidth:"94vw", color:COLORS.text }}>
-            <h2 style={{ marginTop:0, color:COLORS.accent }}>Nueva cuenta por pagar</h2>
-            <label>Proveedor / institución<input name="nombre" required style={{ width:"100%", boxSizing:"border-box", padding:10, margin:"6px 0 10px", borderRadius:8, border:`1px solid ${COLORS.border}`, background:COLORS.surface, color:COLORS.text }}/></label>
-            <label>Tipo<select name="tipo" style={{ width:"100%", boxSizing:"border-box", padding:10, margin:"6px 0 10px", borderRadius:8, border:`1px solid ${COLORS.border}`, background:COLORS.surface, color:COLORS.text }}>
-              <option value="proveedor">Proveedor</option><option value="imposiciones">Imposiciones</option><option value="remuneraciones">Remuneraciones</option><option value="arriendo">Arriendo</option><option value="servicio">Servicio</option><option value="cheque">Cheque</option><option value="deuda antigua">Deuda antigua</option><option value="otro">Otro</option>
-            </select></label>
-            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
-              <label>Monto total<input name="monto_total" type="number" required style={{ width:"100%", boxSizing:"border-box", padding:10, margin:"6px 0 10px", borderRadius:8, border:`1px solid ${COLORS.border}`, background:COLORS.surface, color:COLORS.text }}/></label>
-              <label>Monto cuota<input name="monto_cuota" type="number" style={{ width:"100%", boxSizing:"border-box", padding:10, margin:"6px 0 10px", borderRadius:8, border:`1px solid ${COLORS.border}`, background:COLORS.surface, color:COLORS.text }}/></label>
-              <label>Fecha vencimiento<input name="fecha_vencimiento" type="date" defaultValue={new Date().toISOString().split("T")[0]} style={{ width:"100%", boxSizing:"border-box", padding:10, margin:"6px 0 10px", borderRadius:8, border:`1px solid ${COLORS.border}`, background:COLORS.surface, color:COLORS.text }}/></label>
-              <label>Cuota actual<input name="cuota_actual" type="number" defaultValue="1" style={{ width:"100%", boxSizing:"border-box", padding:10, margin:"6px 0 10px", borderRadius:8, border:`1px solid ${COLORS.border}`, background:COLORS.surface, color:COLORS.text }}/></label>
-              <label>Total cuotas<input name="cuotas_totales" type="number" defaultValue="1" style={{ width:"100%", boxSizing:"border-box", padding:10, margin:"6px 0 10px", borderRadius:8, border:`1px solid ${COLORS.border}`, background:COLORS.surface, color:COLORS.text }}/></label>
-            </div>
-            <label>Detalle<textarea name="detalle" style={{ width:"100%", minHeight:70, boxSizing:"border-box", padding:10, margin:"6px 0 10px", borderRadius:8, border:`1px solid ${COLORS.border}`, background:COLORS.surface, color:COLORS.text }}/></label>
-            <div style={{ display:"flex", justifyContent:"flex-end", gap:10 }}><button type="button" onClick={() => setModalCuentaPagar(false)}>Cancelar</button><button type="submit" style={{ background:COLORS.success, color:"#fff", border:"none", borderRadius:8, padding:"9px 14px", fontWeight:700 }}>Guardar</button></div>
-          </form>
-        </div>
-      )}
-
-      {modalAbonoCuentaPagar && (
-        <div onClick={() => setModalAbonoCuentaPagar(null)} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.65)", display:"flex", alignItems:"flex-start", justifyContent:"center", zIndex:9999, overflowY:"auto", padding:"20px 10px" }}>
-          <form onSubmit={guardarAbonoCuentaPagar} onClick={e=>e.stopPropagation()} style={{ background:COLORS.card, border:`1px solid ${COLORS.border}`, borderRadius:14, padding:20, width:"420px", maxWidth:"94vw", color:COLORS.text }}>
-            <h2 style={{ marginTop:0, color:COLORS.accent }}>Abono a cuenta</h2>
-            <p><b>{modalAbonoCuentaPagar.nombre}</b><br/><span style={{ color:COLORS.muted }}>Saldo: {fmt(saldoCuentaPagar(modalAbonoCuentaPagar))}</span></p>
-            <label>Monto<input name="monto" type="number" required defaultValue={modalAbonoCuentaPagar.monto_cuota || saldoCuentaPagar(modalAbonoCuentaPagar)} style={{ width:"100%", boxSizing:"border-box", padding:10, margin:"6px 0 10px", borderRadius:8, border:`1px solid ${COLORS.border}`, background:COLORS.surface, color:COLORS.text }}/></label>
-            <label>Fecha<input name="fecha" type="date" defaultValue={new Date().toISOString().split("T")[0]} style={{ width:"100%", boxSizing:"border-box", padding:10, margin:"6px 0 10px", borderRadius:8, border:`1px solid ${COLORS.border}`, background:COLORS.surface, color:COLORS.text }}/></label>
-            <label>Medio pago<select name="medio_pago" style={{ width:"100%", boxSizing:"border-box", padding:10, margin:"6px 0 10px", borderRadius:8, border:`1px solid ${COLORS.border}`, background:COLORS.surface, color:COLORS.text }}><option value="transferencia">Transferencia</option><option value="efectivo">Efectivo</option><option value="cheque">Cheque</option></select></label>
-            <label>Observación<input name="observacion" style={{ width:"100%", boxSizing:"border-box", padding:10, margin:"6px 0 10px", borderRadius:8, border:`1px solid ${COLORS.border}`, background:COLORS.surface, color:COLORS.text }}/></label>
-            <div style={{ display:"flex", justifyContent:"flex-end", gap:10 }}><button type="button" onClick={() => setModalAbonoCuentaPagar(null)}>Cancelar</button><button type="submit" style={{ background:COLORS.success, color:"#fff", border:"none", borderRadius:8, padding:"9px 14px", fontWeight:700 }}>Guardar abono</button></div>
-          </form>
-        </div>
-      )}
-
-      {modalTrabajador && (
-        <div onClick={() => setModalTrabajador(false)} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.65)", display:"flex", alignItems:"flex-start", justifyContent:"center", zIndex:9999, overflowY:"auto", padding:"20px 10px" }}>
-          <form onSubmit={guardarTrabajador} onClick={e=>e.stopPropagation()} style={{ background:COLORS.card, border:`1px solid ${COLORS.border}`, borderRadius:14, padding:20, width:"440px", maxWidth:"94vw", color:COLORS.text }}>
-            <h2 style={{ marginTop:0, color:COLORS.accent }}>Nuevo trabajador</h2>
-            <label>Nombre<input name="nombre" required style={{ width:"100%", boxSizing:"border-box", padding:10, margin:"6px 0 10px", borderRadius:8, border:`1px solid ${COLORS.border}`, background:COLORS.surface, color:COLORS.text }}/></label>
-            <label>RUT<input name="rut" style={{ width:"100%", boxSizing:"border-box", padding:10, margin:"6px 0 10px", borderRadius:8, border:`1px solid ${COLORS.border}`, background:COLORS.surface, color:COLORS.text }}/></label>
-            <label>Cargo<input name="cargo" style={{ width:"100%", boxSizing:"border-box", padding:10, margin:"6px 0 10px", borderRadius:8, border:`1px solid ${COLORS.border}`, background:COLORS.surface, color:COLORS.text }}/></label>
-            <label>Fecha ingreso<input name="fecha_ingreso" type="date" style={{ width:"100%", boxSizing:"border-box", padding:10, margin:"6px 0 10px", borderRadius:8, border:`1px solid ${COLORS.border}`, background:COLORS.surface, color:COLORS.text }}/></label>
-            <label>Sueldo base<input name="sueldo_base" type="number" style={{ width:"100%", boxSizing:"border-box", padding:10, margin:"6px 0 10px", borderRadius:8, border:`1px solid ${COLORS.border}`, background:COLORS.surface, color:COLORS.text }}/></label>
-            <label>Estado<select name="estado" style={{ width:"100%", boxSizing:"border-box", padding:10, margin:"6px 0 10px", borderRadius:8, border:`1px solid ${COLORS.border}`, background:COLORS.surface, color:COLORS.text }}><option value="activo">Activo</option><option value="finiquitado">Finiquitado</option></select></label>
-            <div style={{ display:"flex", justifyContent:"flex-end", gap:10 }}><button type="button" onClick={() => setModalTrabajador(false)}>Cancelar</button><button type="submit" style={{ background:COLORS.success, color:"#fff", border:"none", borderRadius:8, padding:"9px 14px", fontWeight:700 }}>Guardar</button></div>
-          </form>
-        </div>
-      )}
-
-      {trabajadorArchivo && (
-        <div onClick={() => setTrabajadorArchivo(null)} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.65)", display:"flex", alignItems:"flex-start", justifyContent:"center", zIndex:9999, overflowY:"auto", padding:"20px 10px" }}>
-          <form onSubmit={subirDocumentoTrabajador} onClick={e=>e.stopPropagation()} style={{ background:COLORS.card, border:`1px solid ${COLORS.border}`, borderRadius:14, padding:20, width:"420px", maxWidth:"94vw", color:COLORS.text }}>
-            <h2 style={{ marginTop:0, color:COLORS.accent }}>Subir documento</h2>
-            <p><b>{trabajadorArchivo.trabajador.nombre}</b><br/><span style={{ color:COLORS.muted }}>{trabajadorArchivo.file.name}</span></p>
-            <label>Tipo documento<select name="tipo" style={{ width:"100%", boxSizing:"border-box", padding:10, margin:"6px 0 10px", borderRadius:8, border:`1px solid ${COLORS.border}`, background:COLORS.surface, color:COLORS.text }}>
-              <option value="Contrato">Contrato</option><option value="Anexo">Anexo</option><option value="Liquidación">Liquidación</option><option value="Cotizaciones">Cotizaciones</option><option value="Licencia médica">Licencia médica</option><option value="Vacaciones">Vacaciones</option><option value="Finiquito">Finiquito</option><option value="Otro">Otro</option>
-            </select></label>
-            <div style={{ display:"flex", justifyContent:"flex-end", gap:10 }}><button type="button" onClick={() => setTrabajadorArchivo(null)}>Cancelar</button><button type="submit" style={{ background:COLORS.success, color:"#fff", border:"none", borderRadius:8, padding:"9px 14px", fontWeight:700 }}>Subir</button></div>
-          </form>
-        </div>
-      )}
 
       {modalCot && (
   <NotasModal
