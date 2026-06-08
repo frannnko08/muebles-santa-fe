@@ -10,144 +10,84 @@ const COLORS = {
   warning: "#c8943a",
 };
 
-/* ============================================================
-   SISTEMA DE NOTIFICACIONES (TOASTS) Y CONFIRMACIÓN
-   A nivel de módulo para que funcione en cualquier componente.
-   Reemplaza los antiguos alert() y window.confirm().
-   ============================================================ */
 
-let _toastId = 0;
-const _toastSubs = new Set();
-const _toastState = { items: [] };
+const INITIAL_COTIZACIONES = [
+  {id:1,numero:"11127",cliente:"DEMOVI",fecha:"2026-05-11",total:109179},
+  {id:2,numero:"12113",cliente:"(sin nombre)",fecha:"2026-05-04",total:65000},
+  {id:3,numero:"12114",cliente:"QCLASS S.A.",fecha:"2026-05-04",total:2130089},
+  {id:4,numero:"12115",cliente:"LUIS NUÑEZ",fecha:"2026-05-05",total:423348},
+  {id:5,numero:"12116",cliente:"SUR-SERVI SPA",fecha:"2026-05-05",total:234161},
+  {id:6,numero:"12117",cliente:"MUEBLES ASENJO",fecha:"2026-05-06",total:1713600},
+  {id:7,numero:"12118",cliente:"HECTOR VALENZUELA",fecha:"2026-05-06",total:1463461},
+  {id:8,numero:"12119",cliente:"MUEBLES ASENJO",fecha:"2026-05-07",total:1590827},
+  {id:9,numero:"12120",cliente:"MAXIMILIANO MORALES",fecha:"2026-05-07",total:316310},
+  {id:10,numero:"12121",cliente:"OSVALDO IRIBARREN",fecha:"2026-05-08",total:110688},
+  {id:11,numero:"12122",cliente:"MUEBLES ASENJO",fecha:"2026-05-11",total:237931},
+  {id:12,numero:"12123",cliente:"GUILLERMO MUÑOZ",fecha:"2026-05-11",total:166564},
+  {id:13,numero:"12124",cliente:"(sin nombre)",fecha:"2026-05-11",total:205269},
+  {id:14,numero:"12125",cliente:"(sin nombre)",fecha:"2026-05-11",total:134583},
+  {id:15,numero:"12126",cliente:"GUSTAVO",fecha:"2026-05-11",total:140242},
+  {id:16,numero:"12127",cliente:"MUEBLES ASENJO",fecha:"2026-05-11",total:1280547},
+  {id:17,numero:"12128",cliente:"DIEGO TOLEDO",fecha:"2026-05-11",total:275756},
+  {id:18,numero:"12129",cliente:"JEOVANY GARRIDO",fecha:"2026-05-12",total:240166},
+  {id:19,numero:"12129b",cliente:"ROSA MARIA VASQUEZ",fecha:"2026-05-12",total:199356},
+  {id:20,numero:"12131",cliente:"JORGE BORBARAN",fecha:"2026-05-12",total:98341},
+  {id:21,numero:"12131b",cliente:"DECOMADERA",fecha:"2026-05-12",total:26355},
+  {id:22,numero:"12133",cliente:"VICTOR CABRERA",fecha:"2026-05-13",total:478004},
+  {id:23,numero:"12134",cliente:"JOSE MARIO",fecha:"2026-05-14",total:148599},
+  {id:24,numero:"12135",cliente:"VALE EVANS",fecha:"2026-05-14",total:59067},
+  {id:25,numero:"12137",cliente:"NICOLAS SEPULVEDA",fecha:"2026-05-14",total:93002},
+  {id:26,numero:"12138",cliente:"TARIM",fecha:"2026-05-14",total:975414},
+  {id:27,numero:"12138b",cliente:"MIRIAM ACUÑA",fecha:"2026-05-14",total:253964},
+  {id:28,numero:"12140",cliente:"JORGE BORBARAN",fecha:"2026-05-14",total:128554},
+  {id:29,numero:"12141",cliente:"GERO MATTE",fecha:"2026-05-14",total:401831},
+  {id:30,numero:"12142",cliente:"MUEBLERIA VALENTINA",fecha:"2026-05-14",total:419564},
+  {id:31,numero:"12142b",cliente:"(sin nombre)",fecha:"2026-05-15",total:102475},
+  {id:32,numero:"12143",cliente:"MUEBLES ASENJO",fecha:"2026-05-15",total:633474},
+  {id:33,numero:"12144",cliente:"CLAUDIO ARELLANO",fecha:"2026-05-15",total:341710},
+  {id:34,numero:"12146",cliente:"(sin nombre)",fecha:"2026-05-15",total:228639},
+  {id:35,numero:"12147",cliente:"ESPACIO HABITADO",fecha:"2026-05-18",total:96744},
+  {id:36,numero:"12158",cliente:"CARLOS SALINAS",fecha:"2026-05-18",total:176515},
+  {id:37,numero:"12159",cliente:"MARTIN TEJEDA",fecha:"2026-05-18",total:7055679},
+  {id:38,numero:"12160",cliente:"MARCELA BRAVO",fecha:"2026-05-19",total:396685},
+  {id:39,numero:"12161",cliente:"ANDRES",fecha:"2026-05-18",total:165705},
+  {id:40,numero:"12162",cliente:"ENRIQUE GUTIERREZ",fecha:"2026-05-19",total:106481},
+  {id:41,numero:"12163",cliente:"THE ROCK SPA",fecha:"2026-05-19",total:80325},
+  {id:42,numero:"12164",cliente:"CARLOS ROJAS",fecha:"2026-05-20",total:55569},
+];
 
-function _emitToasts() {
-  _toastSubs.forEach((fn) => fn([..._toastState.items]));
-}
-
-// Detecta el tipo de mensaje automáticamente según su contenido.
-function _detectarTipoToast(mensaje) {
-  const m = String(mensaje || "").toLowerCase();
-  if (/no se pudo|no se pudieron|error|falló|fallo|no se encontr|no cuadr|inválid|invalid/.test(m)) return "error";
-  if (/correctamente|exitos|guardad|actualizad|eliminad|importad|registrad/.test(m)) return "success";
-  if (/debes|ingresa|revisa|falta|advertencia|atención|atencion|ya fue|ya existe/.test(m)) return "warning";
-  return "info";
-}
-
-// API global. Uso: toast("Mensaje") o toast("Mensaje", "success")
-function toast(mensaje, tipo) {
-  const id = ++_toastId;
-  const t = { id, mensaje: String(mensaje ?? ""), tipo: tipo || _detectarTipoToast(mensaje) };
-  _toastState.items = [..._toastState.items, t];
-  _emitToasts();
-  setTimeout(() => {
-    _toastState.items = _toastState.items.filter((x) => x.id !== id);
-    _emitToasts();
-  }, 4200);
-  return id;
-}
-
-function ToastContainer() {
-  const [items, setItems] = useState([]);
-  useEffect(() => {
-    _toastSubs.add(setItems);
-    setItems([..._toastState.items]);
-    return () => { _toastSubs.delete(setItems); };
-  }, []);
-
-  const estilos = {
-    success: { borde: COLORS.success, icono: "✓" },
-    error:   { borde: COLORS.danger,  icono: "✕" },
-    warning: { borde: COLORS.warning, icono: "⚠" },
-    info:    { borde: COLORS.accent,  icono: "ℹ" },
-  };
-
-  return (
-    <div style={{ position:"fixed", top:16, right:16, zIndex:99999, display:"flex", flexDirection:"column", gap:10, maxWidth:"min(380px, 92vw)" }}>
-      {items.map((t) => {
-        const e = estilos[t.tipo] || estilos.info;
-        return (
-          <div key={t.id} style={{
-            background: COLORS.card,
-            border: `1px solid ${e.borde}`,
-            borderLeft: `4px solid ${e.borde}`,
-            borderRadius: 10,
-            padding: "12px 14px",
-            color: COLORS.text,
-            fontSize: 13.5,
-            boxShadow: "0 8px 24px rgba(0,0,0,.45)",
-            display: "flex",
-            alignItems: "flex-start",
-            gap: 10,
-            animation: "sf-toast-in .18s ease-out",
-          }}>
-            <span style={{ color: e.borde, fontWeight: 800, fontSize: 15, lineHeight: 1.3 }}>{e.icono}</span>
-            <span style={{ flex: 1, lineHeight: 1.35 }}>{t.mensaje}</span>
-            <button
-              onClick={() => { _toastState.items = _toastState.items.filter((x) => x.id !== t.id); _emitToasts(); }}
-              style={{ background:"none", border:"none", color: COLORS.muted, cursor:"pointer", fontSize:14, padding:0 }}
-            >✕</button>
-          </div>
-        );
-      })}
-      <style>{`@keyframes sf-toast-in { from { opacity:0; transform: translateX(20px); } to { opacity:1; transform: translateX(0); } }`}</style>
-    </div>
-  );
-}
-
-// Confirmación basada en promesa. Uso: const ok = await confirmDialog("¿Seguro?")
-let _confirmSub = null;
-function confirmDialog(mensaje) {
-  return new Promise((resolve) => {
-    if (!_confirmSub) {
-      // Fallback de seguridad por si el contenedor no está montado.
-      resolve(window.confirm(mensaje));
-      return;
-    }
-    _confirmSub({ mensaje: String(mensaje ?? ""), resolve });
-  });
-}
-
-function ConfirmContainer() {
-  const [estado, setEstado] = useState(null);
-  useEffect(() => {
-    _confirmSub = (data) => setEstado(data);
-    return () => { _confirmSub = null; };
-  }, []);
-
-  if (!estado) return null;
-
-  const cerrar = (valor) => {
-    estado.resolve(valor);
-    setEstado(null);
-  };
-
-  return (
-    <div
-      onClick={() => cerrar(false)}
-      style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.6)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:100000, padding:16 }}
-    >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        style={{ background: COLORS.card, border:`1px solid ${COLORS.border}`, borderRadius:14, padding:22, width:"min(420px, 94vw)", color: COLORS.text, boxShadow:"0 14px 40px rgba(0,0,0,.5)" }}
-      >
-        <div style={{ fontSize:15, lineHeight:1.5, whiteSpace:"pre-line", marginBottom:18 }}>{estado.mensaje}</div>
-        <div style={{ display:"flex", justifyContent:"flex-end", gap:10 }}>
-          <button
-            onClick={() => cerrar(false)}
-            style={{ background: COLORS.subtle, border:`1px solid ${COLORS.border}`, color: COLORS.text, borderRadius:8, padding:"9px 16px", fontWeight:700, cursor:"pointer" }}
-          >Cancelar</button>
-          <button
-            onClick={() => cerrar(true)}
-            style={{ background: COLORS.danger, border:"none", color:"#fff", borderRadius:8, padding:"9px 16px", fontWeight:700, cursor:"pointer" }}
-          >Confirmar</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// Los datos reales (cotizaciones / notas de venta) se cargan exclusivamente desde Supabase.
-
+const INITIAL_NOTAS = [
+  {id:1,numero:"7442",cliente:"HECTOR ROMERO",fecha:"2026-05-04",total:193953,cotizacion:null},
+  {id:2,numero:"7443",cliente:"CLAUDIO BECERRA",fecha:"2026-05-04",total:180396,cotizacion:null},
+  {id:3,numero:"7444",cliente:"OSVALDO IRIBARREN",fecha:"2026-05-04",total:109900,cotizacion:null},
+  {id:4,numero:"7445",cliente:"CLAUDIO BECERRA",fecha:"2026-05-04",total:39000,cotizacion:null},
+  {id:5,numero:"7446",cliente:"SANDRA TORRES",fecha:"2026-05-06",total:39000,cotizacion:null},
+  {id:6,numero:"7447",cliente:"SUR-SERVI SPA",fecha:"2026-05-05",total:234161,cotizacion:null},
+  {id:7,numero:"7448",cliente:"JUAN CARLOS YAÑEZ",fecha:"2026-05-05",total:143514,cotizacion:null},
+  {id:8,numero:"7449",cliente:"MUEBLES ASENJO LTDA.",fecha:"2026-05-07",total:1713600,cotizacion:"12117"},
+  {id:9,numero:"7450",cliente:"MAXIMILIANO MORALES",fecha:"2026-05-08",total:316169,cotizacion:null},
+  {id:10,numero:"7451",cliente:"MUEBLES ASENJO LTDA.",fecha:"2026-05-11",total:1590827,cotizacion:"12119"},
+  {id:11,numero:"7452",cliente:"MUEBLES ASENJO LTDA.",fecha:"2026-05-11",total:237931,cotizacion:"12122"},
+  {id:12,numero:"7453",cliente:"DHOME DESIGN SPA",fecha:"2026-05-12",total:109179,cotizacion:"11127"},
+  {id:13,numero:"7454",cliente:"PABLO MATURANA",fecha:"2026-05-12",total:119900,cotizacion:null},
+  {id:14,numero:"7455",cliente:"OSVALDO IRIBARREN",fecha:"2026-05-13",total:110688,cotizacion:null},
+  {id:15,numero:"7456",cliente:"GUILLERMO MUÑOZ",fecha:"2026-05-12",total:166565,cotizacion:"12123"},
+  {id:16,numero:"7457",cliente:"GUSTAVO",fecha:"2026-05-12",total:65000,cotizacion:"12126"},
+  {id:17,numero:"7458",cliente:"VALE EVANS",fecha:"2026-05-12",total:65000,cotizacion:"12135"},
+  {id:18,numero:"7459",cliente:"DIEGO TOLEDO",fecha:"2026-05-12",total:275627,cotizacion:"12128"},
+  {id:19,numero:"7460",cliente:"SANCHEZ SPA",fecha:"2026-05-14",total:65000,cotizacion:"12113"},
+  {id:20,numero:"7461",cliente:"JUAN CARLOS YAÑEZ",fecha:"2026-05-05",total:146785,cotizacion:null},
+  {id:21,numero:"7462",cliente:"NICOLAS SEPULVEDA",fecha:"2026-05-15",total:147980,cotizacion:null},
+  {id:22,numero:"7463",cliente:"JOSE MARIO",fecha:"2026-05-15",total:148598,cotizacion:null},
+  {id:23,numero:"7464",cliente:"JOSE MARIO",fecha:"2026-05-15",total:148598,cotizacion:null},
+  {id:24,numero:"7465",cliente:"RENGO",fecha:"2026-05-18",total:102498,cotizacion:null},
+  {id:25,numero:"7466",cliente:"DECOMADERA",fecha:"2026-05-15",total:26355,cotizacion:null},
+  {id:26,numero:"7467",cliente:"CARLOS SALINAS",fecha:"2026-05-18",total:176515,cotizacion:null},
+  {id:27,numero:"7468",cliente:"MUEBLES ASENJO LTDA.",fecha:"2026-05-19",total:633474,cotizacion:"12143"},
+  {id:28,numero:"7469",cliente:"MUEBLES ASENJO LTDA.",fecha:"2026-05-19",total:1213047,cotizacion:"12127"},
+  {id:29,numero:"7470",cliente:"THE ROCK SPA",fecha:"2026-05-19",total:67500,cotizacion:"12127"},
+  {id:30,numero:"7471",cliente:"JORGE BORBARAN",fecha:"2026-05-19",total:128555,cotizacion:"12140"},
+];
 
 function businessDaysSince(dateStr) {
   const start = new Date(dateStr);
@@ -223,7 +163,7 @@ const STATUS_CONFIG = {
   urgente: { bg:"#2a1f0a", color:"#c8943a", border:"#5a3a10", label:"⚡ SEGUIMIENTO" },
   activa:  { bg:"#1a1f2a", color:"#5a8abe", border:"#2a3a5a", label:"● ACTIVA" },
 };
-const LEFT_COLOR = { vendida:COLORS.success, vencida:"#7a5a8a", urgente:COLORS.warning, activa:"#5a8abe" };
+const LEFT_COLOR = { vendida:COLORS.success, vencida:"#7a5a8a", urgente:COLORS.warninging, activa:"#5a8abe" };
 
 function StatusBadge({ status }) {
   const c = STATUS_CONFIG[status];
@@ -874,7 +814,7 @@ const guardarGestionNV = () => {
 </div>
         <p>
           <b>Saldo pendiente:</b>{" "}
-          <span style={{ color: saldo === 0 ? COLORS.success : COLORS.warning }}>
+          <span style={{ color: saldo === 0 ? COLORS.success : COLORS.warninging }}>
             {fmt(saldo)}
           </span>
         </p>
@@ -1019,12 +959,12 @@ function EditarNVCompletaModal({ nota, detalles = [], onClose, onSave }) {
 
   const guardar = () => {
     if (!String(form.numero || "").trim()) {
-      toast("Debes ingresar el número de la Nota de Venta.");
+      alert("Debes ingresar el número de la Nota de Venta.");
       return;
     }
 
     if (!String(form.cliente || "").trim()) {
-      toast("Debes ingresar el cliente.");
+      alert("Debes ingresar el cliente.");
       return;
     }
 
@@ -1207,11 +1147,11 @@ function EditarCotizacionCompletaModal({ cotizacion, detalles = [], onClose, onS
 
   const guardar = () => {
     if (!String(form.numero || "").trim()) {
-      toast("Debes ingresar el número de la cotización.");
+      alert("Debes ingresar el número de la cotización.");
       return;
     }
     if (!String(form.cliente || "").trim()) {
-      toast("Debes ingresar el cliente.");
+      alert("Debes ingresar el cliente.");
       return;
     }
 
@@ -1934,7 +1874,7 @@ function FacturaXmlModal({ factura, onClose, onConfirm }) {
             </button>
             <button
               onClick={() => { setModo("solo_contabilidad"); setCuentaCompra("Gastos generales"); }}
-              style={{ padding:"9px 12px", borderRadius:8, border:`1px solid ${modo === "solo_contabilidad" ? COLORS.warning : COLORS.border}`, background:modo === "solo_contabilidad" ? COLORS.warning : COLORS.card, color:modo === "solo_contabilidad" ? "#111" : COLORS.text, fontWeight:700, cursor:"pointer" }}
+              style={{ padding:"9px 12px", borderRadius:8, border:`1px solid ${modo === "solo_contabilidad" ? COLORS.warninging : COLORS.border}`, background:modo === "solo_contabilidad" ? COLORS.warninging : COLORS.card, color:modo === "solo_contabilidad" ? "#111" : COLORS.text, fontWeight:700, cursor:"pointer" }}
             >
               Solo Contabilidad
             </button>
@@ -2020,7 +1960,7 @@ function EditarProductoModal({ producto, onClose, onSave }) {
 
   const guardar = () => {
     if (!nombre.trim()) {
-      toast("Debes ingresar el nombre del producto.");
+      alert("Debes ingresar el nombre del producto.");
       return;
     }
 
@@ -2417,7 +2357,7 @@ function NuevoProductoModal({ onClose, onSave }) {
 
   const guardar = () => {
     if (!nombre.trim()) {
-      toast("Debes ingresar el nombre del producto.");
+      alert("Debes ingresar el nombre del producto.");
       return;
     }
 
@@ -2679,7 +2619,7 @@ function VentaLaminasModal({ venta, detalles = [], onClose, onSaveCosto }) {
 
         <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))", gap:10, marginBottom:16 }}>
           <StatCard label="Venta c/IVA" value={fmt(resumen.ventaTotal)} icon="💰" color={COLORS.success}/>
-          <StatCard label="Costo c/IVA" value={fmt(resumen.costoTotal)} icon="🧾" color={COLORS.warning}/>
+          <StatCard label="Costo c/IVA" value={fmt(resumen.costoTotal)} icon="🧾" color={COLORS.warninging}/>
           <StatCard label="Utilidad neta" value={fmt(resumen.utilidadNeta)} icon="📈" color={resumen.utilidadNeta >= 0 ? COLORS.success : COLORS.danger}/>
           <StatCard label="IVA a provisionar" value={fmt(resumen.ivaProvisionar)} icon="🏛️" color={resumen.ivaProvisionar >= 0 ? COLORS.accent : COLORS.danger}/>
         </div>
@@ -2869,11 +2809,11 @@ function ContabilidadModal({ asiento, onClose, onSave }) {
   const guardar = () => {
     if (asiento?.id) {
       if (!form.fecha) {
-        toast("Debes ingresar una fecha.");
+        alert("Debes ingresar una fecha.");
         return;
       }
       if (!form.detalle.trim()) {
-        toast("Debes ingresar el detalle/cuenta del asiento.");
+        alert("Debes ingresar el detalle/cuenta del asiento.");
         return;
       }
 
@@ -2881,12 +2821,12 @@ function ContabilidadModal({ asiento, onClose, onSave }) {
       const haber = Number(form.haber) || 0;
 
       if (debe <= 0 && haber <= 0) {
-        toast("Debes ingresar un monto en Debe o Haber.");
+        alert("Debes ingresar un monto en Debe o Haber.");
         return;
       }
 
       if (debe > 0 && haber > 0) {
-        toast("Un asiento no debe tener Debe y Haber al mismo tiempo. Deja uno de los dos en cero.");
+        alert("Un asiento no debe tener Debe y Haber al mismo tiempo. Deja uno de los dos en cero.");
         return;
       }
 
@@ -2904,31 +2844,31 @@ function ContabilidadModal({ asiento, onClose, onSave }) {
     }
 
     if (filasValidas.length < 2) {
-      toast("Debes ingresar al menos 2 líneas para un asiento manual.");
+      alert("Debes ingresar al menos 2 líneas para un asiento manual.");
       return;
     }
 
     for (const fila of filasValidas) {
       if (!fila.fecha) {
-        toast("Todas las filas con datos deben tener fecha.");
+        alert("Todas las filas con datos deben tener fecha.");
         return;
       }
       if (!fila.detalle) {
-        toast("Todas las filas con datos deben tener cuenta/detalle.");
+        alert("Todas las filas con datos deben tener cuenta/detalle.");
         return;
       }
       if (fila.debe <= 0 && fila.haber <= 0) {
-        toast("Cada fila debe tener monto en Debe o en Haber.");
+        alert("Cada fila debe tener monto en Debe o en Haber.");
         return;
       }
       if (fila.debe > 0 && fila.haber > 0) {
-        toast("Una fila no puede tener Debe y Haber al mismo tiempo.");
+        alert("Una fila no puede tener Debe y Haber al mismo tiempo.");
         return;
       }
     }
 
     if (!estaCuadrado) {
-      toast("El asiento no está cuadrado. El total Debe debe ser igual al total Haber.");
+      alert("El asiento no está cuadrado. El total Debe debe ser igual al total Haber.");
       return;
     }
 
@@ -3132,7 +3072,7 @@ function ContabilidadModal({ asiento, onClose, onSave }) {
                 </div>
                 <div style={{ background:COLORS.surface, border:`1px solid ${COLORS.border}`, borderRadius:10, padding:"9px 12px" }}>
                   <div style={{ fontSize:10, color:COLORS.muted }}>Total Haber</div>
-                  <div style={{ fontWeight:700, color:COLORS.warning }}>{fmt(totalHaber)}</div>
+                  <div style={{ fontWeight:700, color:COLORS.warninging }}>{fmt(totalHaber)}</div>
                 </div>
                 <div style={{ background:COLORS.surface, border:`1px solid ${Math.abs(diferencia) === 0 ? COLORS.border : COLORS.danger}`, borderRadius:10, padding:"9px 12px" }}>
                   <div style={{ fontSize:10, color:COLORS.muted }}>Diferencia</div>
@@ -3219,11 +3159,11 @@ function GestionRapidaContabilidadModal({ tipo, onClose, onSave }) {
 
   const construirAsientos = () => {
     if (!form.fecha) {
-      toast("Debes ingresar una fecha.");
+      alert("Debes ingresar una fecha.");
       return null;
     }
     if (total <= 0) {
-      toast("Debes ingresar un monto mayor a cero.");
+      alert("Debes ingresar un monto mayor a cero.");
       return null;
     }
 
@@ -3277,7 +3217,7 @@ function GestionRapidaContabilidadModal({ tipo, onClose, onSave }) {
 
     if (tipo === "movimiento") {
       if (form.origen === form.destino) {
-        toast("El origen y destino no pueden ser iguales.");
+        alert("El origen y destino no pueden ser iguales.");
         return null;
       }
       return [
@@ -3375,7 +3315,7 @@ function GestionRapidaContabilidadModal({ tipo, onClose, onSave }) {
           <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))", gap:10, marginTop:12 }}>
             <StatCard label="Neto" value={fmt(neto)} icon="📄" color={COLORS.success}/>
             <StatCard label={tipo === "compra" ? "IVA CF" : "IVA DF"} value={fmt(iva)} icon="🧾" color={COLORS.accent}/>
-            <StatCard label="Total" value={fmt(total)} icon="💰" color={COLORS.warning}/>
+            <StatCard label="Total" value={fmt(total)} icon="💰" color={COLORS.warninging}/>
           </div>
         )}
 
@@ -3626,7 +3566,7 @@ export default function App() {
 
   event.target.value = "";
 
-  toast(
+  alert(
     `Importación de cotizaciones terminada.\n\nImportadas: ${importadas}\nDuplicadas o saltadas: ${saltadas}\nCon error: ${errores.length}` +
     (errores.length ? `\n\nErrores:\n${errores.slice(0, 5).join("\n")}` : "")
   );
@@ -3736,7 +3676,7 @@ export default function App() {
 
     event.target.value = "";
 
-    toast(
+    alert(
       `Importación de notas de venta terminada.\n\nImportadas: ${importadas}\nDuplicadas o saltadas: ${saltadas}\nCon error: ${errores.length}` +
       (errores.length ? `\n\nErrores:\n${errores.slice(0, 5).join("\n")}` : "")
     );
@@ -3881,7 +3821,7 @@ export default function App() {
 
     event.target.value = "";
 
-    toast(
+    alert(
       `Importación de barranes terminada.\n\nImportados: ${importadas}\nDuplicados o saltados: ${saltadas}\nCon error: ${errores.length}` +
       (errores.length ? `\n\nErrores:\n${errores.slice(0, 5).join("\n")}` : "")
     );
@@ -4065,9 +4005,7 @@ if (!errorDocumentosTrabajadores) {
 }
   }
 
-  cargarDatos()
-    .catch((e) => { console.error(e); toast("Hubo un error al cargar los datos.", "error"); })
-    .finally(() => setCargando(false));
+  cargarDatos();
 }, []);
   const [tab, setTab] = useState("produccion");
   const [filter, setFilter] = useState("");
@@ -4076,7 +4014,6 @@ if (!errorDocumentosTrabajadores) {
   const [mesFiltro, setMesFiltro] = useState(new Date().toISOString().slice(0, 7));
   const [showVencidas, setShowVencidas] = useState(false);
   const [seguimiento, setSeguimiento] = useState({});
-  const [cargando, setCargando] = useState(true);
   const [cotizaciones, setCotizaciones] = useState([]);
   const [detallesCotizaciones, setDetallesCotizaciones] = useState([]);
   const [detallesNotasVenta, setDetallesNotasVenta] = useState([]);
@@ -4134,56 +4071,18 @@ if (!errorDocumentosTrabajadores) {
   const [trabajadorArchivo, setTrabajadorArchivo] = useState(null);
   
 
-  // Cargar seguimiento desde Supabase (con fallback a localStorage).
-  // Tabla esperada: seguimiento_cotizaciones (columnas: numero text, entries jsonb)
+  // Load seguimiento from localStorage
   useEffect(() => {
-    let activo = true;
-    (async () => {
-      // 1) Cache local inmediato para que la UI no quede vacía mientras llega Supabase.
-      try {
-        const saved = localStorage.getItem("sf-seguimiento");
-        if (saved && activo) setSeguimiento(JSON.parse(saved));
-      } catch (e) {}
-
-      // 2) Fuente de verdad: Supabase.
-      try {
-        const { data, error } = await supabase
-          .from("seguimiento_cotizaciones")
-          .select("numero, entries");
-
-        if (!error && data && activo) {
-          const mapa = {};
-          data.forEach((row) => {
-            mapa[String(row.numero)] = Array.isArray(row.entries) ? row.entries : [];
-          });
-          setSeguimiento(mapa);
-          try { localStorage.setItem("sf-seguimiento", JSON.stringify(mapa)); } catch (e) {}
-        }
-      } catch (e) {
-        // Si la tabla no existe todavía, se sigue usando el cache local sin romper la app.
-        console.warn("seguimiento_cotizaciones no disponible, usando cache local.", e);
-      }
-    })();
-    return () => { activo = false; };
+    try {
+      const saved = localStorage.getItem("sf-seguimiento");
+      if (saved) setSeguimiento(JSON.parse(saved));
+    } catch(e) {}
   }, []);
 
-  const saveSeguimiento = useCallback(async (numero, entries) => {
+  const saveSeguimiento = useCallback((numero, entries) => {
     const updated = { ...seguimiento, [numero]: entries };
     setSeguimiento(updated);
-    // Cache local (respaldo / offline).
-    try { localStorage.setItem("sf-seguimiento", JSON.stringify(updated)); } catch (e) {}
-    // Persistir en Supabase.
-    try {
-      const { error } = await supabase
-        .from("seguimiento_cotizaciones")
-        .upsert({ numero: String(numero), entries }, { onConflict: "numero" });
-      if (error) {
-        console.error(error);
-        toast("El seguimiento se guardó localmente, pero no se pudo sincronizar con la nube.", "warning");
-      }
-    } catch (e) {
-      console.error(e);
-    }
+    try { localStorage.setItem("sf-seguimiento", JSON.stringify(updated)); } catch(e) {}
   }, [seguimiento]);
 
   const notasVenta = notas.filter(n => (n.tipo_documento || "nv") !== "barran");
@@ -4310,7 +4209,7 @@ const mesSeleccionadoTexto = nombreMes(mesFiltro);
 
     if (error) {
       console.error(error);
-      toast("No se pudo actualizar la cotización.");
+      alert("No se pudo actualizar la cotización.");
       return;
     }
 
@@ -4340,7 +4239,7 @@ const mesSeleccionadoTexto = nombreMes(mesFiltro);
 
       if (errorInsert) {
         console.error(errorInsert);
-        toast("La cotización se actualizó, pero hubo un error guardando el detalle.");
+        alert("La cotización se actualizó, pero hubo un error guardando el detalle.");
         return;
       }
 
@@ -4369,7 +4268,7 @@ const mesSeleccionadoTexto = nombreMes(mesFiltro);
     }
 
     setModalEditarCotizacion(null);
-    toast("Cotización actualizada correctamente.");
+    alert("Cotización actualizada correctamente.");
   };
 
   const guardarEdicionCompletaNV = async ({ notaOriginal, notaEditada, detallesEditados }) => {
@@ -4409,7 +4308,7 @@ const mesSeleccionadoTexto = nombreMes(mesFiltro);
 
     if (error) {
       console.error(error);
-      toast("No se pudo actualizar la Nota de Venta.");
+      alert("No se pudo actualizar la Nota de Venta.");
       return;
     }
 
@@ -4420,7 +4319,7 @@ const mesSeleccionadoTexto = nombreMes(mesFiltro);
 
     if (errorDeleteAnterior) {
       console.error(errorDeleteAnterior);
-      toast("La NV se actualizó, pero no se pudo reemplazar el detalle anterior.");
+      alert("La NV se actualizó, pero no se pudo reemplazar el detalle anterior.");
       return;
     }
 
@@ -4454,7 +4353,7 @@ const mesSeleccionadoTexto = nombreMes(mesFiltro);
 
       if (errorInsert) {
         console.error(errorInsert);
-        toast("La NV se actualizó, pero hubo un error guardando el nuevo detalle.");
+        alert("La NV se actualizó, pero hubo un error guardando el nuevo detalle.");
         return;
       }
 
@@ -4477,7 +4376,7 @@ const mesSeleccionadoTexto = nombreMes(mesFiltro);
     }
 
     setModalEditarNV(null);
-    toast("Nota de Venta actualizada correctamente.");
+    alert("Nota de Venta actualizada correctamente.");
   };
 
   const guardarGestionNV = async (nvActualizada) => {
@@ -4499,7 +4398,7 @@ const mesSeleccionadoTexto = nombreMes(mesFiltro);
       });
 
     if (errorInsert) {
-      toast("Error al guardar el abono");
+      alert("Error al guardar el abono");
       console.error(errorInsert);
       return;
     }
@@ -4511,7 +4410,7 @@ const mesSeleccionadoTexto = nombreMes(mesFiltro);
     .eq("nota_venta_id", idReal);
 
   if (errorAbonos) {
-    toast("Error al calcular abonos");
+    alert("Error al calcular abonos");
     console.error(errorAbonos);
     return;
   }
@@ -4543,7 +4442,7 @@ const mesSeleccionadoTexto = nombreMes(mesFiltro);
     .eq("id", idReal);
 
   if (error) {
-    toast("Error al guardar gestión de NV");
+    alert("Error al guardar gestión de NV");
     console.error(error);
     return;
   }
@@ -4574,7 +4473,7 @@ const mesSeleccionadoTexto = nombreMes(mesFiltro);
 };
   
 const marcarComoEntregadaProduccion = async (nota) => {
-  const confirmar = await confirmDialog(`¿Marcar ${((nota.tipo_documento || "nv") === "barran" ? "Barrán" : "NV")} ${nota.numero} como entregada?\n\nDesaparecerá del listado de Producción.`);
+  const confirmar = window.confirm(`¿Marcar ${((nota.tipo_documento || "nv") === "barran" ? "Barrán" : "NV")} ${nota.numero} como entregada?\n\nDesaparecerá del listado de Producción.`);
   if (!confirmar) return;
 
   const idReal = Number(String(nota.id).replace("supabase-", ""));
@@ -4586,7 +4485,7 @@ const marcarComoEntregadaProduccion = async (nota) => {
 
   if (error) {
     console.error(error);
-    toast("No se pudo marcar como entregada.");
+    alert("No se pudo marcar como entregada.");
     return;
   }
 
@@ -4618,7 +4517,7 @@ const guardarProduccion = async (notaActualizada) => {
     .eq("id", idReal);
 
   if (error) {
-    toast("Error al guardar producción");
+    alert("Error al guardar producción");
     console.error(error);
     return;
   }
@@ -4650,7 +4549,7 @@ const guardarCuentaPorPagar = async (e) => {
   };
 
   if (!payload.nombre || !payload.monto_total) {
-    toast("Debes ingresar nombre y monto.");
+    alert("Debes ingresar nombre y monto.");
     return;
   }
 
@@ -4662,7 +4561,7 @@ const guardarCuentaPorPagar = async (e) => {
 
   if (error) {
     console.error(error);
-    toast("No se pudo guardar la cuenta por pagar.");
+    alert("No se pudo guardar la cuenta por pagar.");
     return;
   }
 
@@ -4680,7 +4579,7 @@ const guardarAbonoCuentaPagar = async (e) => {
   const observacion = String(form.get("observacion") || "").trim();
 
   if (!monto) {
-    toast("Debes ingresar un monto de abono.");
+    alert("Debes ingresar un monto de abono.");
     return;
   }
 
@@ -4692,7 +4591,7 @@ const guardarAbonoCuentaPagar = async (e) => {
 
   if (error) {
     console.error(error);
-    toast("No se pudo guardar el abono.");
+    alert("No se pudo guardar el abono.");
     return;
   }
 
@@ -4853,7 +4752,7 @@ const importarCartolaBancaria = async (event) => {
   }
 
   if (movimientosDetectados.length === 0) {
-    toast("No se detectaron movimientos en la cartola. Revisa que el archivo tenga fecha, descripción y cargos/abonos.");
+    alert("No se detectaron movimientos en la cartola. Revisa que el archivo tenga fecha, descripción y cargos/abonos.");
     return;
   }
 
@@ -4864,13 +4763,13 @@ const importarCartolaBancaria = async (event) => {
 
   if (error) {
     console.error(error);
-    toast("No se pudo guardar la cartola. Revisa si ejecutaste el SQL de cartola_bancaria.");
+    alert("No se pudo guardar la cartola. Revisa si ejecutaste el SQL de cartola_bancaria.");
     return;
   }
 
   setCartolaMovimientos(prev => [...(data || []), ...prev]);
   setMesCartola(movimientosDetectados[0]?.fecha?.slice(0, 7) || mesCartola);
-  toast(`Cartola importada: ${movimientosDetectados.length} movimientos detectados.`);
+  alert(`Cartola importada: ${movimientosDetectados.length} movimientos detectados.`);
 };
 
 const actualizarMovimientoCartola = async (movimiento, cambios) => {
@@ -4883,7 +4782,7 @@ const actualizarMovimientoCartola = async (movimiento, cambios) => {
 
   if (error) {
     console.error(error);
-    toast("No se pudo actualizar el movimiento de cartola.");
+    alert("No se pudo actualizar el movimiento de cartola.");
     return null;
   }
 
@@ -4894,7 +4793,7 @@ const actualizarMovimientoCartola = async (movimiento, cambios) => {
 const registrarCartolaComoAbonoNV = async (movimiento) => {
   const monto = Number(movimiento.abono || 0);
   if (!monto) {
-    toast("Este movimiento no tiene abono/ingreso para asociar a una NV.");
+    alert("Este movimiento no tiene abono/ingreso para asociar a una NV.");
     return;
   }
 
@@ -4903,7 +4802,7 @@ const registrarCartolaComoAbonoNV = async (movimiento) => {
 
   const nota = notas.find(n => String(n.numero) === String(numero).trim());
   if (!nota) {
-    toast("No encontré esa NV/Barrán en la app.");
+    alert("No encontré esa NV/Barrán en la app.");
     return;
   }
 
@@ -4922,7 +4821,7 @@ const registrarCartolaComoAbonoNV = async (movimiento) => {
 
   if (errorInsert) {
     console.error(errorInsert);
-    toast("No se pudo registrar el abono en la NV/Barrán.");
+    alert("No se pudo registrar el abono en la NV/Barrán.");
     return;
   }
 
@@ -4957,7 +4856,7 @@ const registrarCartolaComoAbonoNV = async (movimiento) => {
 const registrarCartolaComoPagoCuenta = async (movimiento) => {
   const monto = Number(movimiento.cargo || 0);
   if (!monto) {
-    toast("Este movimiento no tiene cargo/egreso para asociar a una cuenta por pagar.");
+    alert("Este movimiento no tiene cargo/egreso para asociar a una cuenta por pagar.");
     return;
   }
 
@@ -4969,7 +4868,7 @@ const registrarCartolaComoPagoCuenta = async (movimiento) => {
     cuentasPagar.find(c => normalizarTextoCartola(c.nombre).includes(busqueda));
 
   if (!cuenta) {
-    toast("No encontré esa cuenta por pagar.");
+    alert("No encontré esa cuenta por pagar.");
     return;
   }
 
@@ -4981,7 +4880,7 @@ const registrarCartolaComoPagoCuenta = async (movimiento) => {
 
   if (error) {
     console.error(error);
-    toast("No se pudo guardar el abono de la cuenta por pagar.");
+    alert("No se pudo guardar el abono de la cuenta por pagar.");
     return;
   }
 
@@ -5038,7 +4937,7 @@ const guardarTrabajador = async (e) => {
   };
 
   if (!payload.nombre) {
-    toast("Debes ingresar el nombre del trabajador.");
+    alert("Debes ingresar el nombre del trabajador.");
     return;
   }
 
@@ -5050,7 +4949,7 @@ const guardarTrabajador = async (e) => {
 
   if (error) {
     console.error(error);
-    toast("No se pudo guardar el trabajador.");
+    alert("No se pudo guardar el trabajador.");
     return;
   }
 
@@ -5075,7 +4974,7 @@ const subirDocumentoTrabajador = async (e) => {
 
   if (uploadError) {
     console.error(uploadError);
-    toast("No se pudo subir el archivo. Revisa que exista el bucket rrhh en Supabase Storage.");
+    alert("No se pudo subir el archivo. Revisa que exista el bucket rrhh en Supabase Storage.");
     return;
   }
 
@@ -5089,7 +4988,7 @@ const subirDocumentoTrabajador = async (e) => {
 
   if (error) {
     console.error(error);
-    toast("El archivo subió, pero no se pudo registrar en la ficha del trabajador.");
+    alert("El archivo subió, pero no se pudo registrar en la ficha del trabajador.");
     return;
   }
 
@@ -5189,7 +5088,7 @@ const estadoStockInventario = (producto) => {
   if (minimo > 0 && stock <= minimo) {
     return {
       texto: "🟡 Bajo stock",
-      color: COLORS.warning
+      color: COLORS.warninging
     };
   }
 
@@ -5264,7 +5163,7 @@ const guardarNuevoProducto = async (producto) => {
 
   if (error) {
     console.error(error);
-    toast("Error al guardar el producto.");
+    alert("Error al guardar el producto.");
     return;
   }
 
@@ -5275,14 +5174,14 @@ const guardarMovimientoInventario = async ({ producto, tipo, cantidad }) => {
   const cantidadNumero = Number(cantidad);
 
   if (!cantidadNumero || cantidadNumero <= 0) {
-    toast("Debes ingresar una cantidad válida.");
+    alert("Debes ingresar una cantidad válida.");
     return;
   }
 
   const stockAnterior = Number(producto.stock_actual || 0);
 
   if (tipo === "salida" && cantidadNumero > stockAnterior) {
-    toast("No puedes descontar más stock del disponible.");
+    alert("No puedes descontar más stock del disponible.");
     return;
   }
 
@@ -5297,7 +5196,7 @@ const guardarMovimientoInventario = async ({ producto, tipo, cantidad }) => {
 
   if (errorUpdate) {
     console.error(errorUpdate);
-    toast("Error al actualizar el stock.");
+    alert("Error al actualizar el stock.");
     return;
   }
 
@@ -5317,7 +5216,7 @@ const guardarMovimientoInventario = async ({ producto, tipo, cantidad }) => {
 
   if (errorMovimiento) {
     console.error(errorMovimiento);
-    toast("El stock cambió, pero hubo un error guardando el historial.");
+    alert("El stock cambió, pero hubo un error guardando el historial.");
     return;
   }
 
@@ -5342,7 +5241,7 @@ const guardarSobrantesLaminado = async ({ producto, sobrantes }) => {
     }));
 
   if (sobrantesValidos.length === 0) {
-    toast("Debes ingresar al menos un sobrante válido.");
+    alert("Debes ingresar al menos un sobrante válido.");
     return;
   }
 
@@ -5353,7 +5252,7 @@ const guardarSobrantesLaminado = async ({ producto, sobrantes }) => {
 
   if (error) {
     console.error(error);
-    toast("Error al guardar los sobrantes.");
+    alert("Error al guardar los sobrantes.");
     return;
   }
 
@@ -5370,7 +5269,7 @@ const marcarSobranteUsado = async (sobrante) => {
 
   if (error) {
     console.error(error);
-    toast("Error al marcar el sobrante como usado.");
+    alert("Error al marcar el sobrante como usado.");
     return;
   }
 
@@ -5395,7 +5294,7 @@ const guardarEdicionProducto = async (productoEditado) => {
 
   if (error) {
     console.error(error);
-    toast("Error al editar el producto.");
+    alert("Error al editar el producto.");
     return;
   }
 
@@ -5433,7 +5332,7 @@ const guardarAsientosAutomaticos = async (asientos, opciones = {}) => {
   const totalHaber = payload.reduce((sum, a) => sum + Number(a.haber || 0), 0);
 
   if (totalDebe !== totalHaber) {
-    toast("No se generó el asiento automático porque Debe y Haber no cuadran.");
+    alert("No se generó el asiento automático porque Debe y Haber no cuadran.");
     return false;
   }
 
@@ -5456,7 +5355,7 @@ const guardarAsientosAutomaticos = async (asientos, opciones = {}) => {
 
   if (error) {
     console.error(error);
-    toast("La operación se guardó, pero no se pudo crear el asiento contable automático.");
+    alert("La operación se guardó, pero no se pudo crear el asiento contable automático.");
     return false;
   }
 
@@ -5562,7 +5461,7 @@ const existeDocumentoImportado = async (clave) => {
 
   if (error) {
     console.error(error);
-    toast("No se pudo verificar si el documento ya fue importado. Ejecuta primero el SQL de documentos_importados en Supabase.");
+    alert("No se pudo verificar si el documento ya fue importado. Ejecuta primero el SQL de documentos_importados en Supabase.");
     return true;
   }
 
@@ -5604,7 +5503,7 @@ const registrarDocumentoImportado = async ({ clave, tipo, proveedor, documento, 
 
   if (error) {
     console.error(error);
-    toast("La operación se guardó, pero no se pudo registrar el documento como importado. Revisa la tabla documentos_importados.");
+    alert("La operación se guardó, pero no se pudo registrar el documento como importado. Revisa la tabla documentos_importados.");
     return false;
   }
 
@@ -5647,7 +5546,7 @@ const subirProductosAInventarioDesdeDocumento = async (productos, origen = "docu
 
       if (error) {
         console.error(error);
-        toast(`Error actualizando ${nombre}`);
+        alert(`Error actualizando ${nombre}`);
         return false;
       }
 
@@ -5686,7 +5585,7 @@ const subirProductosAInventarioDesdeDocumento = async (productos, origen = "docu
 
       if (error) {
         console.error(error);
-        toast(`Error creando ${nombre}`);
+        alert(`Error creando ${nombre}`);
         return false;
       }
 
@@ -5776,7 +5675,7 @@ const importarFacturaXml = async (event) => {
     const yaExiste = await existeDocumentoImportado(factura.clave);
 
     if (yaExiste) {
-      toast(`Esta factura XML ya fue importada anteriormente.\n\nDocumento: ${factura.documento}\nProveedor: ${factura.proveedor}`);
+      alert(`Esta factura XML ya fue importada anteriormente.\n\nDocumento: ${factura.documento}\nProveedor: ${factura.proveedor}`);
       event.target.value = "";
       return;
     }
@@ -5785,7 +5684,7 @@ const importarFacturaXml = async (event) => {
     setModalFacturaXml(true);
   } catch (error) {
     console.error(error);
-    toast(error.message || "No se pudo leer la factura XML.");
+    alert(error.message || "No se pudo leer la factura XML.");
   }
 
   event.target.value = "";
@@ -5798,7 +5697,7 @@ const confirmarImportacionFacturaXml = async ({ modo, estadoPago, cuentaCompra }
   const yaExiste = await existeDocumentoImportado(factura.clave);
 
   if (yaExiste) {
-    toast(`Esta factura ya fue importada anteriormente.\n\n${factura.documento} · ${factura.proveedor}`);
+    alert(`Esta factura ya fue importada anteriormente.\n\n${factura.documento} · ${factura.proveedor}`);
     setModalFacturaXml(false);
     setPreviewFacturaXml(null);
     return;
@@ -5835,7 +5734,7 @@ const confirmarImportacionFacturaXml = async ({ modo, estadoPago, cuentaCompra }
 
   setPreviewFacturaXml(null);
   setModalFacturaXml(false);
-  toast("Factura XML importada correctamente.");
+  alert("Factura XML importada correctamente.");
 };
 
 const leerProductosDesdeOC = async (file) => {
@@ -5948,7 +5847,7 @@ const importarOrdenCompraExcel = async (e) => {
   }
 
   if (productosTodos.length === 0) {
-    toast(
+    alert(
       `No se pudo importar ninguna orden de compra.` +
       (duplicados.length ? `\n\nDuplicadas:\n${duplicados.slice(0, 8).join("\n")}` : "") +
       (errores.length ? `\n\nErrores:\n${errores.slice(0, 8).join("\n")}` : "")
@@ -5970,7 +5869,7 @@ const importarOrdenCompraExcel = async (e) => {
   }, []);
 
   if (errores.length || duplicados.length) {
-    toast(
+    alert(
       `Se leyeron ${documentosValidos.length} OC nueva(s).` +
       (duplicados.length ? `\n\nDuplicadas omitidas:\n${duplicados.slice(0, 8).join("\n")}` : "") +
       (errores.length ? `\n\nCon error:\n${errores.slice(0, 8).join("\n")}` : "")
@@ -6014,13 +5913,13 @@ const confirmarImportacionOC = async (datosCompra = {}) => {
   if (previewOC.length === 0) return;
 
   if (previewOCDocumentos.length === 0) {
-    toast("No hay OC detectadas para registrar. Vuelve a importar los archivos.");
+    alert("No hay OC detectadas para registrar. Vuelve a importar los archivos.");
     return;
   }
 
   for (const doc of previewOCDocumentos) {
     if (existeOCImportadaLocal(doc.documento) || await existeDocumentoImportado(doc.clave)) {
-      toast(`La OC ${doc.documento} ya fue importada anteriormente. Se canceló el ingreso para evitar duplicar stock.`);
+      alert(`La OC ${doc.documento} ya fue importada anteriormente. Se canceló el ingreso para evitar duplicar stock.`);
       return;
     }
   }
@@ -6045,7 +5944,7 @@ const confirmarImportacionOC = async (datosCompra = {}) => {
 
       if (error) {
         console.error(error);
-        toast(`Error actualizando ${nombre}`);
+        alert(`Error actualizando ${nombre}`);
         return;
       }
 
@@ -6085,7 +5984,7 @@ const confirmarImportacionOC = async (datosCompra = {}) => {
 
       if (error) {
         console.error(error);
-        toast(`Error creando ${nombre}`);
+        alert(`Error creando ${nombre}`);
         return;
       }
 
@@ -6138,7 +6037,7 @@ const confirmarImportacionOC = async (datosCompra = {}) => {
   setPreviewOC([]);
   setPreviewOCDocumentos([]);
   setModalPreviewOC(false);
-  toast("Orden(es) de compra importada(s) correctamente.");
+  alert("Orden(es) de compra importada(s) correctamente.");
 };
 
 const excelDateToISO = (value) => {
@@ -6167,7 +6066,7 @@ const importarVentaLaminasExcel = async (event) => {
   const hoja = workbook.Sheets[hojaNombre];
 
   if (!hoja) {
-    toast("No se pudo leer la primera hoja del Excel.");
+    alert("No se pudo leer la primera hoja del Excel.");
     return;
   }
 
@@ -6219,14 +6118,14 @@ const importarVentaLaminasExcel = async (event) => {
   }
 
   if (!numero || !totalVenta) {
-    toast("No se pudo leer el número o total de la cotización de láminas.");
+    alert("No se pudo leer el número o total de la cotización de láminas.");
     event.target.value = "";
     return;
   }
 
   const duplicada = ventasLaminas.some(v => String(v.numero) === String(numero));
   if (duplicada) {
-    toast("Esta venta de láminas ya existe.");
+    alert("Esta venta de láminas ya existe.");
     event.target.value = "";
     return;
   }
@@ -6265,7 +6164,7 @@ const importarVentaLaminasExcel = async (event) => {
   }
 
   if (filaEncabezado === -1) {
-    toast("No se encontró el detalle de láminas en el Excel.");
+    alert("No se encontró el detalle de láminas en el Excel.");
     event.target.value = "";
     return;
   }
@@ -6311,7 +6210,7 @@ const importarVentaLaminasExcel = async (event) => {
 
   if (errorVenta) {
     console.error(errorVenta);
-    toast("Error al guardar la venta de láminas. Revisa si las tablas están creadas en Supabase.");
+    alert("Error al guardar la venta de láminas. Revisa si las tablas están creadas en Supabase.");
     event.target.value = "";
     return;
   }
@@ -6338,7 +6237,7 @@ const importarVentaLaminasExcel = async (event) => {
 
     if (errorDetalles) {
       console.error(errorDetalles);
-      toast("La venta se guardó, pero hubo un error guardando el detalle.");
+      alert("La venta se guardó, pero hubo un error guardando el detalle.");
       event.target.value = "";
       return;
     }
@@ -6357,7 +6256,7 @@ const importarVentaLaminasExcel = async (event) => {
 
   setTab("venta_laminas");
   event.target.value = "";
-  toast("Venta de láminas importada correctamente.");
+  alert("Venta de láminas importada correctamente.");
 };
 
 const guardarCostoVentaLaminas = async (venta, costoCompraTotal) => {
@@ -6369,7 +6268,7 @@ const guardarCostoVentaLaminas = async (venta, costoCompraTotal) => {
 
   if (error) {
     console.error(error);
-    toast("Error al guardar el costo de compra.");
+    alert("Error al guardar el costo de compra.");
     return;
   }
 
@@ -6407,7 +6306,7 @@ const guardarAsientoContable = async (asiento) => {
 
     if (error) {
       console.error(error);
-      toast("No se pudo actualizar el asiento contable.");
+      alert("No se pudo actualizar el asiento contable.");
       return;
     }
 
@@ -6421,7 +6320,7 @@ const guardarAsientoContable = async (asiento) => {
 
     if (error) {
       console.error(error);
-      toast("No se pudo guardar el asiento contable. Revisa que la tabla exista en Supabase.");
+      alert("No se pudo guardar el asiento contable. Revisa que la tabla exista en Supabase.");
       return;
     }
 
@@ -6447,7 +6346,7 @@ const guardarGestionContable = async (asientos) => {
   const totalHaber = payload.reduce((sum, a) => sum + Number(a.haber || 0), 0);
 
   if (Math.abs(totalDebe - totalHaber) !== 0) {
-    toast("Los asientos no cuadran. Revisa los montos antes de guardar.");
+    alert("Los asientos no cuadran. Revisa los montos antes de guardar.");
     return;
   }
 
@@ -6458,17 +6357,17 @@ const guardarGestionContable = async (asientos) => {
 
   if (error) {
     console.error(error);
-    toast("No se pudieron guardar los asientos automáticos.");
+    alert("No se pudieron guardar los asientos automáticos.");
     return;
   }
 
   setAsientosContables(prev => [...data, ...prev]);
   setModalGestionContable(null);
-  toast("Gestión contable registrada correctamente.");
+  alert("Gestión contable registrada correctamente.");
 };
 
 const eliminarAsientoContable = async (asiento) => {
-  const confirmar = await confirmDialog("¿Seguro que quieres eliminar este asiento contable?\n\nEsta acción no se puede deshacer.");
+  const confirmar = window.confirm("¿Seguro que quieres eliminar este asiento contable?\n\nEsta acción no se puede deshacer.");
   if (!confirmar) return;
 
   const { error } = await supabase
@@ -6478,7 +6377,7 @@ const eliminarAsientoContable = async (asiento) => {
 
   if (error) {
     console.error(error);
-    toast("No se pudo eliminar el asiento contable.");
+    alert("No se pudo eliminar el asiento contable.");
     return;
   }
 
@@ -6538,7 +6437,7 @@ const detalleCxcNotas = notas
 
 const totalCxcNotas = detalleCxcNotas.reduce((sum, n) => sum + Number(n.saldo || 0), 0);
 const eliminarVentaLaminas = async (venta) => {
-  const confirmar = await confirmDialog(
+  const confirmar = window.confirm(
     `¿Seguro que quieres eliminar la venta de láminas #${venta.numero}?
 
 Esta acción no se puede deshacer.`
@@ -6553,7 +6452,7 @@ Esta acción no se puede deshacer.`
 
   if (error) {
     console.error(error);
-    toast("No se pudo eliminar la venta de láminas.");
+    alert("No se pudo eliminar la venta de láminas.");
     return;
   }
 
@@ -6564,7 +6463,7 @@ Esta acción no se puede deshacer.`
     setModalVentaLaminas(null);
   }
 
-  toast("Venta de láminas eliminada correctamente.");
+  alert("Venta de láminas eliminada correctamente.");
 };
 
 const ventasLaminasDelMes = ventasLaminas.filter(v => {
@@ -6656,7 +6555,7 @@ const renderTarjetaProduccion = (n) => (
       border: estaAtrasada(n.fecha_entrega_estimada)
         ? `1px solid ${COLORS.danger}`
         : venceHoy(n.fecha_entrega_estimada)
-        ? `1px solid ${COLORS.warning}`
+        ? `1px solid ${COLORS.warninging}`
         : `1px solid ${COLORS.border}`,
       borderRadius:12,
       padding:14
@@ -6688,7 +6587,7 @@ const renderTarjetaProduccion = (n) => (
           <b style={{ color:COLORS.danger }}>(Atrasada)</b>
         )}
         {venceHoy(n.fecha_entrega_estimada) && (
-          <b style={{ color:COLORS.warning }}>(Para hoy)</b>
+          <b style={{ color:COLORS.warninging }}>(Para hoy)</b>
         )}
         {venceManana(n.fecha_entrega_estimada) && (
           <b style={{ color:"#60a5fa" }}>(Para mañana)</b>
@@ -6711,7 +6610,7 @@ const renderTarjetaProduccion = (n) => (
     </div>
 
     {n.produccion_observaciones && (
-      <p style={{ marginTop:10, color:COLORS.warning }}>
+      <p style={{ marginTop:10, color:COLORS.warninging }}>
         Obs: {n.produccion_observaciones}
       </p>
     )}
@@ -6807,28 +6706,15 @@ const renderTarjetaProduccion = (n) => (
 
   return (
     <div style={{ minHeight:"100vh", background:COLORS.bg, color:COLORS.text, fontFamily:"'Trebuchet MS',sans-serif", paddingBottom:60 }}>
-      <ToastContainer />
-      <ConfirmContainer />
-
-      {cargando && (
-        <div style={{ position:"fixed", inset:0, background:COLORS.bg, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:18, zIndex:100001 }}>
-          <div style={{ width:46, height:46, border:`4px solid ${COLORS.subtle}`, borderTopColor:COLORS.accent, borderRadius:"50%", animation:"sf-spin 0.9s linear infinite" }} />
-          <div style={{ color:COLORS.muted, fontSize:14, letterSpacing:0.5 }}>Cargando datos…</div>
-          <style>{`@keyframes sf-spin { to { transform: rotate(360deg); } }`}</style>
-        </div>
-      )}
-
       <style>{`
         @media (max-width: 768px) {
-          .panel-acciones {
-            grid-template-columns: 1fr !important;
-            max-width: 100% !important;
+          .solo-pc {
+            display: none !important;
           }
         }
       `}</style>
- <div className="panel-acciones-wrap">
+ <div className="solo-pc">
   <div
-    className="panel-acciones"
   style={{
     margin: "16px auto",
     padding: 16,
@@ -6883,20 +6769,20 @@ const renderTarjetaProduccion = (n) => (
               <StatCard label="Conversión" value={`${rate}%`} sub={`${vendidas.length} de ${cotizaciones.length}`} icon="🎯" color={COLORS.accent}/>
               <StatCard label="Vendidas" value={vendidas.length} sub={fmt(totalSold)} icon="✅" color={COLORS.success}/>
               <StatCard label="Activas" value={activas.length} sub={fmt(totalActiva)} icon="●" color="#5a8abe"/>
-              <StatCard label="Seguimiento" value={urgentes.length} sub="7-10 días hábiles" icon="⚡" color={COLORS.warning}/>
+              <StatCard label="Seguimiento" value={urgentes.length} sub="7-10 días hábiles" icon="⚡" color={COLORS.warninging}/>
               <StatCard label="Vencidas" value={vencidas.length} sub={fmt(totalVencida)} icon="✕" color="#9a7aaa"/>
               <StatCard label="Total Vendido" value={fmt(totalSold)} sub="30 notas" icon="💰" color={COLORS.success}/>
             </div>
 
             {urgentes.length>0 && (
-              <div style={{ background:"#1e1500", border:`1px solid ${COLORS.warning}`, borderRadius:10, padding:"12px 16px", marginBottom:16 }}>
-                <div style={{ fontSize:12, fontWeight:700, color:COLORS.warning, marginBottom:8 }}>⚡ {urgentes.length} cotizaciones requieren seguimiento urgente</div>
+              <div style={{ background:"#1e1500", border:`1px solid ${COLORS.warninging}`, borderRadius:10, padding:"12px 16px", marginBottom:16 }}>
+                <div style={{ fontSize:12, fontWeight:700, color:COLORS.warninging, marginBottom:8 }}>⚡ {urgentes.length} cotizaciones requieren seguimiento urgente</div>
                 {urgentes.map(q=>(
                   <div key={q.id} style={{ fontSize:12, color:COLORS.text, marginBottom:4, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
                     <span><span style={{ color:COLORS.accent }}>#{q.numero}</span> {q.cliente} — {fmt(q.total)}</span>
                     <div style={{ display:"flex", alignItems:"center", gap:8 }}>
                       <span style={{ color:COLORS.muted, fontSize:11 }}>{businessDaysSince(q.fecha)} días háb.</span>
-                      <button onClick={()=>setModalCot(q)} style={{ background:COLORS.warning, border:"none", borderRadius:6, padding:"3px 10px", color:"#0f0e0c", fontWeight:700, cursor:"pointer", fontSize:11 }}>+ Nota</button>
+                      <button onClick={()=>setModalCot(q)} style={{ background:COLORS.warninging, border:"none", borderRadius:6, padding:"3px 10px", color:"#0f0e0c", fontWeight:700, cursor:"pointer", fontSize:11 }}>+ Nota</button>
                    <button
     onClick={() => setModalEditarCotizacion(q)}
     style={{
@@ -6923,12 +6809,12 @@ const renderTarjetaProduccion = (n) => (
                 <span style={{ fontSize:11, color:COLORS.muted, textTransform:"uppercase", letterSpacing:1, marginBottom:4 }}>Conversión</span>
                 <svg width="160" height="92" viewBox="0 0 160 92">
                   <path d={arcPath(startA,startA+sweepA)} stroke={COLORS.subtle} strokeWidth="11" fill="none" strokeLinecap="round"/>
-                  <path d={arcPath(startA,fillEnd)} stroke={Number(rate)>=40?COLORS.success:COLORS.warning} strokeWidth="11" fill="none" strokeLinecap="round"/>
+                  <path d={arcPath(startA,fillEnd)} stroke={Number(rate)>=40?COLORS.success:COLORS.warninging} strokeWidth="11" fill="none" strokeLinecap="round"/>
                 </svg>
                 <div style={{ fontSize:38, fontWeight:800, color:COLORS.accent, fontFamily:"Georgia,serif", lineHeight:1, marginTop:-10 }}>{rate}%</div>
                 <div style={{ fontSize:11, color:COLORS.muted, marginTop:4, textAlign:"center" }}>{vendidas.length} vendidas · {vencidas.length} vencidas</div>
                 <div style={{ marginTop:10, width:"100%", display:"flex", flexDirection:"column", gap:5 }}>
-                  {[["✓ Vendidas",vendidas.length,COLORS.success],["● Activas",activas.length,"#5a8abe"],["⚡ Seguimiento",urgentes.length,COLORS.warning],["✕ Vencidas",vencidas.length,"#9a7aaa"]].map(([l,c,col])=>(
+                  {[["✓ Vendidas",vendidas.length,COLORS.success],["● Activas",activas.length,"#5a8abe"],["⚡ Seguimiento",urgentes.length,COLORS.warninging],["✕ Vencidas",vencidas.length,"#9a7aaa"]].map(([l,c,col])=>(
                     <div key={l} style={{ display:"flex", justifyContent:"space-between" }}>
                       <span style={{ fontSize:11, color:col }}>{l}</span><span style={{ fontSize:11, color:COLORS.muted }}>{c}</span>
                     </div>
@@ -7077,7 +6963,7 @@ const renderTarjetaProduccion = (n) => (
         : q.status === "vencida"
         ? COLORS.danger
         : q.status === "urgente"
-        ? COLORS.warning
+        ? COLORS.warninging
         : COLORS.text,
     cursor:"pointer",
     textDecoration:"underline"
@@ -7146,13 +7032,13 @@ const renderTarjetaProduccion = (n) => (
                 <div
                 key={s.id}
                 onClick={() => setModalNV(s)}
-                style={{background:COLORS.card, border:`1px solid ${s.cotizacion?"#2d5040":COLORS.border}`, borderLeft:`4px solid ${s.cotizacion?COLORS.success:COLORS.warning}`, borderRadius:10, padding:"11px 14px", display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:8 }}>
+                style={{background:COLORS.card, border:`1px solid ${s.cotizacion?"#2d5040":COLORS.border}`, borderLeft:`4px solid ${s.cotizacion?COLORS.success:COLORS.warninging}`, borderRadius:10, padding:"11px 14px", display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:8 }}>
                   <div>
   <div>
     <span style={{ fontWeight:700, color:COLORS.success, marginRight:8 }}>NV#{s.numero}</span>
     <span style={{ color:COLORS.text }}>{s.cliente}</span>
     {s.cotizacion ? <span style={{ marginLeft:8, fontSize:11, color:COLORS.muted, background:COLORS.subtle, borderRadius:4, padding:"2px 7px" }}>← COT#{s.cotizacion}</span>
-      : <span style={{ marginLeft:8, fontSize:11, color:COLORS.warning, background:"#2a1f0a", borderRadius:4, padding:"2px 7px", border:`1px solid ${COLORS.warning}` }}>sin cotización</span>}
+      : <span style={{ marginLeft:8, fontSize:11, color:COLORS.warninging, background:"#2a1f0a", borderRadius:4, padding:"2px 7px", border:`1px solid ${COLORS.warninging}` }}>sin cotización</span>}
     <span style={{ color:COLORS.muted, marginLeft:8, fontSize:11 }}>{s.fecha}</span>
   </div>
 
@@ -7239,7 +7125,7 @@ const renderTarjetaProduccion = (n) => (
   <button
   onClick={async (e) => {
     e.stopPropagation();
-    const confirmar = await confirmDialog(`¿Eliminar NV ${s.numero}?`);
+    const confirmar = confirm(`¿Eliminar NV ${s.numero}?`);
 
     if (!confirmar) return;
 
@@ -7287,13 +7173,13 @@ const renderTarjetaProduccion = (n) => (
                 <div
                 key={s.id}
                 onClick={() => setModalNV(s)}
-                style={{background:COLORS.card, border:`1px solid ${s.cotizacion?"#2d5040":COLORS.border}`, borderLeft:`4px solid ${s.cotizacion?COLORS.success:COLORS.warning}`, borderRadius:10, padding:"11px 14px", display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:8 }}>
+                style={{background:COLORS.card, border:`1px solid ${s.cotizacion?"#2d5040":COLORS.border}`, borderLeft:`4px solid ${s.cotizacion?COLORS.success:COLORS.warninging}`, borderRadius:10, padding:"11px 14px", display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:8 }}>
                   <div>
   <div>
     <span style={{ fontWeight:700, color:COLORS.success, marginRight:8 }}>Barrán #{s.numero}</span>
     <span style={{ color:COLORS.text }}>{s.cliente}</span>
     {s.cotizacion ? <span style={{ marginLeft:8, fontSize:11, color:COLORS.muted, background:COLORS.subtle, borderRadius:4, padding:"2px 7px" }}>← COT#{s.cotizacion}</span>
-      : <span style={{ marginLeft:8, fontSize:11, color:COLORS.warning, background:"#2a1f0a", borderRadius:4, padding:"2px 7px", border:`1px solid ${COLORS.warning}` }}>barrán interno</span>}
+      : <span style={{ marginLeft:8, fontSize:11, color:COLORS.warninging, background:"#2a1f0a", borderRadius:4, padding:"2px 7px", border:`1px solid ${COLORS.warninging}` }}>barrán interno</span>}
     <span style={{ color:COLORS.muted, marginLeft:8, fontSize:11 }}>{s.fecha}</span>
   </div>
 
@@ -7380,7 +7266,7 @@ const renderTarjetaProduccion = (n) => (
   <button
   onClick={async (e) => {
     e.stopPropagation();
-    const confirmar = await confirmDialog(`¿Eliminar Barrán ${s.numero}?`);
+    const confirmar = confirm(`¿Eliminar Barrán ${s.numero}?`);
 
     if (!confirmar) return;
 
@@ -8110,7 +7996,7 @@ const renderTarjetaProduccion = (n) => (
 
             <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))", gap:12, marginBottom:18 }}>
               <StatCard label="Ventas del mes" value={fmt(resumenVentasLaminasMes.venta)} sub={`${ventasLaminasDelMes.length} registros`} icon="💰" color={COLORS.success}/>
-              <StatCard label="Costos del mes" value={fmt(resumenVentasLaminasMes.costo)} icon="🧾" color={COLORS.warning}/>
+              <StatCard label="Costos del mes" value={fmt(resumenVentasLaminasMes.costo)} icon="🧾" color={COLORS.warninging}/>
               <StatCard label="Utilidad neta" value={fmt(resumenVentasLaminasMes.utilidad)} icon="📈" color={resumenVentasLaminasMes.utilidad >= 0 ? COLORS.success : COLORS.danger}/>
               <StatCard label="IVA a provisionar" value={fmt(resumenVentasLaminasMes.iva)} icon="🏛️" color={resumenVentasLaminasMes.iva >= 0 ? COLORS.accent : COLORS.danger}/>
             </div>
@@ -8445,18 +8331,18 @@ const renderTarjetaProduccion = (n) => (
 
             <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))", gap:12, marginBottom:14 }}>
               <StatCard label="Debe total" value={fmt(resumenContabilidad.debe)} icon="⬅️" color={COLORS.success}/>
-              <StatCard label="Haber total" value={fmt(resumenContabilidad.haber)} icon="➡️" color={COLORS.warning}/>
+              <StatCard label="Haber total" value={fmt(resumenContabilidad.haber)} icon="➡️" color={COLORS.warninging}/>
               <StatCard label="Diferencia" value={fmt(diferenciaContabilidad)} sub={Math.abs(diferenciaContabilidad) === 0 ? "Cuadrado" : "No cuadrado"} icon="⚖️" color={Math.abs(diferenciaContabilidad) === 0 ? COLORS.success : COLORS.danger}/>
               <StatCard label="IVA CF" value={fmt(resumenContabilidad.ivaCf)} icon="🧾" color={COLORS.accent}/>
               <StatCard label="IVA DF" value={fmt(resumenContabilidad.ivaDf)} icon="🏛️" color={COLORS.accent}/>
-              <StatCard label="IVA a pagar" value={fmt(resumenContabilidad.ivaDf - resumenContabilidad.ivaCf)} icon="📌" color={(resumenContabilidad.ivaDf - resumenContabilidad.ivaCf) >= 0 ? COLORS.warning : COLORS.success}/>
+              <StatCard label="IVA a pagar" value={fmt(resumenContabilidad.ivaDf - resumenContabilidad.ivaCf)} icon="📌" color={(resumenContabilidad.ivaDf - resumenContabilidad.ivaCf) >= 0 ? COLORS.warninging : COLORS.success}/>
             </div>
 
             <div
   onClick={() => setModalCxcClientes(true)}
   style={{ cursor: "pointer" }}
 >
-  <StatCard label="CxC Clientes" value={fmt(totalCxcNotas)} icon="👥" color={COLORS.warning}/>
+  <StatCard label="CxC Clientes" value={fmt(totalCxcNotas)} icon="👥" color={COLORS.warninging}/>
 </div>
 
             <div style={{ background:COLORS.card, border:`1px solid ${COLORS.border}`, borderRadius:12, padding:14, marginBottom:14 }}>
@@ -8562,7 +8448,7 @@ const renderTarjetaProduccion = (n) => (
                           <td style={{ padding:"8px", borderBottom:`1px solid ${COLORS.border}` }}>{a.documento}</td>
                           <td style={{ padding:"8px", borderBottom:`1px solid ${COLORS.border}` }}>{a.definicion}</td>
                           <td style={{ padding:"8px", borderBottom:`1px solid ${COLORS.border}`, textAlign:"right", color:COLORS.success, fontWeight:700 }}>{Number(a.debe || 0) > 0 ? fmt(a.debe) : "-"}</td>
-                          <td style={{ padding:"8px", borderBottom:`1px solid ${COLORS.border}`, textAlign:"right", color:COLORS.warning, fontWeight:700 }}>{Number(a.haber || 0) > 0 ? fmt(a.haber) : "-"}</td>
+                          <td style={{ padding:"8px", borderBottom:`1px solid ${COLORS.border}`, textAlign:"right", color:COLORS.warninging, fontWeight:700 }}>{Number(a.haber || 0) > 0 ? fmt(a.haber) : "-"}</td>
                           <td style={{ padding:"8px", borderBottom:`1px solid ${COLORS.border}`, textAlign:"right" }}>
                             <button onClick={() => setModalContabilidad(a)} style={{ marginRight:6, background:COLORS.surface, color:COLORS.text, border:`1px solid ${COLORS.border}`, borderRadius:7, padding:"5px 8px", cursor:"pointer" }}>Editar</button>
                             <button onClick={() => eliminarAsientoContable(a)} style={{ background:COLORS.danger, color:"#fff", border:"none", borderRadius:7, padding:"5px 8px", cursor:"pointer" }}>Eliminar</button>
