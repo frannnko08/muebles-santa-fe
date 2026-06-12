@@ -4427,7 +4427,6 @@ if (!errorDocumentosTrabajadores) {
 }, []);
   const [tab, setTab] = useState("produccion");
   const [esAdmin, setEsAdmin] = useState(false);
-  const [usuarioActual, setUsuarioActual] = useState(null); // {username, nombre, secciones}
   const [modalLogin, setModalLogin] = useState(false);
   const [loginUser, setLoginUser] = useState("");
   const [loginPass, setLoginPass] = useState("");
@@ -4557,38 +4556,14 @@ if (!errorDocumentosTrabajadores) {
     }
   }, [seguimiento]);
 
-  // ============= AUTENTICACIÓN DE USUARIOS =============
-  // Lista de secciones que requieren rol admin (control total)
-  const SECCIONES_ADMIN = ["control_calidad", "cartola", "contabilidad", "rrhh"];
-
-  // Verificar sesión guardada al cargar
+  // ============= AUTENTICACIÓN ADMIN =============
+  // Verificar sesión al cargar
   useEffect(() => {
-    const sesion = sessionStorage.getItem("usuario_session");
-    if (sesion) {
-      try {
-        const u = JSON.parse(sesion);
-        if (u && u.username) {
-          setUsuarioActual(u);
-          // esAdmin si tiene acceso a "all" o a alguna sección admin
-          const tieneAll = Array.isArray(u.secciones) && u.secciones.includes("all");
-          setEsAdmin(tieneAll);
-        }
-      } catch (e) {
-        console.error("Sesión corrupta:", e);
-        sessionStorage.removeItem("usuario_session");
-      }
+    const sesionAdmin = sessionStorage.getItem("admin_session");
+    if (sesionAdmin === "true") {
+      setEsAdmin(true);
     }
   }, []);
-
-  // Guarda de seguridad: si el tab actual no está permitido, redirigir
-  useEffect(() => {
-    if (!usuarioActual) return;
-    const secs = usuarioActual.secciones || [];
-    if (secs.includes("all")) return; // acceso total
-    if (!secs.includes(tab)) {
-      setTab(secs[0] || "produccion");
-    }
-  }, [usuarioActual, tab]);
 
   // Cargar errores de producción si es admin
   useEffect(() => {
@@ -4608,7 +4583,7 @@ if (!errorDocumentosTrabajadores) {
     })();
   }, [esAdmin]);
 
-  // Login de usuario
+  // Login admin
   const hacerLoginAdmin = async () => {
     if (!loginUser.trim() || !loginPass.trim()) {
       toast("Ingresa usuario y contraseña", "warning");
@@ -4617,19 +4592,13 @@ if (!errorDocumentosTrabajadores) {
     setCargandoLogin(true);
     try {
       const { data, error } = await supabase
-        .from("usuarios")
-        .select("username, password, nombre, secciones, activo")
+        .from("admin_config")
+        .select("username, password")
         .eq("username", loginUser.trim())
         .maybeSingle();
 
       if (error || !data) {
         toast("Usuario o contraseña incorrectos", "error");
-        setCargandoLogin(false);
-        return;
-      }
-
-      if (data.activo === false) {
-        toast("Este usuario está desactivado", "error");
         setCargandoLogin(false);
         return;
       }
@@ -4641,26 +4610,12 @@ if (!errorDocumentosTrabajadores) {
       }
 
       // Éxito
-      const usuario = {
-        username: data.username,
-        nombre: data.nombre || data.username,
-        secciones: Array.isArray(data.secciones) ? data.secciones : [],
-      };
-      sessionStorage.setItem("usuario_session", JSON.stringify(usuario));
-      setUsuarioActual(usuario);
-      const tieneAll = usuario.secciones.includes("all");
-      setEsAdmin(tieneAll);
+      sessionStorage.setItem("admin_session", "true");
+      setEsAdmin(true);
       setModalLogin(false);
       setLoginUser("");
       setLoginPass("");
-
-      // Llevar al usuario a su primera sección permitida
-      const primeraSeccion = usuario.secciones.includes("all")
-        ? "produccion"
-        : (usuario.secciones[0] || "produccion");
-      setTab(primeraSeccion);
-
-      toast(`Bienvenido, ${usuario.nombre}`, "success");
+      toast("Sesión de administrador iniciada", "success");
     } catch (e) {
       console.error(e);
       toast("Error al verificar credenciales", "error");
@@ -4669,13 +4624,11 @@ if (!errorDocumentosTrabajadores) {
     }
   };
 
-  // Logout
+  // Logout admin
   const hacerLogoutAdmin = () => {
-    sessionStorage.removeItem("usuario_session");
-    setUsuarioActual(null);
+    sessionStorage.removeItem("admin_session");
     setEsAdmin(false);
-    setLoginUser("");
-    setLoginPass("");
+    setTab("produccion");
     toast("Sesión cerrada", "info");
   };
 
@@ -7561,64 +7514,12 @@ const renderTarjetaProduccion = (n) => (
     {key:"rrhh",label:`👷 RRHH (${trabajadores.length})`},
   ];
 
-  // Filtrar tabs según permisos del usuario actual
-  const seccionesUsuario = usuarioActual?.secciones || [];
-  const tieneAccesoTotal = seccionesUsuario.includes("all");
-  const todosLosTabs = [...tabsPublicos, ...tabsAdmin];
-  const tabs = tieneAccesoTotal
-    ? todosLosTabs
-    : todosLosTabs.filter(t => seccionesUsuario.includes(t.key));
+  const tabs = esAdmin ? [...tabsPublicos, ...tabsAdmin] : tabsPublicos;
 
   return (
     <div style={{ minHeight:"100vh", background:COLORS.bg, color:COLORS.text, fontFamily:"'Trebuchet MS',sans-serif", paddingBottom:60 }}>
       <ToastContainer />
       <ConfirmContainer />
-
-      {/* PANTALLA DE LOGIN OBLIGATORIO */}
-      {!usuarioActual && (
-        <div style={{ position:"fixed", inset:0, background:COLORS.bg, display:"flex", alignItems:"center", justifyContent:"center", zIndex:100002, padding:20 }}>
-          <div style={{ width:"min(380px, 92vw)", background:COLORS.card, border:`1px solid ${COLORS.border}`, borderRadius:16, padding:32, boxSizing:"border-box" }}>
-            <div style={{ textAlign:"center", marginBottom:24 }}>
-              <div style={{ fontSize:34, marginBottom:8 }}>🪑</div>
-              <h1 style={{ margin:0, fontSize:20, color:COLORS.accent }}>Muebles Santa Fe</h1>
-              <p style={{ margin:"6px 0 0", fontSize:13, color:COLORS.muted }}>Panel de Conversión</p>
-            </div>
-
-            <label style={{ display:"block", marginBottom:6, fontSize:12, color:COLORS.muted }}>Usuario</label>
-            <input
-              type="text"
-              value={loginUser}
-              onChange={(e) => setLoginUser(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") document.getElementById("login-pass-input")?.focus(); }}
-              placeholder="Tu nombre de usuario"
-              autoFocus
-              style={{ width:"100%", padding:"11px 13px", borderRadius:9, border:`1px solid ${COLORS.border}`, background:COLORS.surface, color:COLORS.text, boxSizing:"border-box", marginBottom:14, fontSize:14 }}
-            />
-
-            <label style={{ display:"block", marginBottom:6, fontSize:12, color:COLORS.muted }}>Contraseña</label>
-            <input
-              id="login-pass-input"
-              type="password"
-              value={loginPass}
-              onChange={(e) => setLoginPass(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter" && !cargandoLogin) hacerLoginAdmin(); }}
-              placeholder="Tu contraseña"
-              style={{ width:"100%", padding:"11px 13px", borderRadius:9, border:`1px solid ${COLORS.border}`, background:COLORS.surface, color:COLORS.text, boxSizing:"border-box", marginBottom:20, fontSize:14 }}
-            />
-
-            <button
-              onClick={hacerLoginAdmin}
-              disabled={cargandoLogin}
-              style={{ width:"100%", padding:"12px", background:cargandoLogin?COLORS.subtle:COLORS.accent, border:"none", color:"#0f0e0c", borderRadius:9, fontWeight:700, fontSize:15, cursor:cargandoLogin?"default":"pointer" }}
-            >
-              {cargandoLogin ? "Verificando…" : "Ingresar"}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {usuarioActual && (
-      <>
 
       {cargando && (
         <div style={{ position:"fixed", inset:0, background:COLORS.bg, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:18, zIndex:100001 }}>
@@ -7677,31 +7578,48 @@ const renderTarjetaProduccion = (n) => (
 </div>
 </div>
 
-{/* Barra de sesión de usuario */}
+{/* Barra de sesión admin */}
 <div style={{ display:"flex", justifyContent:"flex-end", alignItems:"center", padding:"8px 16px", borderBottom:`1px solid ${COLORS.border}`, background:COLORS.surface, gap:12 }}>
-  <span style={{ fontSize:12, color:COLORS.text }}>
-    👤 <b style={{ color:COLORS.accent }}>{usuarioActual?.nombre || usuarioActual?.username}</b>
-    {tieneAccesoTotal && <span style={{ marginLeft:6, fontSize:10, color:COLORS.success, fontWeight:700 }}>ADMIN</span>}
-  </span>
-  <button
-    onClick={hacerLogoutAdmin}
-    style={{
-      background:COLORS.danger,
-      border:"none",
-      color:"#fff",
-      borderRadius:6,
-      padding:"6px 12px",
-      fontWeight:700,
-      cursor:"pointer",
-      fontSize:12,
-    }}
-  >
-    Cerrar sesión
-  </button>
+  {esAdmin ? (
+    <>
+      <span style={{ fontSize:12, color:COLORS.success, fontWeight:700 }}>🔐 Admin conectado</span>
+      <button
+        onClick={hacerLogoutAdmin}
+        style={{
+          background:COLORS.danger,
+          border:"none",
+          color:"#fff",
+          borderRadius:6,
+          padding:"6px 12px",
+          fontWeight:700,
+          cursor:"pointer",
+          fontSize:12,
+        }}
+      >
+        Cerrar sesión
+      </button>
+    </>
+  ) : (
+    <button
+      onClick={() => setModalLogin(true)}
+      style={{
+        background:COLORS.accent,
+        border:"none",
+        color:"#0f0e0c",
+        borderRadius:6,
+        padding:"6px 12px",
+        fontWeight:700,
+        cursor:"pointer",
+        fontSize:12,
+      }}
+    >
+      🔓 Login
+    </button>
+  )}
 </div>
       
 
-      <div style={{ display:"flex", gap:2, padding:"12px 12px 0", borderBottom:`1px solid ${COLORS.border}`, overflowX:"auto", WebkitOverflowScrolling:"touch" }}>>
+      <div style={{ display:"flex", gap:2, padding:"12px 12px 0", borderBottom:`1px solid ${COLORS.border}`, overflowX:"auto", WebkitOverflowScrolling:"touch" }}>
         {tabs.map(t=>(
           <button key={t.key} onClick={()=>setTab(t.key)} style={{ background:tab===t.key?COLORS.card:"transparent", border:`1px solid ${tab===t.key?COLORS.border:"transparent"}`, borderBottom:tab===t.key?`2px solid ${COLORS.accent}`:"2px solid transparent", borderRadius:"8px 8px 0 0", padding:"8px 16px", color:tab===t.key?COLORS.accent:COLORS.muted, cursor:"pointer", fontSize:15, fontWeight:tab===t.key?700:400, whiteSpace:"nowrap" }}>{t.label}</button>
         ))}
@@ -10059,8 +9977,6 @@ const renderTarjetaProduccion = (n) => (
             </div>
           </div>
         </div>
-      )}
-      </>
       )}
     </div>
   );
