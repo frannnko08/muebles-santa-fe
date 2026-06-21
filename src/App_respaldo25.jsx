@@ -5009,18 +5009,14 @@ const cumpleMes = (fecha) => {
   setMesFiltro(new Date().toISOString().slice(0, 7));
 };
 
-const obtenerNumeroCotizacionOrden = (valor) => {
-  const numeroLimpio = String(valor || "").replace(/\D/g, "");
-  return Number(numeroLimpio || 0);
-};
-
 const filteredQuotes = withStatus.filter(q =>
-  (String(q.numero || "").toLowerCase().includes(filter.toLowerCase()) || String(q.cliente || "").toLowerCase().includes(filter.toLowerCase())) &&
+  (q.numero.toLowerCase().includes(filter.toLowerCase()) || q.cliente.toLowerCase().includes(filter.toLowerCase())) &&
   cumpleFecha(q.fecha) &&
   cumpleMes(q.fecha) &&
   (showVencidas || q.status !== "vencida")
-).sort((a,b) => {
-  return obtenerNumeroCotizacionOrden(b.numero) - obtenerNumeroCotizacionOrden(a.numero);
+).sort((a,b) => { 
+  const o={urgente:0,activa:1,vendida:2,vencida:3}; 
+  return o[a.status]-o[b.status]; 
 });
 
 const filteredNotas = notasVenta.filter(s =>
