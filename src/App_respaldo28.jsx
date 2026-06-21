@@ -5033,18 +5033,18 @@ if (!errorDocumentosTrabajadores) {
     const notasPeriodo = notasVenta.filter(n => estaEnRangoResumen(n.fecha, rango));
     const barranesPeriodo = barranes.filter(n => estaEnRangoResumen(n.fecha, rango));
     const ventasPeriodo = [...notasPeriodo, ...barranesPeriodo];
-    const convertedPeriodo = new Set(ventasPeriodo.filter(n => n.cotizacion).map(n => n.cotizacion));
+    const convertedPeriodo = new Set(notasPeriodo.filter(n => n.cotizacion).map(n => n.cotizacion));
     const cotizacionesConEstado = cotizacionesPeriodo.map(q => ({ ...q, status: getStatus(q, convertedPeriodo) }));
     const vendidasPeriodo = cotizacionesConEstado.filter(q => q.status === "vendida");
     const activasPeriodo = cotizacionesConEstado.filter(q => q.status === "activa");
     const urgentesPeriodo = cotizacionesConEstado.filter(q => q.status === "urgente");
     const vencidasPeriodo = cotizacionesConEstado.filter(q => q.status === "vencida");
     const montoCotizado = cotizacionesPeriodo.reduce((s,q) => s + Number(q.total || 0), 0);
-    const montoVendido = ventasPeriodo.reduce((s,n) => s + Number(n.total || 0), 0);
+    const montoVendido = notasPeriodo.reduce((s,n) => s + Number(n.total || 0), 0);
     const conversion = cotizacionesPeriodo.length > 0 ? Number((vendidasPeriodo.length / cotizacionesPeriodo.length * 100).toFixed(1)) : 0;
     const clientesCotizados = new Set(cotizacionesPeriodo.map(c => String(c.cliente || "").trim()).filter(Boolean));
-    const clientesVendidos = new Set(ventasPeriodo.map(n => String(n.cliente || "").trim()).filter(Boolean));
-    const ventasPorCliente = ventasPeriodo.reduce((acc, n) => {
+    const clientesVendidos = new Set(notasPeriodo.map(n => String(n.cliente || "").trim()).filter(Boolean));
+    const ventasPorCliente = notasPeriodo.reduce((acc, n) => {
       const cliente = String(n.cliente || "Sin cliente").trim() || "Sin cliente";
       if (!acc[cliente]) acc[cliente] = { cliente, cantidad:0, total:0 };
       acc[cliente].cantidad += 1;
@@ -5053,8 +5053,8 @@ if (!errorDocumentosTrabajadores) {
     }, {});
     const topClientes = Object.values(ventasPorCliente).sort((a,b) => b.total - a.total).slice(0, 10);
 
-    const montoCotizadoVendido = montoVendido;
-    const conversionMonto = montoCotizado > 0 ? Number((montoVendido / montoCotizado * 100).toFixed(1)) : 0;
+    const montoCotizadoVendido = vendidasPeriodo.reduce((s,q) => s + Number(q.total || 0), 0);
+    const conversionMonto = montoCotizado > 0 ? Number((montoCotizadoVendido / montoCotizado * 100).toFixed(1)) : 0;
 
     const sumarEstado = (estado) => cotizacionesConEstado
       .filter(q => q.status === estado)
@@ -5112,8 +5112,6 @@ if (!errorDocumentosTrabajadores) {
     return {
       cotizacionesPeriodo,
       notasPeriodo,
-      barranesPeriodo,
-      ventasPeriodo,
       cotizacionesConEstado,
       vendidasPeriodo,
       activasPeriodo,
@@ -5128,7 +5126,7 @@ if (!errorDocumentosTrabajadores) {
       conversionPorTramo,
       diasPromedioCierre,
       ticketCotizado: cotizacionesPeriodo.length ? Math.round(montoCotizado / cotizacionesPeriodo.length) : 0,
-      ticketVendido: ventasPeriodo.length ? Math.round(montoVendido / ventasPeriodo.length) : 0,
+      ticketVendido: notasPeriodo.length ? Math.round(montoVendido / notasPeriodo.length) : 0,
       clientesCotizados: clientesCotizados.size,
       clientesVendidos: clientesVendidos.size,
       topClientes
@@ -8031,12 +8029,12 @@ const renderTarjetaProduccion = (n) => (
 
             <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))", gap:12, marginBottom:20 }}>
               <StatCard label="Conversión" value={`${resumenActual.conversion}%`} sub={`${resumenActual.vendidasPeriodo.length} de ${resumenActual.cotizacionesPeriodo.length} cotizaciones`} icon="🎯" color={COLORS.accent}/>
-              <StatCard label="Conversión monto" value={`${resumenActual.conversionMonto}%`} sub={`${fmt(resumenActual.montoVendido)} vendido de ${fmt(resumenActual.montoCotizado)} cotizado`} icon="💰" color={COLORS.success}/>
+              <StatCard label="Conversión monto" value={`${resumenActual.conversionMonto}%`} sub={`${fmt(resumenActual.montoCotizadoVendido)} de ${fmt(resumenActual.montoCotizado)}`} icon="💰" color={COLORS.success}/>
               <StatCard label="Días cierre" value={`${resumenActual.diasPromedioCierre}`} sub="Promedio cotización → NV" icon="⏱️" color={COLORS.warning}/>
               <StatCard label="Cotizaciones" value={resumenActual.cotizacionesPeriodo.length} sub={fmt(resumenActual.montoCotizado)} icon="📄" color="#5a8abe"/>
-              <StatCard label="Ventas registradas" value={resumenActual.ventasPeriodo.length} sub={`${fmt(resumenActual.montoVendido)} (NV + barranes)`} icon="🧾" color={COLORS.success}/>
+              <StatCard label="Notas de venta" value={resumenActual.notasPeriodo.length} sub={fmt(resumenActual.montoVendido)} icon="🧾" color={COLORS.success}/>
               <StatCard label="Ticket cotizado" value={fmt(resumenActual.ticketCotizado)} sub="Promedio por cotización" icon="🧮" color={COLORS.warning}/>
-              <StatCard label="Ticket vendido" value={fmt(resumenActual.ticketVendido)} sub="Promedio por venta registrada" icon="💵" color={COLORS.success}/>
+              <StatCard label="Ticket vendido" value={fmt(resumenActual.ticketVendido)} sub="Promedio por NV" icon="💵" color={COLORS.success}/>
               <StatCard label="Clientes" value={resumenActual.clientesVendidos} sub={`${resumenActual.clientesCotizados} cotizados`} icon="👥" color={COLORS.accent}/>
             </div>
 
