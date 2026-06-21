@@ -5051,62 +5051,6 @@ if (!errorDocumentosTrabajadores) {
     }, {});
     const topClientes = Object.values(ventasPorCliente).sort((a,b) => b.total - a.total).slice(0, 10);
 
-    const montoCotizadoVendido = vendidasPeriodo.reduce((s,q) => s + Number(q.total || 0), 0);
-    const conversionMonto = montoCotizado > 0 ? Number((montoCotizadoVendido / montoCotizado * 100).toFixed(1)) : 0;
-
-    const sumarEstado = (estado) => cotizacionesConEstado
-      .filter(q => q.status === estado)
-      .reduce((s,q) => s + Number(q.total || 0), 0);
-
-    const embudoDinero = [
-      { key:"vendida", label:"Vendidas", cantidad:vendidasPeriodo.length, monto:sumarEstado("vendida"), color:COLORS.success },
-      { key:"activa", label:"Activas", cantidad:activasPeriodo.length, monto:sumarEstado("activa"), color:"#5a8abe" },
-      { key:"urgente", label:"Seguimiento", cantidad:urgentesPeriodo.length, monto:sumarEstado("urgente"), color:COLORS.warning },
-      { key:"vencida", label:"Vencidas", cantidad:vencidasPeriodo.length, monto:sumarEstado("vencida"), color:"#9a7aaa" },
-    ];
-
-    const tramosBase = [
-      { key:"hasta_100", label:"Hasta $100.000", min:0, max:100000 },
-      { key:"100_250", label:"$100.001 - $250.000", min:100001, max:250000 },
-      { key:"250_500", label:"$250.001 - $500.000", min:250001, max:500000 },
-      { key:"500_1m", label:"$500.001 - $1.000.000", min:500001, max:1000000 },
-      { key:"mas_1m", label:"Más de $1.000.000", min:1000001, max:Infinity },
-    ];
-
-    const conversionPorTramo = tramosBase.map((t) => {
-      const items = cotizacionesConEstado.filter(q => {
-        const total = Number(q.total || 0);
-        return total >= t.min && total <= t.max;
-      });
-      const vendidasTramo = items.filter(q => q.status === "vendida");
-      const montoTramo = items.reduce((s,q) => s + Number(q.total || 0), 0);
-      const montoVendidoTramo = vendidasTramo.reduce((s,q) => s + Number(q.total || 0), 0);
-      return {
-        ...t,
-        cantidad:items.length,
-        vendidas:vendidasTramo.length,
-        conversion:items.length ? Number((vendidasTramo.length / items.length * 100).toFixed(1)) : 0,
-        monto:montoTramo,
-        montoVendido:montoVendidoTramo,
-        conversionMonto:montoTramo ? Number((montoVendidoTramo / montoTramo * 100).toFixed(1)) : 0,
-      };
-    });
-
-    const cierres = vendidasPeriodo.map((q) => {
-      const fechaCot = obtenerFechaValida(q.fecha);
-      const nv = notasPeriodo
-        .filter(n => String(n.cotizacion) === String(q.numero))
-        .map(n => ({ ...n, fechaObj: obtenerFechaValida(n.fecha) }))
-        .filter(n => n.fechaObj && fechaCot)
-        .sort((a,b) => a.fechaObj - b.fechaObj)[0];
-      if (!fechaCot || !nv?.fechaObj) return null;
-      return Math.max(0, Math.round((nv.fechaObj - fechaCot) / (1000 * 60 * 60 * 24)));
-    }).filter(v => v !== null);
-
-    const diasPromedioCierre = cierres.length
-      ? Number((cierres.reduce((s,d) => s + d, 0) / cierres.length).toFixed(1))
-      : 0;
-
     return {
       cotizacionesPeriodo,
       notasPeriodo,
@@ -5118,11 +5062,6 @@ if (!errorDocumentosTrabajadores) {
       montoCotizado,
       montoVendido,
       conversion,
-      conversionMonto,
-      montoCotizadoVendido,
-      embudoDinero,
-      conversionPorTramo,
-      diasPromedioCierre,
       ticketCotizado: cotizacionesPeriodo.length ? Math.round(montoCotizado / cotizacionesPeriodo.length) : 0,
       ticketVendido: notasPeriodo.length ? Math.round(montoVendido / notasPeriodo.length) : 0,
       clientesCotizados: clientesCotizados.size,
@@ -8018,8 +7957,6 @@ const renderTarjetaProduccion = (n) => (
 
             <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))", gap:12, marginBottom:20 }}>
               <StatCard label="Conversión" value={`${resumenActual.conversion}%`} sub={`${resumenActual.vendidasPeriodo.length} de ${resumenActual.cotizacionesPeriodo.length} cotizaciones`} icon="🎯" color={COLORS.accent}/>
-              <StatCard label="Conversión monto" value={`${resumenActual.conversionMonto}%`} sub={`${fmt(resumenActual.montoCotizadoVendido)} de ${fmt(resumenActual.montoCotizado)}`} icon="💰" color={COLORS.success}/>
-              <StatCard label="Días cierre" value={`${resumenActual.diasPromedioCierre}`} sub="Promedio cotización → NV" icon="⏱️" color={COLORS.warning}/>
               <StatCard label="Cotizaciones" value={resumenActual.cotizacionesPeriodo.length} sub={fmt(resumenActual.montoCotizado)} icon="📄" color="#5a8abe"/>
               <StatCard label="Notas de venta" value={resumenActual.notasPeriodo.length} sub={fmt(resumenActual.montoVendido)} icon="🧾" color={COLORS.success}/>
               <StatCard label="Ticket cotizado" value={fmt(resumenActual.ticketCotizado)} sub="Promedio por cotización" icon="🧮" color={COLORS.warning}/>
@@ -8047,57 +7984,6 @@ const renderTarjetaProduccion = (n) => (
                 </div>
               </div>
             )}
-
-            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(320px,1fr))", gap:16, marginBottom:20 }}>
-              <div style={{ background:COLORS.card, border:`1px solid ${COLORS.border}`, borderRadius:12, padding:18 }}>
-                <div style={{ fontSize:11, color:COLORS.muted, textTransform:"uppercase", letterSpacing:1, marginBottom:12 }}>Conversión por tramo de valor</div>
-                <div style={{ display:"grid", gap:10 }}>
-                  {resumenActual.conversionPorTramo.map(t => {
-                    const ancho = Math.max(3, Math.min(100, t.conversion));
-                    return (
-                      <div key={t.key}>
-                        <div style={{ display:"flex", justifyContent:"space-between", gap:10, fontSize:12, marginBottom:4 }}>
-                          <b style={{ color:COLORS.text }}>{t.label}</b>
-                          <span style={{ color:t.conversion >= 35 ? COLORS.success : t.conversion >= 20 ? COLORS.warning : COLORS.danger, fontWeight:800 }}>{t.conversion}%</span>
-                        </div>
-                        <div style={{ height:7, background:COLORS.subtle, borderRadius:6, overflow:"hidden" }}>
-                          <div style={{ width:`${ancho}%`, height:"100%", background:t.conversion >= 35 ? COLORS.success : t.conversion >= 20 ? COLORS.warning : COLORS.danger }}/>
-                        </div>
-                        <div style={{ display:"flex", justifyContent:"space-between", fontSize:10.5, color:COLORS.muted, marginTop:3 }}>
-                          <span>{t.vendidas} de {t.cantidad} vendidas</span>
-                          <span>{fmt(t.montoVendido)} / {fmt(t.monto)}</span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div style={{ background:COLORS.card, border:`1px solid ${COLORS.border}`, borderRadius:12, padding:18 }}>
-                <div style={{ fontSize:11, color:COLORS.muted, textTransform:"uppercase", letterSpacing:1, marginBottom:12 }}>Embudo comercial por dinero</div>
-                <div style={{ display:"grid", gap:10 }}>
-                  {resumenActual.embudoDinero.map(e => {
-                    const pct = resumenActual.montoCotizado > 0 ? Math.round((e.monto / resumenActual.montoCotizado) * 100) : 0;
-                    const ancho = Math.max(3, Math.min(100, pct));
-                    return (
-                      <div key={e.key}>
-                        <div style={{ display:"flex", justifyContent:"space-between", gap:10, fontSize:12, marginBottom:4 }}>
-                          <b style={{ color:e.color }}>{e.label}</b>
-                          <span style={{ color:COLORS.text, fontWeight:800 }}>{fmt(e.monto)}</span>
-                        </div>
-                        <div style={{ height:8, background:COLORS.subtle, borderRadius:6, overflow:"hidden" }}>
-                          <div style={{ width:`${ancho}%`, height:"100%", background:e.color }}/>
-                        </div>
-                        <div style={{ display:"flex", justifyContent:"space-between", fontSize:10.5, color:COLORS.muted, marginTop:3 }}>
-                          <span>{e.cantidad} cotizaciones</span>
-                          <span>{pct}% del monto cotizado</span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
 
             {resumenActual.urgentesPeriodo.length>0 && (
               <div style={{ background:"#1e1500", border:`1px solid ${COLORS.warning}`, borderRadius:10, padding:"12px 16px", marginBottom:16 }}>
