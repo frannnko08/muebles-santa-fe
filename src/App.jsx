@@ -4441,6 +4441,7 @@ if (!errorDocumentosTrabajadores) {
   const [clienteSeleccionado, setClienteSeleccionado] = useState(null);
   const [busquedaClienteAnalisis, setBusquedaClienteAnalisis] = useState("");
   const [filtroFechasAnalisis, setFiltroFechasAnalisis] = useState("mes_actual");
+  const [filtroResumen, setFiltroResumen] = useState("mes_actual");
   const [filter, setFilter] = useState("");
   const [fechaDesde, setFechaDesde] = useState("");
   const [fechaHasta, setFechaHasta] = useState("");
@@ -4961,6 +4962,136 @@ if (!errorDocumentosTrabajadores) {
   const totalActiva = [...activas,...urgentes].reduce((s,q) => s + q.total, 0);
   const totalVencida = vencidas.reduce((s,q) => s + q.total, 0);
   const totalQuoted = cotizaciones.reduce((s,q) => s + q.total, 0);
+
+  const obtenerFechaValida = (fecha) => {
+    if (!fecha) return null;
+    const f = new Date(`${fecha}T00:00:00`);
+    if (!Number.isNaN(f.getTime())) return f;
+    const fallback = new Date(fecha);
+    return Number.isNaN(fallback.getTime()) ? null : fallback;
+  };
+
+  const nombreMesResumen = (mes) => {
+    if (!mes) return "Todos los meses";
+    const [year, month] = String(mes).split("-");
+    const nombre = new Date(Number(year), Number(month) - 1, 1)
+      .toLocaleDateString("es-CL", { month:"long", year:"numeric" });
+    return nombre.charAt(0).toUpperCase() + nombre.slice(1);
+  };
+
+  const inicioMes = (fecha) => new Date(fecha.getFullYear(), fecha.getMonth(), 1);
+  const finMes = (fecha) => new Date(fecha.getFullYear(), fecha.getMonth() + 1, 0, 23, 59, 59, 999);
+  const sumarMeses = (fecha, meses) => new Date(fecha.getFullYear(), fecha.getMonth() + meses, 1);
+
+  const obtenerRangoResumen = (tipo = filtroResumen, offset = 0) => {
+    const hoy = new Date();
+    const base = sumarMeses(hoy, offset);
+
+    if (tipo === "todo") {
+      return { desde:null, hasta:null, label:"Todo el histórico" };
+    }
+
+    if (tipo === "mes_actual") {
+      return { desde:inicioMes(base), hasta:finMes(base), label:nombreMesResumen(`${base.getFullYear()}-${String(base.getMonth()+1).padStart(2,"0")}`) };
+    }
+
+    if (tipo === "mes_anterior") {
+      const mes = sumarMeses(base, -1);
+      return { desde:inicioMes(mes), hasta:finMes(mes), label:nombreMesResumen(`${mes.getFullYear()}-${String(mes.getMonth()+1).padStart(2,"0")}`) };
+    }
+
+    if (tipo === "ultimos_3_meses") {
+      const hasta = finMes(base);
+      const desde = inicioMes(sumarMeses(base, -2));
+      return { desde, hasta, label:"Últimos 3 meses" };
+    }
+
+    if (tipo === "ultimos_6_meses") {
+      const hasta = finMes(base);
+      const desde = inicioMes(sumarMeses(base, -5));
+      return { desde, hasta, label:"Últimos 6 meses" };
+    }
+
+    if (tipo === "año_actual") {
+      return { desde:new Date(hoy.getFullYear(), 0, 1), hasta:new Date(hoy.getFullYear(), 11, 31, 23, 59, 59, 999), label:`Año ${hoy.getFullYear()}` };
+    }
+
+    return { desde:null, hasta:null, label:"Todo el histórico" };
+  };
+
+  const estaEnRangoResumen = (fecha, rango) => {
+    if (!rango?.desde && !rango?.hasta) return true;
+    const f = obtenerFechaValida(fecha);
+    if (!f) return false;
+    if (rango.desde && f < rango.desde) return false;
+    if (rango.hasta && f > rango.hasta) return false;
+    return true;
+  };
+
+  const calcularMetricasResumen = (rango) => {
+    const cotizacionesPeriodo = cotizaciones.filter(c => estaEnRangoResumen(c.fecha, rango));
+    const notasPeriodo = notasVenta.filter(n => estaEnRangoResumen(n.fecha, rango));
+    const convertedPeriodo = new Set(notasPeriodo.filter(n => n.cotizacion).map(n => n.cotizacion));
+    const cotizacionesConEstado = cotizacionesPeriodo.map(q => ({ ...q, status: getStatus(q, convertedPeriodo) }));
+    const vendidasPeriodo = cotizacionesConEstado.filter(q => q.status === "vendida");
+    const activasPeriodo = cotizacionesConEstado.filter(q => q.status === "activa");
+    const urgentesPeriodo = cotizacionesConEstado.filter(q => q.status === "urgente");
+    const vencidasPeriodo = cotizacionesConEstado.filter(q => q.status === "vencida");
+    const montoCotizado = cotizacionesPeriodo.reduce((s,q) => s + Number(q.total || 0), 0);
+    const montoVendido = notasPeriodo.reduce((s,n) => s + Number(n.total || 0), 0);
+    const conversion = cotizacionesPeriodo.length > 0 ? Number((vendidasPeriodo.length / cotizacionesPeriodo.length * 100).toFixed(1)) : 0;
+    const clientesCotizados = new Set(cotizacionesPeriodo.map(c => String(c.cliente || "").trim()).filter(Boolean));
+    const clientesVendidos = new Set(notasPeriodo.map(n => String(n.cliente || "").trim()).filter(Boolean));
+    const ventasPorCliente = notasPeriodo.reduce((acc, n) => {
+      const cliente = String(n.cliente || "Sin cliente").trim() || "Sin cliente";
+      if (!acc[cliente]) acc[cliente] = { cliente, cantidad:0, total:0 };
+      acc[cliente].cantidad += 1;
+      acc[cliente].total += Number(n.total || 0);
+      return acc;
+    }, {});
+    const topClientes = Object.values(ventasPorCliente).sort((a,b) => b.total - a.total).slice(0, 10);
+
+    return {
+      cotizacionesPeriodo,
+      notasPeriodo,
+      cotizacionesConEstado,
+      vendidasPeriodo,
+      activasPeriodo,
+      urgentesPeriodo,
+      vencidasPeriodo,
+      montoCotizado,
+      montoVendido,
+      conversion,
+      ticketCotizado: cotizacionesPeriodo.length ? Math.round(montoCotizado / cotizacionesPeriodo.length) : 0,
+      ticketVendido: notasPeriodo.length ? Math.round(montoVendido / notasPeriodo.length) : 0,
+      clientesCotizados: clientesCotizados.size,
+      clientesVendidos: clientesVendidos.size,
+      topClientes
+    };
+  };
+
+  const rangoResumen = obtenerRangoResumen();
+  const resumenActual = calcularMetricasResumen(rangoResumen);
+  const rangoResumenAnterior = filtroResumen === "todo" ? null : obtenerRangoResumen(filtroResumen, filtroResumen === "año_actual" ? -12 : filtroResumen === "ultimos_6_meses" ? -6 : filtroResumen === "ultimos_3_meses" ? -3 : -1);
+  const resumenAnterior = rangoResumenAnterior ? calcularMetricasResumen(rangoResumenAnterior) : null;
+  const variacionPorcentual = (actual, anterior) => {
+    if (!anterior) return actual > 0 ? 100 : 0;
+    return Number(((actual - anterior) / anterior * 100).toFixed(1));
+  };
+  const diferenciaConversionResumen = resumenAnterior ? Number((resumenActual.conversion - resumenAnterior.conversion).toFixed(1)) : 0;
+  const variacionVentasResumen = resumenAnterior ? variacionPorcentual(resumenActual.montoVendido, resumenAnterior.montoVendido) : 0;
+  const mesesResumenGrafico = (() => {
+    const hoy = new Date();
+    const cantidad = filtroResumen === "ultimos_6_meses" ? 6 : filtroResumen === "ultimos_3_meses" ? 3 : 6;
+    return Array.from({ length:cantidad }, (_, i) => {
+      const fecha = sumarMeses(hoy, i - cantidad + 1);
+      const key = `${fecha.getFullYear()}-${String(fecha.getMonth()+1).padStart(2,"0")}`;
+      const rangoMes = { desde:inicioMes(fecha), hasta:finMes(fecha) };
+      const m = calcularMetricasResumen(rangoMes);
+      return { key, label:nombreMesResumen(key).replace(` ${fecha.getFullYear()}`, ""), ...m };
+    });
+  })();
+  const maxGraficoResumen = Math.max(...mesesResumenGrafico.map(m => Math.max(m.montoCotizado, m.montoVendido)), 1);
 
   const cumpleFecha = (fecha) => {
   if (!fecha) return true;
@@ -7705,7 +7836,7 @@ const renderTarjetaProduccion = (n) => (
 </div>
       
 
-      <div style={{ display:"flex", gap:2, padding:"12px 12px 0", borderBottom:`1px solid ${COLORS.border}`, overflowX:"auto", WebkitOverflowScrolling:"touch" }}>>
+      <div style={{ display:"flex", gap:2, padding:"12px 12px 0", borderBottom:`1px solid ${COLORS.border}`, overflowX:"auto", WebkitOverflowScrolling:"touch" }}>
         {tabs.map(t=>(
           <button key={t.key} onClick={()=>setTab(t.key)} style={{ background:tab===t.key?COLORS.card:"transparent", border:`1px solid ${tab===t.key?COLORS.border:"transparent"}`, borderBottom:tab===t.key?`2px solid ${COLORS.accent}`:"2px solid transparent", borderRadius:"8px 8px 0 0", padding:"8px 16px", color:tab===t.key?COLORS.accent:COLORS.muted, cursor:"pointer", fontSize:15, fontWeight:tab===t.key?700:400, whiteSpace:"nowrap" }}>{t.label}</button>
         ))}
@@ -7803,56 +7934,84 @@ const renderTarjetaProduccion = (n) => (
         )}
         {tab==="dashboard" && (
           <div>
-            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))", gap:12, marginBottom:20 }}>
-              <StatCard label="Conversión" value={`${rate}%`} sub={`${vendidas.length} de ${cotizaciones.length}`} icon="🎯" color={COLORS.accent}/>
-              <StatCard label="Vendidas" value={vendidas.length} sub={fmt(totalSold)} icon="✅" color={COLORS.success}/>
-              <StatCard label="Activas" value={activas.length} sub={fmt(totalActiva)} icon="●" color="#5a8abe"/>
-              <StatCard label="Seguimiento" value={urgentes.length} sub="7-10 días hábiles" icon="⚡" color={COLORS.warning}/>
-              <StatCard label="Vencidas" value={vencidas.length} sub={fmt(totalVencida)} icon="✕" color="#9a7aaa"/>
-              <StatCard label="Total Vendido" value={fmt(totalSold)} sub="30 notas" icon="💰" color={COLORS.success}/>
+            <div style={{ background:COLORS.card, border:`1px solid ${COLORS.border}`, borderRadius:12, padding:16, marginBottom:18 }}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:12, flexWrap:"wrap" }}>
+                <div>
+                  <h2 style={{ margin:"0 0 4px", color:COLORS.accent }}>📊 Resumen Comercial</h2>
+                  <div style={{ fontSize:12, color:COLORS.muted }}>Periodo seleccionado: {rangoResumen.label}</div>
+                </div>
+                <select
+                  value={filtroResumen}
+                  onChange={(e) => setFiltroResumen(e.target.value)}
+                  style={{ background:COLORS.surface, border:`1px solid ${COLORS.border}`, color:COLORS.text, borderRadius:8, padding:"9px 12px", fontSize:13, minWidth:180 }}
+                >
+                  <option value="mes_actual">Mes actual</option>
+                  <option value="mes_anterior">Mes anterior</option>
+                  <option value="ultimos_3_meses">Últimos 3 meses</option>
+                  <option value="ultimos_6_meses">Últimos 6 meses</option>
+                  <option value="año_actual">Año actual</option>
+                  <option value="todo">Todo</option>
+                </select>
+              </div>
             </div>
 
-            {urgentes.length>0 && (
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))", gap:12, marginBottom:20 }}>
+              <StatCard label="Conversión" value={`${resumenActual.conversion}%`} sub={`${resumenActual.vendidasPeriodo.length} de ${resumenActual.cotizacionesPeriodo.length} cotizaciones`} icon="🎯" color={COLORS.accent}/>
+              <StatCard label="Cotizaciones" value={resumenActual.cotizacionesPeriodo.length} sub={fmt(resumenActual.montoCotizado)} icon="📄" color="#5a8abe"/>
+              <StatCard label="Notas de venta" value={resumenActual.notasPeriodo.length} sub={fmt(resumenActual.montoVendido)} icon="🧾" color={COLORS.success}/>
+              <StatCard label="Ticket cotizado" value={fmt(resumenActual.ticketCotizado)} sub="Promedio por cotización" icon="🧮" color={COLORS.warning}/>
+              <StatCard label="Ticket vendido" value={fmt(resumenActual.ticketVendido)} sub="Promedio por NV" icon="💵" color={COLORS.success}/>
+              <StatCard label="Clientes" value={resumenActual.clientesVendidos} sub={`${resumenActual.clientesCotizados} cotizados`} icon="👥" color={COLORS.accent}/>
+            </div>
+
+            {resumenAnterior && (
+              <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))", gap:12, marginBottom:20 }}>
+                <div style={{ background:COLORS.card, border:`1px solid ${COLORS.border}`, borderRadius:12, padding:16 }}>
+                  <div style={{ fontSize:11, color:COLORS.muted, textTransform:"uppercase", letterSpacing:1 }}>Comparación conversión</div>
+                  <div style={{ marginTop:8, fontSize:14, color:COLORS.text }}>{rangoResumen.label}: <b style={{ color:COLORS.accent }}>{resumenActual.conversion}%</b></div>
+                  <div style={{ fontSize:13, color:COLORS.muted }}>Periodo anterior: {resumenAnterior.conversion}%</div>
+                  <div style={{ marginTop:6, fontSize:18, fontWeight:800, color:diferenciaConversionResumen >= 0 ? COLORS.success : COLORS.danger }}>
+                    {diferenciaConversionResumen >= 0 ? "+" : ""}{diferenciaConversionResumen} pts
+                  </div>
+                </div>
+                <div style={{ background:COLORS.card, border:`1px solid ${COLORS.border}`, borderRadius:12, padding:16 }}>
+                  <div style={{ fontSize:11, color:COLORS.muted, textTransform:"uppercase", letterSpacing:1 }}>Comparación ventas</div>
+                  <div style={{ marginTop:8, fontSize:14, color:COLORS.text }}>{rangoResumen.label}: <b style={{ color:COLORS.success }}>{fmt(resumenActual.montoVendido)}</b></div>
+                  <div style={{ fontSize:13, color:COLORS.muted }}>Periodo anterior: {fmt(resumenAnterior.montoVendido)}</div>
+                  <div style={{ marginTop:6, fontSize:18, fontWeight:800, color:variacionVentasResumen >= 0 ? COLORS.success : COLORS.danger }}>
+                    {variacionVentasResumen >= 0 ? "+" : ""}{variacionVentasResumen}%
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {resumenActual.urgentesPeriodo.length>0 && (
               <div style={{ background:"#1e1500", border:`1px solid ${COLORS.warning}`, borderRadius:10, padding:"12px 16px", marginBottom:16 }}>
-                <div style={{ fontSize:12, fontWeight:700, color:COLORS.warning, marginBottom:8 }}>⚡ {urgentes.length} cotizaciones requieren seguimiento urgente</div>
-                {urgentes.map(q=>(
-                  <div key={q.id} style={{ fontSize:12, color:COLORS.text, marginBottom:4, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                <div style={{ fontSize:12, fontWeight:700, color:COLORS.warning, marginBottom:8 }}>⚡ {resumenActual.urgentesPeriodo.length} cotizaciones del período requieren seguimiento</div>
+                {resumenActual.urgentesPeriodo.map(q=>(
+                  <div key={q.id} style={{ fontSize:12, color:COLORS.text, marginBottom:4, display:"flex", justifyContent:"space-between", alignItems:"center", gap:10 }}>
                     <span><span style={{ color:COLORS.accent }}>#{q.numero}</span> {q.cliente} — {fmt(q.total)}</span>
                     <div style={{ display:"flex", alignItems:"center", gap:8 }}>
                       <span style={{ color:COLORS.muted, fontSize:11 }}>{businessDaysSince(q.fecha)} días háb.</span>
                       <button onClick={()=>setModalCot(q)} style={{ background:COLORS.warning, border:"none", borderRadius:6, padding:"3px 10px", color:"#0f0e0c", fontWeight:700, cursor:"pointer", fontSize:11 }}>+ Nota</button>
-                   <button
-    onClick={() => setModalEditarCotizacion(q)}
-    style={{
-      background: COLORS.accent,
-      border: "none",
-      borderRadius: 6,
-      padding: "4px 10px",
-      color: "#0f0e0c",
-      cursor: "pointer",
-      fontSize: 12,
-      fontWeight: 700
-    }}
-  >
-    Editar
-  </button>
+                      <button onClick={() => setModalEditarCotizacion(q)} style={{ background:COLORS.accent, border:"none", borderRadius:6, padding:"4px 10px", color:"#0f0e0c", cursor:"pointer", fontSize:12, fontWeight:700 }}>Editar</button>
                     </div>
                   </div>
                 ))}
               </div>
             )}
 
-            <div style={{ display:"grid", gridTemplateColumns:"200px 1fr", gap:16 }}>
+            <div style={{ display:"grid", gridTemplateColumns:"minmax(200px,260px) 1fr", gap:16 }}>
               <div style={{ background:COLORS.card, border:`1px solid ${COLORS.border}`, borderRadius:12, padding:18, display:"flex", flexDirection:"column", alignItems:"center" }}>
-                <span style={{ fontSize:11, color:COLORS.muted, textTransform:"uppercase", letterSpacing:1, marginBottom:4 }}>Conversión</span>
+                <span style={{ fontSize:11, color:COLORS.muted, textTransform:"uppercase", letterSpacing:1, marginBottom:4 }}>Conversión del período</span>
                 <svg width="160" height="92" viewBox="0 0 160 92">
                   <path d={arcPath(startA,startA+sweepA)} stroke={COLORS.subtle} strokeWidth="11" fill="none" strokeLinecap="round"/>
-                  <path d={arcPath(startA,fillEnd)} stroke={Number(rate)>=40?COLORS.success:COLORS.warning} strokeWidth="11" fill="none" strokeLinecap="round"/>
+                  <path d={arcPath(startA,startA+sweepA*(resumenActual.conversion/100))} stroke={Number(resumenActual.conversion)>=40?COLORS.success:COLORS.warning} strokeWidth="11" fill="none" strokeLinecap="round"/>
                 </svg>
-                <div style={{ fontSize:38, fontWeight:800, color:COLORS.accent, fontFamily:"Georgia,serif", lineHeight:1, marginTop:-10 }}>{rate}%</div>
-                <div style={{ fontSize:11, color:COLORS.muted, marginTop:4, textAlign:"center" }}>{vendidas.length} vendidas · {vencidas.length} vencidas</div>
+                <div style={{ fontSize:38, fontWeight:800, color:COLORS.accent, fontFamily:"Georgia,serif", lineHeight:1, marginTop:-10 }}>{resumenActual.conversion}%</div>
+                <div style={{ fontSize:11, color:COLORS.muted, marginTop:4, textAlign:"center" }}>{resumenActual.vendidasPeriodo.length} vendidas · {resumenActual.vencidasPeriodo.length} vencidas</div>
                 <div style={{ marginTop:10, width:"100%", display:"flex", flexDirection:"column", gap:5 }}>
-                  {[["✓ Vendidas",vendidas.length,COLORS.success],["● Activas",activas.length,"#5a8abe"],["⚡ Seguimiento",urgentes.length,COLORS.warning],["✕ Vencidas",vencidas.length,"#9a7aaa"]].map(([l,c,col])=>(
+                  {[["✓ Vendidas",resumenActual.vendidasPeriodo.length,COLORS.success],["● Activas",resumenActual.activasPeriodo.length,"#5a8abe"],["⚡ Seguimiento",resumenActual.urgentesPeriodo.length,COLORS.warning],["✕ Vencidas",resumenActual.vencidasPeriodo.length,"#9a7aaa"]].map(([l,c,col])=>(
                     <div key={l} style={{ display:"flex", justifyContent:"space-between" }}>
                       <span style={{ fontSize:11, color:col }}>{l}</span><span style={{ fontSize:11, color:COLORS.muted }}>{c}</span>
                     </div>
@@ -7860,16 +8019,44 @@ const renderTarjetaProduccion = (n) => (
                 </div>
               </div>
 
+              <div style={{ background:COLORS.card, border:`1px solid ${COLORS.border}`, borderRadius:12, padding:18 }}>
+                <span style={{ fontSize:11, color:COLORS.muted, textTransform:"uppercase", letterSpacing:1 }}>Evolución mensual</span>
+                <div style={{ marginTop:14, display:"grid", gap:10 }}>
+                  {mesesResumenGrafico.map(m => {
+                    const anchoCotizado = Math.max(3, Math.round((m.montoCotizado / maxGraficoResumen) * 100));
+                    const anchoVendido = Math.max(3, Math.round((m.montoVendido / maxGraficoResumen) * 100));
+                    return (
+                      <div key={m.key}>
+                        <div style={{ display:"flex", justifyContent:"space-between", fontSize:12, marginBottom:4 }}>
+                          <b style={{ color:COLORS.text }}>{m.label}</b>
+                          <span style={{ color:COLORS.muted }}>Conv. {m.conversion}%</span>
+                        </div>
+                        <div style={{ display:"grid", gap:3 }}>
+                          <div style={{ height:7, background:COLORS.subtle, borderRadius:6, overflow:"hidden" }}><div style={{ width:`${anchoCotizado}%`, height:"100%", background:"#5a8abe" }}/></div>
+                          <div style={{ height:7, background:COLORS.subtle, borderRadius:6, overflow:"hidden" }}><div style={{ width:`${anchoVendido}%`, height:"100%", background:COLORS.success }}/></div>
+                        </div>
+                        <div style={{ display:"flex", justifyContent:"space-between", fontSize:10.5, color:COLORS.muted, marginTop:3 }}>
+                          <span>Cotizado {fmt(m.montoCotizado)}</span>
+                          <span>Vendido {fmt(m.montoVendido)}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16, marginTop:16 }}>
               <div style={{ background:COLORS.card, border:`1px solid ${COLORS.border}`, borderRadius:12, padding:18, maxHeight:420, overflowY:"auto" }}>
-                <span style={{ fontSize:11, color:COLORS.muted, textTransform:"uppercase", letterSpacing:1 }}>Estado por Cotización</span>
+                <span style={{ fontSize:11, color:COLORS.muted, textTransform:"uppercase", letterSpacing:1 }}>Estado por Cotización del período</span>
                 <div style={{ marginTop:14 }}>
-                  {withStatus.slice().sort((a,b)=>{ const o={urgente:0,activa:1,vendida:2,vencida:3}; return o[a.status]-o[b.status]||b.total-a.total; }).map(q=>{
-                    const nvs=notas.filter(s=>s.cotizacion===q.numero);
-                    const pct=totalQuoted>0?q.total/totalQuoted*100:0;
+                  {resumenActual.cotizacionesConEstado.slice().sort((a,b)=>{ const o={urgente:0,activa:1,vendida:2,vencida:3}; return o[a.status]-o[b.status]||Number(b.total||0)-Number(a.total||0); }).map(q=>{
+                    const nvs=notasVenta.filter(s=>String(s.cotizacion)===String(q.numero));
+                    const pct=resumenActual.montoCotizado>0?Number(q.total || 0)/resumenActual.montoCotizado*100:0;
                     const nCount=(seguimiento[q.numero]||[]).length;
                     return (
-                      <div key={q.id} style={{ marginBottom:11, opacity:q.status==="vencida"?0.5:1 }}>
-                        <div style={{ display:"flex", justifyContent:"space-between", marginBottom:3 }}>
+                      <div key={q.id} style={{ marginBottom:11, opacity:q.status==="vencida"?0.55:1 }}>
+                        <div style={{ display:"flex", justifyContent:"space-between", marginBottom:3, gap:8 }}>
                           <span style={{ fontSize:12, color:COLORS.text }}><b style={{ color:COLORS.accent }}>#{q.numero}</b> {q.cliente}</span>
                           <span style={{ fontSize:12, fontWeight:600, color:q.status==="vendida"?COLORS.success:COLORS.muted }}>{fmt(q.total)}</span>
                         </div>
@@ -7877,7 +8064,7 @@ const renderTarjetaProduccion = (n) => (
                           <div style={{ height:"100%", width:`${pct}%`, background:LEFT_COLOR[q.status], borderRadius:3 }}/>
                         </div>
                         <div style={{ display:"flex", justifyContent:"space-between", marginTop:2, alignItems:"center" }}>
-                          <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                          <div style={{ display:"flex", alignItems:"center", gap:6, flexWrap:"wrap" }}>
                             <StatusBadge status={q.status}/>
                             {nvs.length>0 && <span style={{ fontSize:10, color:COLORS.muted }}>→ {nvs.map(n=>`NV#${n.numero}`).join(", ")}</span>}
                             {nCount>0 && <span style={{ fontSize:10, color:COLORS.accent }}>📝{nCount}</span>}
@@ -7887,6 +8074,24 @@ const renderTarjetaProduccion = (n) => (
                       </div>
                     );
                   })}
+                  {resumenActual.cotizacionesConEstado.length === 0 && <div style={{ color:COLORS.muted, fontSize:13 }}>Sin cotizaciones en este período.</div>}
+                </div>
+              </div>
+
+              <div style={{ background:COLORS.card, border:`1px solid ${COLORS.border}`, borderRadius:12, padding:18, maxHeight:420, overflowY:"auto" }}>
+                <span style={{ fontSize:11, color:COLORS.muted, textTransform:"uppercase", letterSpacing:1 }}>Top 10 clientes por ventas</span>
+                <div style={{ marginTop:14, display:"grid", gap:10 }}>
+                  {resumenActual.topClientes.map((c, idx) => (
+                    <div key={c.cliente} style={{ display:"grid", gridTemplateColumns:"28px 1fr auto", gap:8, alignItems:"center", paddingBottom:8, borderBottom:`1px solid ${COLORS.border}` }}>
+                      <div style={{ color:COLORS.accent, fontWeight:800 }}>#{idx+1}</div>
+                      <div>
+                        <div style={{ color:COLORS.text, fontSize:13, fontWeight:700 }}>{c.cliente}</div>
+                        <div style={{ color:COLORS.muted, fontSize:11 }}>{c.cantidad} NV</div>
+                      </div>
+                      <div style={{ color:COLORS.success, fontSize:13, fontWeight:800 }}>{fmt(c.total)}</div>
+                    </div>
+                  ))}
+                  {resumenActual.topClientes.length === 0 && <div style={{ color:COLORS.muted, fontSize:13 }}>Sin ventas en este período.</div>}
                 </div>
               </div>
             </div>
