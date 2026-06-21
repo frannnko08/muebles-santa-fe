@@ -5239,6 +5239,15 @@ const mesSeleccionadoTexto = nombreMes(mesFiltro);
     const p2={x:cx+r2*Math.cos(toRad(e)),y:cy+r2*Math.sin(toRad(e))};
     return `M ${p1.x} ${p1.y} A ${r2} ${r2} 0 ${e-s>180?1:0} 1 ${p2.x} ${p2.y}`;
   };
+  const conteoCotizacionesEnNV = [...notas, ...barranes].reduce((acc, nv) => {
+  const cot = String(nv.cotizacion || "").trim();
+
+  if (!cot) return acc;
+
+  acc[cot] = (acc[cot] || 0) + 1;
+
+  return acc;
+}, {});
   const fillEnd=startA+sweepA*(rate/100);
 
   const guardarEdicionCompletaCotizacion = async ({ cotizacionOriginal, cotizacionEditada, detallesEditados }) => {
@@ -8546,8 +8555,45 @@ const renderTarjetaProduccion = (n) => (
   <div>
     <span style={{ fontWeight:700, color:COLORS.success, marginRight:8 }}>NV#{s.numero}</span>
     <span style={{ color:COLORS.text }}>{s.cliente}</span>
-    {s.cotizacion ? <span style={{ marginLeft:8, fontSize:11, color:COLORS.muted, background:COLORS.subtle, borderRadius:4, padding:"2px 7px" }}>← COT#{s.cotizacion}</span>
-      : <span style={{ marginLeft:8, fontSize:11, color:COLORS.warning, background:"#2a1f0a", borderRadius:4, padding:"2px 7px", border:`1px solid ${COLORS.warning}` }}>sin cotización</span>}
+    {s.cotizacion ? (
+  <span
+    title={
+      conteoCotizacionesEnNV[String(s.cotizacion || "").trim()] > 1
+        ? `Esta cotización está asociada a ${conteoCotizacionesEnNV[String(s.cotizacion || "").trim()]} notas/barranes`
+        : ""
+    }
+    style={{
+      marginLeft: 8,
+      fontSize: 11,
+      color:
+        conteoCotizacionesEnNV[String(s.cotizacion || "").trim()] > 1
+          ? "#fff"
+          : COLORS.muted,
+      background:
+        conteoCotizacionesEnNV[String(s.cotizacion || "").trim()] > 1
+          ? COLORS.danger
+          : COLORS.subtle,
+      borderRadius: 4,
+      padding: "2px 7px",
+      border:
+        conteoCotizacionesEnNV[String(s.cotizacion || "").trim()] > 1
+          ? `1px solid ${COLORS.danger}`
+          : "none",
+      fontWeight:
+        conteoCotizacionesEnNV[String(s.cotizacion || "").trim()] > 1
+          ? 800
+          : 400
+    }}
+  >
+    {conteoCotizacionesEnNV[String(s.cotizacion || "").trim()] > 1
+      ? `⚠ COT#${s.cotizacion} duplicada`
+      : `← COT#${s.cotizacion}`}
+  </span>
+) : (
+  <span style={{ marginLeft:8, fontSize:11, color:COLORS.warning, background:"#2a1f0a", borderRadius:4, padding:"2px 7px", border:`1px solid ${COLORS.warning}` }}>
+    sin cotización
+  </span>
+)}
     <span style={{ color:COLORS.muted, marginLeft:8, fontSize:11 }}>{s.fecha}</span>
   </div>
 
@@ -8687,8 +8733,45 @@ const renderTarjetaProduccion = (n) => (
   <div>
     <span style={{ fontWeight:700, color:COLORS.success, marginRight:8 }}>Barrán #{s.numero}</span>
     <span style={{ color:COLORS.text }}>{s.cliente}</span>
-    {s.cotizacion ? <span style={{ marginLeft:8, fontSize:11, color:COLORS.muted, background:COLORS.subtle, borderRadius:4, padding:"2px 7px" }}>← COT#{s.cotizacion}</span>
-      : <span style={{ marginLeft:8, fontSize:11, color:COLORS.warning, background:"#2a1f0a", borderRadius:4, padding:"2px 7px", border:`1px solid ${COLORS.warning}` }}>barrán interno</span>}
+    {s.cotizacion ? (
+  <span
+    title={
+      conteoCotizacionesEnNV[String(s.cotizacion || "").trim()] > 1
+        ? `Esta cotización está asociada a ${conteoCotizacionesEnNV[String(s.cotizacion || "").trim()]} notas/barranes`
+        : ""
+    }
+    style={{
+      marginLeft: 8,
+      fontSize: 11,
+      color:
+        conteoCotizacionesEnNV[String(s.cotizacion || "").trim()] > 1
+          ? "#fff"
+          : COLORS.muted,
+      background:
+        conteoCotizacionesEnNV[String(s.cotizacion || "").trim()] > 1
+          ? COLORS.danger
+          : COLORS.subtle,
+      borderRadius: 4,
+      padding: "2px 7px",
+      border:
+        conteoCotizacionesEnNV[String(s.cotizacion || "").trim()] > 1
+          ? `1px solid ${COLORS.danger}`
+          : "none",
+      fontWeight:
+        conteoCotizacionesEnNV[String(s.cotizacion || "").trim()] > 1
+          ? 800
+          : 400
+    }}
+  >
+    {conteoCotizacionesEnNV[String(s.cotizacion || "").trim()] > 1
+      ? `⚠ COT#${s.cotizacion} duplicada`
+      : `← COT#${s.cotizacion}`}
+  </span>
+) : (
+  <span style={{ marginLeft:8, fontSize:11, color:COLORS.warning, background:"#2a1f0a", borderRadius:4, padding:"2px 7px", border:`1px solid ${COLORS.warning}` }}>
+    barrán interno
+  </span>
+)}
     <span style={{ color:COLORS.muted, marginLeft:8, fontSize:11 }}>{s.fecha}</span>
   </div>
 
