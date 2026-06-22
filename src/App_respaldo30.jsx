@@ -4491,7 +4491,6 @@ if (!errorDocumentosTrabajadores) {
   const [modalContabilidad, setModalContabilidad] = useState(null);
   const [modalGestionContable, setModalGestionContable] = useState(null);
   const [mesContabilidad, setMesContabilidad] = useState(new Date().toISOString().slice(0, 7));
-  const [mesCxc, setMesCxc] = useState(new Date().toISOString().slice(0, 7));
   const [busquedaContabilidad, setBusquedaContabilidad] = useState("");
   const [cartolaMovimientos, setCartolaMovimientos] = useState([]);
   const [mesCartola, setMesCartola] = useState(new Date().toISOString().slice(0, 7));
@@ -4515,7 +4514,6 @@ if (!errorDocumentosTrabajadores) {
   const [abonosCuentasPagar, setAbonosCuentasPagar] = useState([]);
   const [modalCuentaPagar, setModalCuentaPagar] = useState(false);
   const [modalAbonoCuentaPagar, setModalAbonoCuentaPagar] = useState(null);
-  const [modalAbonoCxc, setModalAbonoCxc] = useState(null);
   const [trabajadores, setTrabajadores] = useState([]);
   const [documentosTrabajadores, setDocumentosTrabajadores] = useState([]);
   const [modalTrabajador, setModalTrabajador] = useState(false);
@@ -7693,7 +7691,7 @@ const obtenerEstadoCxc = (nota, saldo) => {
   return { key:"saldo_pendiente", label:"Saldo pendiente", icon:"🟡", color:COLORS.warning };
 };
 
-const detalleCxcNotasTodas = notas
+const detalleCxcNotas = notas
   .map(n => {
     const total = Number(n.total || 0);
     const abonado = calcularAbonadoDocumento(n);
@@ -7720,10 +7718,6 @@ const detalleCxcNotasTodas = notas
     };
   })
   .filter(n => n.saldo > 0);
-
-const detalleCxcNotas = detalleCxcNotasTodas.filter(n =>
-  String(n.fecha || "").slice(0, 7) === mesCxc
-);
 
 const totalCxcNotas = detalleCxcNotas.reduce((sum, n) => sum + Number(n.saldo || 0), 0);
 const cxcSaldosPendientes = detalleCxcNotas.filter(n => n.estado.key === "saldo_pendiente");
@@ -10240,25 +10234,6 @@ const renderTarjetaProduccion = (n) => (
                 </p>
               </div>
               <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}>
-                <button onClick={() => setMesCxc(cambiarMesSimple(mesCxc, -1))} style={{ background:COLORS.surface, border:`1px solid ${COLORS.border}`, color:COLORS.text, borderRadius:8, padding:"8px 10px", cursor:"pointer" }}>
-                  ←
-                </button>
-
-                <input
-                  type="month"
-                  value={mesCxc}
-                  onChange={e=>setMesCxc(e.target.value)}
-                  style={{ background:COLORS.surface, border:`1px solid ${COLORS.border}`, color:COLORS.text, borderRadius:8, padding:"8px 10px" }}
-                />
-
-                <button onClick={() => setMesCxc(cambiarMesSimple(mesCxc, 1))} style={{ background:COLORS.surface, border:`1px solid ${COLORS.border}`, color:COLORS.text, borderRadius:8, padding:"8px 10px", cursor:"pointer" }}>
-                  →
-                </button>
-
-                <button onClick={() => setMesCxc(mesActual)} style={{ background:COLORS.accent, border:"none", color:"#0f0e0c", borderRadius:8, padding:"8px 10px", fontWeight:700, cursor:"pointer" }}>
-                  Mes actual
-                </button>
-
                 <input
                   value={busquedaCxcCartola}
                   onChange={e=>setBusquedaCxcCartola(e.target.value)}
@@ -10349,7 +10324,20 @@ const renderTarjetaProduccion = (n) => (
                           <td style={{ padding:10, borderBottom:`1px solid ${COLORS.border}` }}>
                             <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
                               <button
-                                onClick={() => setModalAbonoCxc(item)}
+                                onClick={async () => {
+                                  const monto = window.prompt(`Monto a abonar a ${item.tipo} #${item.numero}:`, String(item.saldo));
+                                  if (!monto) return;
+                                  const tipo = window.prompt("Tipo de abono: inicial / parcial / retiro / saldo", "saldo");
+                                  const mapa = { inicial:"abono_inicial", parcial:"abono", retiro:"abono_retiro_parcial", saldo:"abono_saldo" };
+                                  await registrarAbonoDocumento({
+                                    nota:item.nota,
+                                    monto:Number(String(monto).replace(/[^0-9]/g, "")),
+                                    fecha:new Date().toISOString().split("T")[0],
+                                    medioPago:"transferencia",
+                                    tipoAbono:mapa[String(tipo || "").toLowerCase()] || "abono",
+                                    observacion:"Registrado desde CxC"
+                                  });
+                                }}
                                 style={{ background:COLORS.success, color:"#fff", border:"none", borderRadius:7, padding:"6px 8px", cursor:"pointer", fontSize:11, fontWeight:800 }}
                               >
                                 Registrar abono
@@ -10556,76 +10544,6 @@ const renderTarjetaProduccion = (n) => (
             </div>
             <label>Detalle<textarea name="detalle" style={{ width:"100%", minHeight:70, boxSizing:"border-box", padding:10, margin:"6px 0 10px", borderRadius:8, border:`1px solid ${COLORS.border}`, background:COLORS.surface, color:COLORS.text }}/></label>
             <div style={{ display:"flex", justifyContent:"flex-end", gap:10 }}><button type="button" onClick={() => setModalCuentaPagar(false)}>Cancelar</button><button type="submit" style={{ background:COLORS.success, color:"#fff", border:"none", borderRadius:8, padding:"9px 14px", fontWeight:700 }}>Guardar</button></div>
-          </form>
-        </div>
-      )}
-
-      {modalAbonoCxc && (
-        <div onClick={() => setModalAbonoCxc(null)} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.65)", display:"flex", alignItems:"flex-start", justifyContent:"center", zIndex:9999, overflowY:"auto", padding:"20px 10px" }}>
-          <form
-            onSubmit={async (e) => {
-              e.preventDefault();
-              const fd = new FormData(e.currentTarget);
-              const monto = Number(String(fd.get("monto") || "0").replace(/[^0-9]/g, ""));
-              const fecha = fd.get("fecha") || new Date().toISOString().split("T")[0];
-              const medioPago = fd.get("medio_pago") || "transferencia";
-              const tipoAbono = fd.get("tipo_abono") || "abono";
-              const observacion = fd.get("observacion") || "Registrado desde CxC";
-
-              const ok = await registrarAbonoDocumento({
-                nota: modalAbonoCxc.nota,
-                monto,
-                fecha,
-                medioPago,
-                tipoAbono,
-                observacion
-              });
-
-              if (ok) setModalAbonoCxc(null);
-            }}
-            onClick={e=>e.stopPropagation()}
-            style={{ background:COLORS.card, border:`1px solid ${COLORS.border}`, borderRadius:14, padding:20, width:"430px", maxWidth:"94vw", color:COLORS.text }}
-          >
-            <h2 style={{ marginTop:0, color:COLORS.accent }}>Registrar abono CxC</h2>
-            <p style={{ marginTop:0, lineHeight:1.45 }}>
-              <b>{modalAbonoCxc.tipo} #{modalAbonoCxc.numero}</b><br/>
-              <span style={{ color:COLORS.text }}>{modalAbonoCxc.cliente}</span><br/>
-              <span style={{ color:COLORS.muted }}>Total: {fmt(modalAbonoCxc.total)} · Abonado: {fmt(modalAbonoCxc.abonado)} · Saldo: {fmt(modalAbonoCxc.saldo)}</span>
-            </p>
-
-            <label style={{ display:"block", fontSize:12, color:COLORS.muted }}>Monto
-              <input name="monto" type="number" required defaultValue={modalAbonoCxc.saldo} style={{ width:"100%", boxSizing:"border-box", padding:10, margin:"6px 0 10px", borderRadius:8, border:`1px solid ${COLORS.border}`, background:COLORS.surface, color:COLORS.text }} />
-            </label>
-
-            <label style={{ display:"block", fontSize:12, color:COLORS.muted }}>Tipo de abono
-              <select name="tipo_abono" defaultValue="abono_saldo" style={{ width:"100%", boxSizing:"border-box", padding:10, margin:"6px 0 10px", borderRadius:8, border:`1px solid ${COLORS.border}`, background:COLORS.surface, color:COLORS.text }}>
-                <option value="abono_inicial">Abono inicial</option>
-                <option value="abono">Abono parcial</option>
-                <option value="abono_retiro_parcial">Abono retiro parcial</option>
-                <option value="abono_saldo">Abono saldo</option>
-              </select>
-            </label>
-
-            <label style={{ display:"block", fontSize:12, color:COLORS.muted }}>Fecha
-              <input name="fecha" type="date" defaultValue={new Date().toISOString().split("T")[0]} style={{ width:"100%", boxSizing:"border-box", padding:10, margin:"6px 0 10px", borderRadius:8, border:`1px solid ${COLORS.border}`, background:COLORS.surface, color:COLORS.text }} />
-            </label>
-
-            <label style={{ display:"block", fontSize:12, color:COLORS.muted }}>Medio de pago
-              <select name="medio_pago" defaultValue="transferencia" style={{ width:"100%", boxSizing:"border-box", padding:10, margin:"6px 0 10px", borderRadius:8, border:`1px solid ${COLORS.border}`, background:COLORS.surface, color:COLORS.text }}>
-                <option value="transferencia">Transferencia</option>
-                <option value="efectivo">Efectivo</option>
-                <option value="cheque">Cheque</option>
-              </select>
-            </label>
-
-            <label style={{ display:"block", fontSize:12, color:COLORS.muted }}>Observación
-              <input name="observacion" defaultValue="Registrado desde CxC" style={{ width:"100%", boxSizing:"border-box", padding:10, margin:"6px 0 14px", borderRadius:8, border:`1px solid ${COLORS.border}`, background:COLORS.surface, color:COLORS.text }} />
-            </label>
-
-            <div style={{ display:"flex", justifyContent:"flex-end", gap:10 }}>
-              <button type="button" onClick={() => setModalAbonoCxc(null)} style={{ background:COLORS.subtle, border:`1px solid ${COLORS.border}`, color:COLORS.text, borderRadius:8, padding:"9px 14px", cursor:"pointer" }}>Cancelar</button>
-              <button type="submit" style={{ background:COLORS.success, color:"#fff", border:"none", borderRadius:8, padding:"9px 14px", fontWeight:700, cursor:"pointer" }}>Guardar abono</button>
-            </div>
           </form>
         </div>
       )}
