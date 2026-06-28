@@ -1235,61 +1235,43 @@ const guardarGestionNV = () => {
           </span>
         </p>
 
-        <div style={{
-          margin:"12px 0",
-          padding:12,
-          borderRadius:10,
-          background:COLORS.surface,
-          border:`1px solid ${COLORS.border}`
-        }}>
-          <b style={{ color: COLORS.accent }}>📦 Estado de producción</b>
-          <div style={{ fontSize:12, color:COLORS.muted, margin:"4px 0 10px" }}>
-            Se actualiza desde Producción. En Notas de Venta no se edita manualmente para evitar diferencias.
-          </div>
+        <label>Materiales</label>
+        <select
+          value={materiales}
+          onChange={(e) => setMateriales(e.target.value)}
+          style={{
+            width:"100%",
+            padding:10,
+            margin:"6px 0 12px",
+            borderRadius:8,
+            background:COLORS.surface,
+            color:COLORS.text,
+            border:`1px solid ${COLORS.border}`
+          }}
+        >
+          <option value="falta">Falta</option>
+          <option value="comprados">Comprados</option>
+        </select>
 
-          <div style={{ display:"grid", gap:6, fontSize:13, marginBottom:10 }}>
-            {[
-              ["MDF cortado", nota.mdf_cortado],
-              ["Lámina cortada", nota.lamina_cortada],
-              ["Tupizado", nota.tupizado],
-              ["Armado", nota.armado],
-              ["Pegado", nota.pegado],
-              ["Postformado", nota.postformado],
-              ["Media caña", nota.media_cana],
-            ].map(([nombre, listo]) => (
-              <div key={nombre} style={{ display:"flex", justifyContent:"space-between", borderBottom:`1px solid ${COLORS.border}`, paddingBottom:4 }}>
-                <span>{nombre}</span>
-                <b style={{ color:listo ? COLORS.success : COLORS.muted }}>{listo ? "✓" : "—"}</b>
-              </div>
-            ))}
-          </div>
-
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
-            <div style={{
-              padding:10,
-              borderRadius:8,
-              background:COLORS.card,
-              border:`1px solid ${COLORS.border}`
-            }}>
-              <div style={{ fontSize:11, color:COLORS.muted, textTransform:"uppercase" }}>Materiales</div>
-              <div style={{ color: materiales === "comprados" ? COLORS.success : COLORS.warning, fontWeight:800 }}>
-                {materiales === "comprados" ? "Comprados" : (nota.mdf_cortado ? "Falta lámina" : "Falta")}
-              </div>
-            </div>
-
-            <div style={{
-              padding:10,
-              borderRadius:8,
-              background:COLORS.card,
-              border:`1px solid ${COLORS.border}`
-            }}>
-              <div style={{ fontSize:11, color:COLORS.muted, textTransform:"uppercase" }}>Proceso</div>
-              <div style={{ color:estadoProd.color, fontWeight:800 }}>
-                {estadoProd.texto}
-              </div>
-            </div>
-          </div>
-        </div>
+        <label>Proceso</label>
+        <select
+          value={proceso}
+          onChange={(e) => setProceso(e.target.value)}
+          style={{
+            width:"100%",
+            padding:10,
+            margin:"6px 0 12px",
+            borderRadius:8,
+            background:COLORS.surface,
+            color:COLORS.text,
+            border:`1px solid ${COLORS.border}`
+          }}
+        >
+          <option value="en espera">En espera</option>
+          <option value="en producción">En producción</option>
+          <option value="terminado">Terminado</option>
+          <option value="entregado">Entregado</option>
+        </select>
 
         <label>Observaciones</label>
         <textarea
@@ -5578,19 +5560,14 @@ const mesSeleccionadoTexto = nombreMes(mesFiltro);
 };
   
 const marcarComoEntregadaProduccion = async (nota) => {
-  const confirmar = await confirmDialog(`¿Marcar ${((nota.tipo_documento || "nv") === "barran" ? "Barrán" : "NV")} ${nota.numero} como entregada?
-
-Desaparecerá del listado de Producción y también aparecerá como ENTREGADA en Notas de Venta.`);
+  const confirmar = await confirmDialog(`¿Marcar ${((nota.tipo_documento || "nv") === "barran" ? "Barrán" : "NV")} ${nota.numero} como entregada?\n\nDesaparecerá del listado de Producción.`);
   if (!confirmar) return;
 
   const idReal = Number(String(nota.id).replace("supabase-", ""));
 
   const { error } = await supabase
     .from("notas_venta")
-    .update({
-      proceso: "entregado",
-      materiales: "comprados"
-    })
+    .update({ proceso: "entregado" })
     .eq("id", idReal);
 
   if (error) {
@@ -5600,7 +5577,7 @@ Desaparecerá del listado de Producción y también aparecerá como ENTREGADA en
   }
 
   setNotas(prev => prev.map(n =>
-    n.id === nota.id ? { ...n, proceso: "entregado", materiales: "comprados" } : n
+    n.id === nota.id ? { ...n, proceso: "entregado" } : n
   ));
 
   setModalProduccion(null);
@@ -5609,9 +5586,6 @@ Desaparecerá del listado de Producción y también aparecerá como ENTREGADA en
 const guardarProduccion = async (notaActualizada) => {
   const idReal = Number(String(notaActualizada.id).replace("supabase-", ""));
   const procesoAutomatico = calcularProcesoDesdeAvance(notaActualizada);
-  const materialesAutomaticos = notaActualizada.lamina_cortada || procesoAutomatico === "entregado"
-    ? "comprados"
-    : "falta";
 
   const { error } = await supabase
     .from("notas_venta")
@@ -5625,7 +5599,6 @@ const guardarProduccion = async (notaActualizada) => {
       pegado: notaActualizada.pegado,
       postformado: notaActualizada.postformado,
       media_cana: notaActualizada.media_cana,
-      materiales: materialesAutomaticos,
       proceso: procesoAutomatico,
     })
     .eq("id", idReal);
@@ -5638,7 +5611,7 @@ const guardarProduccion = async (notaActualizada) => {
 
   setNotas(notas.map(n =>
     n.id === notaActualizada.id
-      ? { ...n, ...notaActualizada, materiales: materialesAutomaticos, proceso: procesoAutomatico }
+      ? { ...n, ...notaActualizada, proceso: procesoAutomatico }
       : n
   ));
 
