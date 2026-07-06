@@ -4660,10 +4660,14 @@ if (!errorDocumentosTrabajadores) {
     }
     setCargandoLogin(true);
     try {
+      // La verificación de la contraseña ahora ocurre DENTRO de Supabase
+      // (función verificar_login), nunca en el navegador. La contraseña
+      // en texto plano ya no viaja ni se compara acá.
       const { data, error } = await supabase
-        .from("usuarios")
-        .select("username, password, nombre, secciones, activo")
-        .eq("username", loginUser.trim())
+        .rpc("verificar_login", {
+          p_username: loginUser.trim(),
+          p_password: loginPass,
+        })
         .maybeSingle();
 
       if (error || !data) {
@@ -4674,12 +4678,6 @@ if (!errorDocumentosTrabajadores) {
 
       if (data.activo === false) {
         toast("Este usuario está desactivado", "error");
-        setCargandoLogin(false);
-        return;
-      }
-
-      if (data.password !== loginPass) {
-        toast("Usuario o contraseña incorrectos", "error");
         setCargandoLogin(false);
         return;
       }

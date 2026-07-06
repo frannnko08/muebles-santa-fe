@@ -1235,43 +1235,61 @@ const guardarGestionNV = () => {
           </span>
         </p>
 
-        <label>Materiales</label>
-        <select
-          value={materiales}
-          onChange={(e) => setMateriales(e.target.value)}
-          style={{
-            width:"100%",
-            padding:10,
-            margin:"6px 0 12px",
-            borderRadius:8,
-            background:COLORS.surface,
-            color:COLORS.text,
-            border:`1px solid ${COLORS.border}`
-          }}
-        >
-          <option value="falta">Falta</option>
-          <option value="comprados">Comprados</option>
-        </select>
+        <div style={{
+          margin:"12px 0",
+          padding:12,
+          borderRadius:10,
+          background:COLORS.surface,
+          border:`1px solid ${COLORS.border}`
+        }}>
+          <b style={{ color: COLORS.accent }}>📦 Estado de producción</b>
+          <div style={{ fontSize:12, color:COLORS.muted, margin:"4px 0 10px" }}>
+            Se actualiza desde Producción. En Notas de Venta no se edita manualmente para evitar diferencias.
+          </div>
 
-        <label>Proceso</label>
-        <select
-          value={proceso}
-          onChange={(e) => setProceso(e.target.value)}
-          style={{
-            width:"100%",
-            padding:10,
-            margin:"6px 0 12px",
-            borderRadius:8,
-            background:COLORS.surface,
-            color:COLORS.text,
-            border:`1px solid ${COLORS.border}`
-          }}
-        >
-          <option value="en espera">En espera</option>
-          <option value="en producción">En producción</option>
-          <option value="terminado">Terminado</option>
-          <option value="entregado">Entregado</option>
-        </select>
+          <div style={{ display:"grid", gap:6, fontSize:13, marginBottom:10 }}>
+            {[
+              ["MDF cortado", nota.mdf_cortado],
+              ["Lámina cortada", nota.lamina_cortada],
+              ["Tupizado", nota.tupizado],
+              ["Armado", nota.armado],
+              ["Pegado", nota.pegado],
+              ["Postformado", nota.postformado],
+              ["Media caña", nota.media_cana],
+            ].map(([nombre, listo]) => (
+              <div key={nombre} style={{ display:"flex", justifyContent:"space-between", borderBottom:`1px solid ${COLORS.border}`, paddingBottom:4 }}>
+                <span>{nombre}</span>
+                <b style={{ color:listo ? COLORS.success : COLORS.muted }}>{listo ? "✓" : "—"}</b>
+              </div>
+            ))}
+          </div>
+
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
+            <div style={{
+              padding:10,
+              borderRadius:8,
+              background:COLORS.card,
+              border:`1px solid ${COLORS.border}`
+            }}>
+              <div style={{ fontSize:11, color:COLORS.muted, textTransform:"uppercase" }}>Materiales</div>
+              <div style={{ color: materiales === "comprados" ? COLORS.success : COLORS.warning, fontWeight:800 }}>
+                {materiales === "comprados" ? "Comprados" : (nota.mdf_cortado ? "Falta lámina" : "Falta")}
+              </div>
+            </div>
+
+            <div style={{
+              padding:10,
+              borderRadius:8,
+              background:COLORS.card,
+              border:`1px solid ${COLORS.border}`
+            }}>
+              <div style={{ fontSize:11, color:COLORS.muted, textTransform:"uppercase" }}>Proceso</div>
+              <div style={{ color:estadoProd.color, fontWeight:800 }}>
+                {estadoProd.texto}
+              </div>
+            </div>
+          </div>
+        </div>
 
         <label>Observaciones</label>
         <textarea
@@ -4491,20 +4509,45 @@ if (!errorDocumentosTrabajadores) {
   const [modalContabilidad, setModalContabilidad] = useState(null);
   const [modalGestionContable, setModalGestionContable] = useState(null);
   const [mesContabilidad, setMesContabilidad] = useState(new Date().toISOString().slice(0, 7));
+  const [mesCxc, setMesCxc] = useState(new Date().toISOString().slice(0, 7));
   const [busquedaContabilidad, setBusquedaContabilidad] = useState("");
   const [cartolaMovimientos, setCartolaMovimientos] = useState([]);
   const [mesCartola, setMesCartola] = useState(new Date().toISOString().slice(0, 7));
+  const mesActual = new Date().toISOString().slice(0, 7);
+
+  const cambiarMesSimple = (mes, delta) => {
+  const [year, month] = mes.split("-").map(Number);
+  const fecha = new Date(year, month - 1 + delta, 1);
+  return `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, "0")}`;
+};
   const [busquedaCartola, setBusquedaCartola] = useState("");
+  const [modalClasificarCartola, setModalClasificarCartola] = useState(null);
+  const [categoriaCartolaSeleccionada, setCategoriaCartolaSeleccionada] = useState("");
+  const [busquedaCategoriaCartola, setBusquedaCategoriaCartola] = useState("");
+  const [busquedaCxcCartola, setBusquedaCxcCartola] = useState("");
+  const [cxcSeleccionadaCartola, setCxcSeleccionadaCartola] = useState(null);
+  const [tipoAbonoCartola, setTipoAbonoCartola] = useState("abono");
+  const [clientesCreditoAutorizado, setClientesCreditoAutorizado] = useState([]);
   const [mesCalendario, setMesCalendario] = useState(new Date().toISOString().slice(0, 7));
   const [cuentasPagar, setCuentasPagar] = useState([]);
   const [abonosCuentasPagar, setAbonosCuentasPagar] = useState([]);
   const [modalCuentaPagar, setModalCuentaPagar] = useState(false);
   const [modalAbonoCuentaPagar, setModalAbonoCuentaPagar] = useState(null);
+  const [modalAbonoCxc, setModalAbonoCxc] = useState(null);
   const [trabajadores, setTrabajadores] = useState([]);
   const [documentosTrabajadores, setDocumentosTrabajadores] = useState([]);
   const [modalTrabajador, setModalTrabajador] = useState(false);
   const [trabajadorArchivo, setTrabajadorArchivo] = useState(null);
   
+
+  useEffect(() => {
+    try {
+      const guardados = localStorage.getItem("sf-clientes-credito-autorizado");
+      if (guardados) setClientesCreditoAutorizado(JSON.parse(guardados));
+    } catch (e) {
+      console.warn("No se pudo leer clientes con crédito autorizado", e);
+    }
+  }, []);
 
   // Cargar seguimiento desde Supabase (con fallback a localStorage).
   // Tabla esperada: seguimiento_cotizaciones (columnas: numero text, entries jsonb)
@@ -4560,7 +4603,7 @@ if (!errorDocumentosTrabajadores) {
 
   // ============= AUTENTICACIÓN DE USUARIOS =============
   // Lista de secciones que requieren rol admin (control total)
-  const SECCIONES_ADMIN = ["control_calidad", "cartola", "contabilidad", "rrhh"];
+  const SECCIONES_ADMIN = ["control_calidad", "cartola", "cxc", "contabilidad", "rrhh"];
 
   // Verificar sesión guardada al cargar
   useEffect(() => {
@@ -5031,18 +5074,20 @@ if (!errorDocumentosTrabajadores) {
   const calcularMetricasResumen = (rango) => {
     const cotizacionesPeriodo = cotizaciones.filter(c => estaEnRangoResumen(c.fecha, rango));
     const notasPeriodo = notasVenta.filter(n => estaEnRangoResumen(n.fecha, rango));
-    const convertedPeriodo = new Set(notasPeriodo.filter(n => n.cotizacion).map(n => n.cotizacion));
+    const barranesPeriodo = barranes.filter(n => estaEnRangoResumen(n.fecha, rango));
+    const ventasPeriodo = [...notasPeriodo, ...barranesPeriodo];
+    const convertedPeriodo = new Set(ventasPeriodo.filter(n => n.cotizacion).map(n => n.cotizacion));
     const cotizacionesConEstado = cotizacionesPeriodo.map(q => ({ ...q, status: getStatus(q, convertedPeriodo) }));
     const vendidasPeriodo = cotizacionesConEstado.filter(q => q.status === "vendida");
     const activasPeriodo = cotizacionesConEstado.filter(q => q.status === "activa");
     const urgentesPeriodo = cotizacionesConEstado.filter(q => q.status === "urgente");
     const vencidasPeriodo = cotizacionesConEstado.filter(q => q.status === "vencida");
     const montoCotizado = cotizacionesPeriodo.reduce((s,q) => s + Number(q.total || 0), 0);
-    const montoVendido = notasPeriodo.reduce((s,n) => s + Number(n.total || 0), 0);
+    const montoVendido = ventasPeriodo.reduce((s,n) => s + Number(n.total || 0), 0);
     const conversion = cotizacionesPeriodo.length > 0 ? Number((vendidasPeriodo.length / cotizacionesPeriodo.length * 100).toFixed(1)) : 0;
     const clientesCotizados = new Set(cotizacionesPeriodo.map(c => String(c.cliente || "").trim()).filter(Boolean));
-    const clientesVendidos = new Set(notasPeriodo.map(n => String(n.cliente || "").trim()).filter(Boolean));
-    const ventasPorCliente = notasPeriodo.reduce((acc, n) => {
+    const clientesVendidos = new Set(ventasPeriodo.map(n => String(n.cliente || "").trim()).filter(Boolean));
+    const ventasPorCliente = ventasPeriodo.reduce((acc, n) => {
       const cliente = String(n.cliente || "Sin cliente").trim() || "Sin cliente";
       if (!acc[cliente]) acc[cliente] = { cliente, cantidad:0, total:0 };
       acc[cliente].cantidad += 1;
@@ -5051,9 +5096,67 @@ if (!errorDocumentosTrabajadores) {
     }, {});
     const topClientes = Object.values(ventasPorCliente).sort((a,b) => b.total - a.total).slice(0, 10);
 
+    const montoCotizadoVendido = montoVendido;
+    const conversionMonto = montoCotizado > 0 ? Number((montoVendido / montoCotizado * 100).toFixed(1)) : 0;
+
+    const sumarEstado = (estado) => cotizacionesConEstado
+      .filter(q => q.status === estado)
+      .reduce((s,q) => s + Number(q.total || 0), 0);
+
+    const embudoDinero = [
+      { key:"vendida", label:"Vendidas", cantidad:vendidasPeriodo.length, monto:sumarEstado("vendida"), color:COLORS.success },
+      { key:"activa", label:"Activas", cantidad:activasPeriodo.length, monto:sumarEstado("activa"), color:"#5a8abe" },
+      { key:"urgente", label:"Seguimiento", cantidad:urgentesPeriodo.length, monto:sumarEstado("urgente"), color:COLORS.warning },
+      { key:"vencida", label:"Vencidas", cantidad:vencidasPeriodo.length, monto:sumarEstado("vencida"), color:"#9a7aaa" },
+    ];
+
+    const tramosBase = [
+      { key:"hasta_100", label:"Hasta $100.000", min:0, max:100000 },
+      { key:"100_250", label:"$100.001 - $250.000", min:100001, max:250000 },
+      { key:"250_500", label:"$250.001 - $500.000", min:250001, max:500000 },
+      { key:"500_1m", label:"$500.001 - $1.000.000", min:500001, max:1000000 },
+      { key:"mas_1m", label:"Más de $1.000.000", min:1000001, max:Infinity },
+    ];
+
+    const conversionPorTramo = tramosBase.map((t) => {
+      const items = cotizacionesConEstado.filter(q => {
+        const total = Number(q.total || 0);
+        return total >= t.min && total <= t.max;
+      });
+      const vendidasTramo = items.filter(q => q.status === "vendida");
+      const montoTramo = items.reduce((s,q) => s + Number(q.total || 0), 0);
+      const montoVendidoTramo = vendidasTramo.reduce((s,q) => s + Number(q.total || 0), 0);
+      return {
+        ...t,
+        cantidad:items.length,
+        vendidas:vendidasTramo.length,
+        conversion:items.length ? Number((vendidasTramo.length / items.length * 100).toFixed(1)) : 0,
+        monto:montoTramo,
+        montoVendido:montoVendidoTramo,
+        conversionMonto:montoTramo ? Number((montoVendidoTramo / montoTramo * 100).toFixed(1)) : 0,
+      };
+    });
+
+    const cierres = vendidasPeriodo.map((q) => {
+      const fechaCot = obtenerFechaValida(q.fecha);
+      const nv = notasPeriodo
+        .filter(n => String(n.cotizacion) === String(q.numero))
+        .map(n => ({ ...n, fechaObj: obtenerFechaValida(n.fecha) }))
+        .filter(n => n.fechaObj && fechaCot)
+        .sort((a,b) => a.fechaObj - b.fechaObj)[0];
+      if (!fechaCot || !nv?.fechaObj) return null;
+      return Math.max(0, Math.round((nv.fechaObj - fechaCot) / (1000 * 60 * 60 * 24)));
+    }).filter(v => v !== null);
+
+    const diasPromedioCierre = cierres.length
+      ? Number((cierres.reduce((s,d) => s + d, 0) / cierres.length).toFixed(1))
+      : 0;
+
     return {
       cotizacionesPeriodo,
       notasPeriodo,
+      barranesPeriodo,
+      ventasPeriodo,
       cotizacionesConEstado,
       vendidasPeriodo,
       activasPeriodo,
@@ -5062,8 +5165,13 @@ if (!errorDocumentosTrabajadores) {
       montoCotizado,
       montoVendido,
       conversion,
+      conversionMonto,
+      montoCotizadoVendido,
+      embudoDinero,
+      conversionPorTramo,
+      diasPromedioCierre,
       ticketCotizado: cotizacionesPeriodo.length ? Math.round(montoCotizado / cotizacionesPeriodo.length) : 0,
-      ticketVendido: notasPeriodo.length ? Math.round(montoVendido / notasPeriodo.length) : 0,
+      ticketVendido: ventasPeriodo.length ? Math.round(montoVendido / ventasPeriodo.length) : 0,
       clientesCotizados: clientesCotizados.size,
       clientesVendidos: clientesVendidos.size,
       topClientes
@@ -5178,6 +5286,15 @@ const mesSeleccionadoTexto = nombreMes(mesFiltro);
     const p2={x:cx+r2*Math.cos(toRad(e)),y:cy+r2*Math.sin(toRad(e))};
     return `M ${p1.x} ${p1.y} A ${r2} ${r2} 0 ${e-s>180?1:0} 1 ${p2.x} ${p2.y}`;
   };
+  const conteoCotizacionesEnNV = [...notas, ...barranes].reduce((acc, nv) => {
+  const cot = String(nv.cotizacion || "").trim();
+
+  if (!cot) return acc;
+
+  acc[cot] = (acc[cot] || 0) + 1;
+
+  return acc;
+}, {});
   const fillEnd=startA+sweepA*(rate/100);
 
   const guardarEdicionCompletaCotizacion = async ({ cotizacionOriginal, cotizacionEditada, detallesEditados }) => {
@@ -5461,14 +5578,19 @@ const mesSeleccionadoTexto = nombreMes(mesFiltro);
 };
   
 const marcarComoEntregadaProduccion = async (nota) => {
-  const confirmar = await confirmDialog(`¿Marcar ${((nota.tipo_documento || "nv") === "barran" ? "Barrán" : "NV")} ${nota.numero} como entregada?\n\nDesaparecerá del listado de Producción.`);
+  const confirmar = await confirmDialog(`¿Marcar ${((nota.tipo_documento || "nv") === "barran" ? "Barrán" : "NV")} ${nota.numero} como entregada?
+
+Desaparecerá del listado de Producción y también aparecerá como ENTREGADA en Notas de Venta.`);
   if (!confirmar) return;
 
   const idReal = Number(String(nota.id).replace("supabase-", ""));
 
   const { error } = await supabase
     .from("notas_venta")
-    .update({ proceso: "entregado" })
+    .update({
+      proceso: "entregado",
+      materiales: "comprados"
+    })
     .eq("id", idReal);
 
   if (error) {
@@ -5478,7 +5600,7 @@ const marcarComoEntregadaProduccion = async (nota) => {
   }
 
   setNotas(prev => prev.map(n =>
-    n.id === nota.id ? { ...n, proceso: "entregado" } : n
+    n.id === nota.id ? { ...n, proceso: "entregado", materiales: "comprados" } : n
   ));
 
   setModalProduccion(null);
@@ -5487,6 +5609,9 @@ const marcarComoEntregadaProduccion = async (nota) => {
 const guardarProduccion = async (notaActualizada) => {
   const idReal = Number(String(notaActualizada.id).replace("supabase-", ""));
   const procesoAutomatico = calcularProcesoDesdeAvance(notaActualizada);
+  const materialesAutomaticos = notaActualizada.lamina_cortada || procesoAutomatico === "entregado"
+    ? "comprados"
+    : "falta";
 
   const { error } = await supabase
     .from("notas_venta")
@@ -5500,6 +5625,7 @@ const guardarProduccion = async (notaActualizada) => {
       pegado: notaActualizada.pegado,
       postformado: notaActualizada.postformado,
       media_cana: notaActualizada.media_cana,
+      materiales: materialesAutomaticos,
       proceso: procesoAutomatico,
     })
     .eq("id", idReal);
@@ -5512,7 +5638,7 @@ const guardarProduccion = async (notaActualizada) => {
 
   setNotas(notas.map(n =>
     n.id === notaActualizada.id
-      ? { ...n, ...notaActualizada, proceso: procesoAutomatico }
+      ? { ...n, ...notaActualizada, materiales: materialesAutomaticos, proceso: procesoAutomatico }
       : n
   ));
 
@@ -5778,67 +5904,241 @@ const actualizarMovimientoCartola = async (movimiento, cambios) => {
   return data;
 };
 
-const registrarCartolaComoAbonoNV = async (movimiento) => {
-  const monto = Number(movimiento.abono || 0);
-  if (!monto) {
-    toast("Este movimiento no tiene abono/ingreso para asociar a una NV.");
-    return;
+const registrarAbonoDocumento = async ({
+  nota,
+  monto,
+  fecha,
+  medioPago = "transferencia",
+  tipoAbono = "abono",
+  observacion = "",
+  movimiento = null
+}) => {
+  if (!nota) {
+    toast("Selecciona una NV o Barrán para registrar el abono.", "warning");
+    return false;
   }
 
-  const numero = window.prompt("Escribe el número de NV o Barrán al que corresponde este abono:");
-  if (!numero) return;
-
-  const nota = notas.find(n => String(n.numero) === String(numero).trim());
-  if (!nota) {
-    toast("No encontré esa NV/Barrán en la app.");
-    return;
+  const montoBase = Math.round(Number(monto || 0));
+  if (!montoBase || montoBase <= 0) {
+    toast("El monto del abono debe ser mayor a cero.", "warning");
+    return false;
   }
 
   const idReal = Number(String(nota.id).replace("supabase-", ""));
-  const observacion = `Abono registrado desde cartola bancaria. ${movimiento.descripcion || ""}`;
+  const abonosExistentes = abonosNV.filter(a => Number(a.nota_venta_id) === idReal);
+  const abonadoAntes = abonosExistentes.reduce((sum, a) => sum + Number(a.monto || 0), 0);
+  const totalDocumento = Math.round(Number(nota.total || 0));
+  const saldoAntes = Math.max(totalDocumento - abonadoAntes, 0);
+
+  const etiquetasTipoAbono = {
+    abono_inicial: "Abono inicial",
+    abono: "Abono parcial",
+    abono_retiro_parcial: "Abono retiro parcial",
+    abono_saldo: "Abono saldo"
+  };
+
+  let registros = [{
+    monto: montoBase,
+    fecha: fecha || new Date().toISOString().split("T")[0],
+    medio_pago: medioPago,
+    observacion: `${etiquetasTipoAbono[tipoAbono] || "Abono"}${observacion ? ` · ${observacion}` : ""}`.trim()
+  }];
+
+  const saldoDespues = Math.max(saldoAntes - montoBase, 0);
+
+  if (saldoDespues > 0 && saldoDespues <= 99) {
+    const cerrar = await confirmDialog(
+      `Queda un saldo de ${fmt(saldoDespues)}.\n\n¿Deseas cerrar la venta con ajuste comercial?`
+    );
+
+    if (cerrar) {
+      registros.push({
+        monto: saldoDespues,
+        fecha: fecha || new Date().toISOString().split("T")[0],
+        medio_pago: "ajuste",
+        observacion: `Ajuste comercial automático por diferencia menor o igual a $99. Saldo ajustado: ${fmt(saldoDespues)}`
+      });
+    }
+  } else if (tipoAbono === "abono_saldo" && saldoDespues > 99) {
+    const confirmar = await confirmDialog(
+      `Este abono no cubre todo el saldo.\n\nSaldo pendiente después del abono: ${fmt(saldoDespues)}.\n\n¿Deseas registrarlo igualmente como abono parcial?`
+    );
+    if (!confirmar) return false;
+    registros = registros.map(r => ({
+      ...r,
+      observacion: r.observacion.replace("Abono saldo", "Abono parcial")
+    }));
+  }
+
+  const payload = registros.map(r => ({
+    nota_venta_id: idReal,
+    monto: r.monto,
+    fecha: r.fecha,
+    medio_pago: r.medio_pago,
+    observacion: r.observacion
+  }));
 
   const { error: errorInsert } = await supabase
     .from("abonos_nv")
-    .insert({
-      nota_venta_id:idReal,
-      monto,
-      fecha:movimiento.fecha,
-      medio_pago:"transferencia",
-      observacion
-    });
+    .insert(payload);
 
   if (errorInsert) {
     console.error(errorInsert);
-    toast("No se pudo registrar el abono en la NV/Barrán.");
-    return;
+    toast("No se pudo registrar el abono.", "error");
+    return false;
   }
 
-  const { data: abonosActualizados } = await supabase
+  const { data: abonosActualizados, error: errorAbonos } = await supabase
     .from("abonos_nv")
     .select("*")
     .eq("nota_venta_id", idReal);
 
-  const totalAbonado = (abonosActualizados || []).reduce((sum, a) => sum + Number(a.monto || 0), 0);
-  const total = Number(nota.total || 0);
-  const estadoPago = totalAbonado >= total && total > 0 ? "pagada" : totalAbonado > 0 ? "abonada" : "pendiente";
+  if (errorAbonos) {
+    console.error(errorAbonos);
+  }
+
+  const totalAbonado = (abonosActualizados || [...abonosExistentes, ...payload])
+    .reduce((sum, a) => sum + Number(a.monto || 0), 0);
+
+  const estadoPago = totalAbonado >= totalDocumento && totalDocumento > 0
+    ? "pagada"
+    : totalAbonado > 0
+    ? "abonada"
+    : "pendiente";
 
   await supabase
     .from("notas_venta")
-    .update({ abono:totalAbonado, estado_pago:estadoPago })
+    .update({ abono: totalAbonado, estado_pago: estadoPago })
     .eq("id", idReal);
 
   await crearAsientoAbonoNVAutomatico({
-    fecha:movimiento.fecha,
-    numero:nota.numero,
-    cliente:nota.cliente,
-    monto,
-    medioPago:"transferencia",
-    tipoDocumento:nota.tipo_documento || "nv"
+    fecha: fecha || new Date().toISOString().split("T")[0],
+    numero: nota.numero,
+    cliente: nota.cliente,
+    monto: montoBase,
+    medioPago,
+    tipoDocumento: nota.tipo_documento || "nv"
   });
 
-  setAbonosNV(prev => [...prev.filter(a => a.nota_venta_id !== idReal), ...(abonosActualizados || [])]);
-  setNotas(prev => prev.map(n => n.id === nota.id ? { ...n, abono:totalAbonado, estado_pago:estadoPago } : n));
-  await actualizarMovimientoCartola(movimiento, { estado:"conciliado", categoria:"Abono cliente", nota_venta_id:idReal });
+  setAbonosNV(prev => [...prev.filter(a => Number(a.nota_venta_id) !== idReal), ...(abonosActualizados || payload)]);
+  setNotas(prev => prev.map(n => n.id === nota.id ? { ...n, abono: totalAbonado, estado_pago: estadoPago } : n));
+
+  if (movimiento) {
+    await actualizarMovimientoCartola(movimiento, {
+      estado: "conciliado",
+      categoria: "Abono CxC",
+      nota_venta_id: idReal
+    });
+  }
+
+  toast(`Abono registrado en ${(nota.tipo_documento || "nv") === "barran" ? "Barrán" : "NV"} #${nota.numero}.`, "success");
+  return true;
+};
+
+const registrarCartolaComoAbonoNV = async (movimiento) => {
+  setModalClasificarCartola(movimiento);
+  setCategoriaCartolaSeleccionada("Abono CxC");
+  setBusquedaCategoriaCartola("");
+  setBusquedaCxcCartola("");
+  setCxcSeleccionadaCartola(null);
+  setTipoAbonoCartola("abono");
+};
+
+const abrirClasificacionCartola = (movimiento) => {
+  setModalClasificarCartola(movimiento);
+  setCategoriaCartolaSeleccionada("");
+  setBusquedaCategoriaCartola("");
+  setBusquedaCxcCartola("");
+  setCxcSeleccionadaCartola(null);
+  setTipoAbonoCartola(Number(movimiento?.abono || 0) > 0 ? "abono" : "");
+};
+
+const cerrarClasificacionCartola = () => {
+  setModalClasificarCartola(null);
+  setCategoriaCartolaSeleccionada("");
+  setBusquedaCategoriaCartola("");
+  setBusquedaCxcCartola("");
+  setCxcSeleccionadaCartola(null);
+  setTipoAbonoCartola("abono");
+};
+
+const guardarClasificacionCartola = async () => {
+  const movimiento = modalClasificarCartola;
+  if (!movimiento) return;
+
+  const categoria = String(categoriaCartolaSeleccionada || "").trim();
+  if (!categoria) {
+    toast("Selecciona una categoría.", "warning");
+    return;
+  }
+
+  if (categoria === "Abono CxC") {
+    const monto = Number(movimiento.abono || 0);
+    if (!monto) {
+      toast("Este movimiento no tiene abono/ingreso para asociar a una CxC.", "warning");
+      return;
+    }
+
+    if (!cxcSeleccionadaCartola) {
+      toast("Selecciona la NV o Barrán al que corresponde el abono.", "warning");
+      return;
+    }
+
+    const ok = await registrarAbonoDocumento({
+      nota: cxcSeleccionadaCartola.nota,
+      monto,
+      fecha: movimiento.fecha,
+      medioPago: "transferencia",
+      tipoAbono: tipoAbonoCartola || "abono",
+      observacion: `Registrado desde cartola bancaria. ${movimiento.descripcion || ""}`,
+      movimiento
+    });
+
+    if (ok) cerrarClasificacionCartola();
+    return;
+  }
+
+  await actualizarMovimientoCartola(movimiento, {
+    estado: "conciliado",
+    categoria
+  });
+
+  toast(`Movimiento clasificado como ${categoria}.`, "success");
+  cerrarClasificacionCartola();
+};
+
+const normalizarClienteCredito = (cliente) =>
+  String(cliente || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+
+const clienteTieneCreditoAutorizado = (cliente) => {
+  const clave = normalizarClienteCredito(cliente);
+  return clientesCreditoAutorizado.some(c => normalizarClienteCredito(c) === clave);
+};
+
+const toggleCreditoAutorizadoCliente = async (cliente) => {
+  const nombre = String(cliente || "").trim();
+  if (!nombre) return;
+
+  const yaExiste = clienteTieneCreditoAutorizado(nombre);
+  const nuevos = yaExiste
+    ? clientesCreditoAutorizado.filter(c => normalizarClienteCredito(c) !== normalizarClienteCredito(nombre))
+    : [...clientesCreditoAutorizado, nombre];
+
+  setClientesCreditoAutorizado(nuevos);
+  try {
+    localStorage.setItem("sf-clientes-credito-autorizado", JSON.stringify(nuevos));
+  } catch (e) {}
+
+  toast(
+    yaExiste
+      ? `${nombre} ya no está marcado con crédito autorizado.`
+      : `${nombre} quedó marcado con crédito autorizado.`,
+    yaExiste ? "info" : "success"
+  );
 };
 
 const registrarCartolaComoPagoCuenta = async (movimiento) => {
@@ -7398,32 +7698,113 @@ const resumenContabilidad = asientosContablesFiltrados.reduce((acc, a) => {
 }, { debe:0, haber:0, ivaCf:0, ivaDf:0, banco:0, caja:0, cxc:0 });
 
 const diferenciaContabilidad = resumenContabilidad.debe - resumenContabilidad.haber;
-const detalleCxcNotas = notas
-  .filter(n => !mesContabilidad || obtenerMesFecha(n.fecha) === mesContabilidad)
+
+const calcularAbonadoDocumento = (nota) => {
+  const idNota = Number(String(nota.id).replace("supabase-", ""));
+  const abonadoDesdeNota = Number(nota.abono || nota.abonado || 0);
+  const abonadoDesdeHistorial = abonosNV
+    .filter(a => Number(a.nota_venta_id) === idNota)
+    .reduce((sum, a) => sum + Number(a.monto || 0), 0);
+  return Math.max(abonadoDesdeNota, abonadoDesdeHistorial);
+};
+
+const obtenerEstadoCxc = (nota, saldo) => {
+  if (saldo <= 0) return { key:"pagada", label:"Pagada", icon:"🟢", color:COLORS.success };
+  const entregada = String(nota.proceso || "").toLowerCase() === "entregado";
+  if (entregada && clienteTieneCreditoAutorizado(nota.cliente)) {
+    return { key:"credito_autorizado", label:"Crédito autorizado", icon:"🟣", color:"#a78bfa" };
+  }
+  if (entregada) {
+    return { key:"entregada_por_confirmar", label:"Entregada por confirmar", icon:"🔴", color:COLORS.danger };
+  }
+  return { key:"saldo_pendiente", label:"Saldo pendiente", icon:"🟡", color:COLORS.warning };
+};
+
+const detalleCxcNotasTodas = notas
   .map(n => {
-    const idNota = Number(String(n.id).replace("supabase-", ""));
-
     const total = Number(n.total || 0);
-
-    const abonadoDesdeNota = Number(n.abono || n.abonado || 0);
-
-    const abonadoDesdeHistorial = abonosNV
-      .filter(a => Number(a.nota_venta_id) === idNota)
-      .reduce((sum, a) => sum + Number(a.monto || 0), 0);
-
-    const abonado = Math.max(abonadoDesdeNota, abonadoDesdeHistorial);
-
+    const abonado = calcularAbonadoDocumento(n);
     const saldo = Math.max(total - abonado, 0);
+    const estado = obtenerEstadoCxc(n, saldo);
+    const tipo = (n.tipo_documento || "nv") === "barran" ? "Barrán" : "NV";
+    const detalles = detallesNotasVenta.filter(d => String(d.nota_venta_numero) === String(n.numero));
 
     return {
+      nota: n,
+      id: n.id,
       numero: n.numero || n.nota_venta || n.id,
+      tipo,
       cliente: n.cliente || "Sin cliente",
-      saldo
+      fecha: n.fecha,
+      total,
+      abonado,
+      saldo,
+      estado,
+      proceso: n.proceso || "en espera",
+      fechaEntrega: n.fecha_entrega_estimada || "",
+      detalles,
+      detalleTexto: detalles.slice(0, 2).map(d => `${d.cantidad || 0} x ${d.descripcion || d.material || "item"} ${d.color ? `· ${d.color}` : ""}`).join(" | ")
     };
   })
   .filter(n => n.saldo > 0);
 
+const detalleCxcNotas = detalleCxcNotasTodas.filter(n =>
+  String(n.fecha || "").slice(0, 7) === mesCxc
+);
+
 const totalCxcNotas = detalleCxcNotas.reduce((sum, n) => sum + Number(n.saldo || 0), 0);
+const cxcSaldosPendientes = detalleCxcNotas.filter(n => n.estado.key === "saldo_pendiente");
+const cxcEntregadasPorConfirmar = detalleCxcNotas.filter(n => n.estado.key === "entregada_por_confirmar");
+const cxcCreditoAutorizado = detalleCxcNotas.filter(n => n.estado.key === "credito_autorizado");
+
+const totalCxcSaldosPendientes = cxcSaldosPendientes.reduce((sum, n) => sum + Number(n.saldo || 0), 0);
+const totalCxcEntregadasPorConfirmar = cxcEntregadasPorConfirmar.reduce((sum, n) => sum + Number(n.saldo || 0), 0);
+const totalCxcCreditoAutorizado = cxcCreditoAutorizado.reduce((sum, n) => sum + Number(n.saldo || 0), 0);
+
+const detalleCxcFiltrado = detalleCxcNotas.filter(item => {
+  const q = String(busquedaCxcCartola || "").toLowerCase().trim();
+  if (!q) return true;
+  return [
+    item.numero,
+    item.tipo,
+    item.cliente,
+    item.fecha,
+    item.estado.label,
+    item.detalleTexto
+  ].join(" ").toLowerCase().includes(q);
+});
+
+const categoriasCartola = [
+  { nombre:"Abono CxC", tipo:"ingreso", descripcion:"Pago de cliente asociado a NV o Barrán" },
+  { nombre:"Préstamo socio", tipo:"ingreso", descripcion:"Dinero aportado por Franco/familia para caja" },
+  { nombre:"Venta sin documento", tipo:"ingreso", descripcion:"Ingreso no asociado a CxC" },
+  { nombre:"Factura compra", tipo:"egreso", descripcion:"Compra facturada; se considera flujo, no duplica resumen SII" },
+  { nombre:"Compra sin factura", tipo:"egreso", descripcion:"Compra o gasto sin documento tributario" },
+  { nombre:"Remuneraciones", tipo:"egreso", descripcion:"Sueldos y pagos a trabajadores" },
+  { nombre:"Imposiciones", tipo:"egreso", descripcion:"Previred, AFP, salud, cesantía" },
+  { nombre:"Arriendo", tipo:"egreso", descripcion:"Arriendo local/bodega" },
+  { nombre:"Bencina", tipo:"egreso", descripcion:"Combustible" },
+  { nombre:"TAG", tipo:"egreso", descripcion:"Autopistas" },
+  { nombre:"Servicios básicos", tipo:"egreso", descripcion:"Luz, agua, internet, telefonía" },
+  { nombre:"Deuda antigua", tipo:"egreso", descripcion:"Pagos de deudas históricas" },
+  { nombre:"Retiro socio", tipo:"egreso", descripcion:"Retiros personales o familiares" },
+  { nombre:"Transferencia interna", tipo:"neutro", descripcion:"Movimiento entre cuentas propias" },
+  { nombre:"No sumar", tipo:"neutro", descripcion:"Movimiento duplicado o que no corresponde analizar" },
+  { nombre:"Otro", tipo:"otro", descripcion:"Clasificación manual general" }
+];
+
+const categoriasCartolaFiltradas = categoriasCartola.filter(c => {
+  const q = busquedaCategoriaCartola.toLowerCase().trim();
+  if (!q) return true;
+  return `${c.nombre} ${c.descripcion}`.toLowerCase().includes(q);
+});
+
+const opcionesCxcCartola = detalleCxcNotas.filter(item => {
+  const q = busquedaCxcCartola.toLowerCase().trim();
+  if (!q) return true;
+  return `${item.tipo} ${item.numero} ${item.cliente} ${item.saldo} ${item.detalleTexto}`.toLowerCase().includes(q);
+});
+
 const eliminarVentaLaminas = async (venta) => {
   const confirmar = await confirmDialog(
     `¿Seguro que quieres eliminar la venta de láminas #${venta.numero}?
@@ -7677,6 +8058,22 @@ const renderTarjetaProduccion = (n) => (
   const totalIngresosCartola = cartolaFiltrada.reduce((sum, m) => sum + Number(m.abono || 0), 0);
   const totalEgresosCartola = cartolaFiltrada.reduce((sum, m) => sum + Number(m.cargo || 0), 0);
 
+  const resumenFinancieroCartola = cartolaFiltrada.reduce((acc, m) => {
+    const categoria = String(m.categoria || "Por revisar");
+    const cargo = Number(m.cargo || 0);
+    const abono = Number(m.abono || 0);
+
+    if (!acc[categoria]) acc[categoria] = { categoria, ingresos:0, egresos:0, movimientos:0 };
+    acc[categoria].ingresos += abono;
+    acc[categoria].egresos += cargo;
+    acc[categoria].movimientos += 1;
+
+    return acc;
+  }, {});
+
+  const resumenCartolaCategorias = Object.values(resumenFinancieroCartola)
+    .sort((a, b) => (b.ingresos + b.egresos) - (a.ingresos + a.egresos));
+
   const tabsPublicos=[
     {key:"produccion",label:`🏭 Producción`},
     {key:"inventario",label:`📦 Inventario`},
@@ -7692,6 +8089,7 @@ const renderTarjetaProduccion = (n) => (
   const tabsAdmin=[
     {key:"control_calidad",label:`🔍 Control de Calidad (${erroresProduccion.length})`},
     {key:"cartola",label:`🏦 Cartola (${cartolaPorRevisar.length})`},
+    {key:"cxc",label:`💰 CxC (${detalleCxcNotas.length})`},
     {key:"contabilidad",label:`📚 Contabilidad (${asientosContablesFiltrados.length})`},
     {key:"rrhh",label:`👷 RRHH (${trabajadores.length})`},
   ];
@@ -7957,10 +8355,12 @@ const renderTarjetaProduccion = (n) => (
 
             <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))", gap:12, marginBottom:20 }}>
               <StatCard label="Conversión" value={`${resumenActual.conversion}%`} sub={`${resumenActual.vendidasPeriodo.length} de ${resumenActual.cotizacionesPeriodo.length} cotizaciones`} icon="🎯" color={COLORS.accent}/>
+              <StatCard label="Conversión monto" value={`${resumenActual.conversionMonto}%`} sub={`${fmt(resumenActual.montoVendido)} vendido de ${fmt(resumenActual.montoCotizado)} cotizado`} icon="💰" color={COLORS.success}/>
+              <StatCard label="Días cierre" value={`${resumenActual.diasPromedioCierre}`} sub="Promedio cotización → NV" icon="⏱️" color={COLORS.warning}/>
               <StatCard label="Cotizaciones" value={resumenActual.cotizacionesPeriodo.length} sub={fmt(resumenActual.montoCotizado)} icon="📄" color="#5a8abe"/>
-              <StatCard label="Notas de venta" value={resumenActual.notasPeriodo.length} sub={fmt(resumenActual.montoVendido)} icon="🧾" color={COLORS.success}/>
+              <StatCard label="Ventas registradas" value={resumenActual.ventasPeriodo.length} sub={`${fmt(resumenActual.montoVendido)} (NV + barranes)`} icon="🧾" color={COLORS.success}/>
               <StatCard label="Ticket cotizado" value={fmt(resumenActual.ticketCotizado)} sub="Promedio por cotización" icon="🧮" color={COLORS.warning}/>
-              <StatCard label="Ticket vendido" value={fmt(resumenActual.ticketVendido)} sub="Promedio por NV" icon="💵" color={COLORS.success}/>
+              <StatCard label="Ticket vendido" value={fmt(resumenActual.ticketVendido)} sub="Promedio por venta registrada" icon="💵" color={COLORS.success}/>
               <StatCard label="Clientes" value={resumenActual.clientesVendidos} sub={`${resumenActual.clientesCotizados} cotizados`} icon="👥" color={COLORS.accent}/>
             </div>
 
@@ -7984,6 +8384,57 @@ const renderTarjetaProduccion = (n) => (
                 </div>
               </div>
             )}
+
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(320px,1fr))", gap:16, marginBottom:20 }}>
+              <div style={{ background:COLORS.card, border:`1px solid ${COLORS.border}`, borderRadius:12, padding:18 }}>
+                <div style={{ fontSize:11, color:COLORS.muted, textTransform:"uppercase", letterSpacing:1, marginBottom:12 }}>Conversión por tramo de valor</div>
+                <div style={{ display:"grid", gap:10 }}>
+                  {resumenActual.conversionPorTramo.map(t => {
+                    const ancho = Math.max(3, Math.min(100, t.conversion));
+                    return (
+                      <div key={t.key}>
+                        <div style={{ display:"flex", justifyContent:"space-between", gap:10, fontSize:12, marginBottom:4 }}>
+                          <b style={{ color:COLORS.text }}>{t.label}</b>
+                          <span style={{ color:t.conversion >= 35 ? COLORS.success : t.conversion >= 20 ? COLORS.warning : COLORS.danger, fontWeight:800 }}>{t.conversion}%</span>
+                        </div>
+                        <div style={{ height:7, background:COLORS.subtle, borderRadius:6, overflow:"hidden" }}>
+                          <div style={{ width:`${ancho}%`, height:"100%", background:t.conversion >= 35 ? COLORS.success : t.conversion >= 20 ? COLORS.warning : COLORS.danger }}/>
+                        </div>
+                        <div style={{ display:"flex", justifyContent:"space-between", fontSize:10.5, color:COLORS.muted, marginTop:3 }}>
+                          <span>{t.vendidas} de {t.cantidad} vendidas</span>
+                          <span>{fmt(t.montoVendido)} / {fmt(t.monto)}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div style={{ background:COLORS.card, border:`1px solid ${COLORS.border}`, borderRadius:12, padding:18 }}>
+                <div style={{ fontSize:11, color:COLORS.muted, textTransform:"uppercase", letterSpacing:1, marginBottom:12 }}>Embudo comercial por dinero</div>
+                <div style={{ display:"grid", gap:10 }}>
+                  {resumenActual.embudoDinero.map(e => {
+                    const pct = resumenActual.montoCotizado > 0 ? Math.round((e.monto / resumenActual.montoCotizado) * 100) : 0;
+                    const ancho = Math.max(3, Math.min(100, pct));
+                    return (
+                      <div key={e.key}>
+                        <div style={{ display:"flex", justifyContent:"space-between", gap:10, fontSize:12, marginBottom:4 }}>
+                          <b style={{ color:e.color }}>{e.label}</b>
+                          <span style={{ color:COLORS.text, fontWeight:800 }}>{fmt(e.monto)}</span>
+                        </div>
+                        <div style={{ height:8, background:COLORS.subtle, borderRadius:6, overflow:"hidden" }}>
+                          <div style={{ width:`${ancho}%`, height:"100%", background:e.color }}/>
+                        </div>
+                        <div style={{ display:"flex", justifyContent:"space-between", fontSize:10.5, color:COLORS.muted, marginTop:3 }}>
+                          <span>{e.cantidad} cotizaciones</span>
+                          <span>{pct}% del monto cotizado</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
 
             {resumenActual.urgentesPeriodo.length>0 && (
               <div style={{ background:"#1e1500", border:`1px solid ${COLORS.warning}`, borderRadius:10, padding:"12px 16px", marginBottom:16 }}>
@@ -8432,8 +8883,45 @@ const renderTarjetaProduccion = (n) => (
   <div>
     <span style={{ fontWeight:700, color:COLORS.success, marginRight:8 }}>NV#{s.numero}</span>
     <span style={{ color:COLORS.text }}>{s.cliente}</span>
-    {s.cotizacion ? <span style={{ marginLeft:8, fontSize:11, color:COLORS.muted, background:COLORS.subtle, borderRadius:4, padding:"2px 7px" }}>← COT#{s.cotizacion}</span>
-      : <span style={{ marginLeft:8, fontSize:11, color:COLORS.warning, background:"#2a1f0a", borderRadius:4, padding:"2px 7px", border:`1px solid ${COLORS.warning}` }}>sin cotización</span>}
+    {s.cotizacion ? (
+  <span
+    title={
+      conteoCotizacionesEnNV[String(s.cotizacion || "").trim()] > 1
+        ? `Esta cotización está asociada a ${conteoCotizacionesEnNV[String(s.cotizacion || "").trim()]} notas/barranes`
+        : ""
+    }
+    style={{
+      marginLeft: 8,
+      fontSize: 11,
+      color:
+        conteoCotizacionesEnNV[String(s.cotizacion || "").trim()] > 1
+          ? "#fff"
+          : COLORS.muted,
+      background:
+        conteoCotizacionesEnNV[String(s.cotizacion || "").trim()] > 1
+          ? COLORS.danger
+          : COLORS.subtle,
+      borderRadius: 4,
+      padding: "2px 7px",
+      border:
+        conteoCotizacionesEnNV[String(s.cotizacion || "").trim()] > 1
+          ? `1px solid ${COLORS.danger}`
+          : "none",
+      fontWeight:
+        conteoCotizacionesEnNV[String(s.cotizacion || "").trim()] > 1
+          ? 800
+          : 400
+    }}
+  >
+    {conteoCotizacionesEnNV[String(s.cotizacion || "").trim()] > 1
+      ? `⚠ COT#${s.cotizacion} duplicada`
+      : `← COT#${s.cotizacion}`}
+  </span>
+) : (
+  <span style={{ marginLeft:8, fontSize:11, color:COLORS.warning, background:"#2a1f0a", borderRadius:4, padding:"2px 7px", border:`1px solid ${COLORS.warning}` }}>
+    sin cotización
+  </span>
+)}
     <span style={{ color:COLORS.muted, marginLeft:8, fontSize:11 }}>{s.fecha}</span>
   </div>
 
@@ -8573,8 +9061,45 @@ const renderTarjetaProduccion = (n) => (
   <div>
     <span style={{ fontWeight:700, color:COLORS.success, marginRight:8 }}>Barrán #{s.numero}</span>
     <span style={{ color:COLORS.text }}>{s.cliente}</span>
-    {s.cotizacion ? <span style={{ marginLeft:8, fontSize:11, color:COLORS.muted, background:COLORS.subtle, borderRadius:4, padding:"2px 7px" }}>← COT#{s.cotizacion}</span>
-      : <span style={{ marginLeft:8, fontSize:11, color:COLORS.warning, background:"#2a1f0a", borderRadius:4, padding:"2px 7px", border:`1px solid ${COLORS.warning}` }}>barrán interno</span>}
+    {s.cotizacion ? (
+  <span
+    title={
+      conteoCotizacionesEnNV[String(s.cotizacion || "").trim()] > 1
+        ? `Esta cotización está asociada a ${conteoCotizacionesEnNV[String(s.cotizacion || "").trim()]} notas/barranes`
+        : ""
+    }
+    style={{
+      marginLeft: 8,
+      fontSize: 11,
+      color:
+        conteoCotizacionesEnNV[String(s.cotizacion || "").trim()] > 1
+          ? "#fff"
+          : COLORS.muted,
+      background:
+        conteoCotizacionesEnNV[String(s.cotizacion || "").trim()] > 1
+          ? COLORS.danger
+          : COLORS.subtle,
+      borderRadius: 4,
+      padding: "2px 7px",
+      border:
+        conteoCotizacionesEnNV[String(s.cotizacion || "").trim()] > 1
+          ? `1px solid ${COLORS.danger}`
+          : "none",
+      fontWeight:
+        conteoCotizacionesEnNV[String(s.cotizacion || "").trim()] > 1
+          ? 800
+          : 400
+    }}
+  >
+    {conteoCotizacionesEnNV[String(s.cotizacion || "").trim()] > 1
+      ? `⚠ COT#${s.cotizacion} duplicada`
+      : `← COT#${s.cotizacion}`}
+  </span>
+) : (
+  <span style={{ marginLeft:8, fontSize:11, color:COLORS.warning, background:"#2a1f0a", borderRadius:4, padding:"2px 7px", border:`1px solid ${COLORS.warning}` }}>
+    barrán interno
+  </span>
+)}
     <span style={{ color:COLORS.muted, marginLeft:8, fontSize:11 }}>{s.fecha}</span>
   </div>
 
@@ -9631,19 +10156,46 @@ const renderTarjetaProduccion = (n) => (
                   <div style={{ fontSize:13, fontWeight:700, color:COLORS.accent }}>🏦 Cartola bancaria</div>
                   <div style={{ color:COLORS.muted, fontSize:12 }}>Importa Excel/CSV del banco, revisa movimientos y conviértelos en abonos, pagos o asientos.</div>
                 </div>
-                <div style={{ display:"flex", gap:8, flexWrap:"wrap", alignItems:"flex-end" }}>
-                  <div>
-                    <label style={{ display:"block", fontSize:10, color:COLORS.muted, marginBottom:5 }}>Mes cartola</label>
-                    <input type="month" value={mesCartola} onChange={e=>setMesCartola(e.target.value)} style={{ background:COLORS.surface, border:`1px solid ${COLORS.border}`, color:COLORS.text, borderRadius:8, padding:"8px 10px" }} />
-                  </div>
-                  <button onClick={() => document.getElementById("importar-cartola-bancaria")?.click()} style={{ background:COLORS.success, color:"#fff", border:"none", borderRadius:8, padding:"10px 12px", fontWeight:700, cursor:"pointer" }}>Importar cartola</button>
-                </div>
+                <div style={{ display:"flex", gap:6, alignItems:"center", flexWrap:"wrap" }}>
+  <button onClick={() => setMesCartola(cambiarMesSimple(mesCartola, -1))} style={{ background:COLORS.surface, border:`1px solid ${COLORS.border}`, color:COLORS.text, borderRadius:8, padding:"8px 10px", cursor:"pointer" }}>
+    ←
+  </button>
+
+  <input type="month" value={mesCartola} onChange={e=>setMesCartola(e.target.value)} style={{ background:COLORS.surface, border:`1px solid ${COLORS.border}`, color:COLORS.text, borderRadius:8, padding:"8px 10px" }} />
+
+  <button onClick={() => setMesCartola(cambiarMesSimple(mesCartola, 1))} style={{ background:COLORS.surface, border:`1px solid ${COLORS.border}`, color:COLORS.text, borderRadius:8, padding:"8px 10px", cursor:"pointer" }}>
+    →
+  </button>
+
+  <button onClick={() => setMesCartola(mesActual)} style={{ background:COLORS.accent, border:"none", color:"#0f0e0c", borderRadius:8, padding:"8px 10px", fontWeight:700, cursor:"pointer" }}>
+    Mes actual
+  </button>
+</div>
               </div>
 
               <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))", gap:10, marginBottom:12 }}>
                 <StatCard label="Ingresos cartola" value={fmt(totalIngresosCartola)} icon="⬆️" color={COLORS.success}/>
                 <StatCard label="Egresos cartola" value={fmt(totalEgresosCartola)} icon="⬇️" color={COLORS.danger}/>
                 <StatCard label="Por revisar" value={cartolaPorRevisar.length} icon="🔎" color={cartolaPorRevisar.length ? COLORS.warning : COLORS.success}/>
+              </div>
+
+              <div style={{ marginBottom:12, background:COLORS.surface, border:`1px solid ${COLORS.border}`, borderRadius:10, padding:12 }}>
+                <div style={{ fontSize:12, color:COLORS.accent, fontWeight:800, marginBottom:8 }}>Resumen por categoría del mes</div>
+                {resumenCartolaCategorias.length === 0 ? (
+                  <div style={{ color:COLORS.muted, fontSize:12 }}>Sin movimientos clasificados.</div>
+                ) : (
+                  <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))", gap:8 }}>
+                    {resumenCartolaCategorias.slice(0, 8).map(c => (
+                      <div key={c.categoria} style={{ background:COLORS.card, border:`1px solid ${COLORS.border}`, borderRadius:8, padding:10 }}>
+                        <div style={{ fontSize:11, color:COLORS.muted }}>{c.categoria}</div>
+                        <div style={{ fontSize:14, color:c.ingresos > c.egresos ? COLORS.success : COLORS.danger, fontWeight:800 }}>
+                          {fmt(c.ingresos > 0 ? c.ingresos : c.egresos)}
+                        </div>
+                        <div style={{ fontSize:10, color:COLORS.muted }}>{c.movimientos} mov.</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div style={{ display:"flex", justifyContent:"space-between", gap:10, flexWrap:"wrap", alignItems:"center", marginBottom:10 }}>
@@ -9664,7 +10216,7 @@ const renderTarjetaProduccion = (n) => (
                         <th style={{ padding:"8px", borderBottom:`1px solid ${COLORS.border}`, textAlign:"right" }}>Abono</th>
                         <th style={{ padding:"8px", borderBottom:`1px solid ${COLORS.border}` }}>Categoría</th>
                         <th style={{ padding:"8px", borderBottom:`1px solid ${COLORS.border}` }}>Estado</th>
-                        <th style={{ padding:"8px", borderBottom:`1px solid ${COLORS.border}` }}>Acciones</th>
+                        <th style={{ padding:"8px", borderBottom:`1px solid ${COLORS.border}` }}>Detalle / Acción</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -9674,13 +10226,173 @@ const renderTarjetaProduccion = (n) => (
                           <td style={{ padding:"8px", borderBottom:`1px solid ${COLORS.border}`, color:COLORS.text, fontWeight:700 }}>{m.descripcion}</td>
                           <td style={{ padding:"8px", borderBottom:`1px solid ${COLORS.border}`, textAlign:"right", color:COLORS.danger }}>{Number(m.cargo || 0) ? fmt(m.cargo) : "-"}</td>
                           <td style={{ padding:"8px", borderBottom:`1px solid ${COLORS.border}`, textAlign:"right", color:COLORS.success }}>{Number(m.abono || 0) ? fmt(m.abono) : "-"}</td>
-                          <td style={{ padding:"8px", borderBottom:`1px solid ${COLORS.border}` }}>{m.categoria || "Por revisar"}</td>
-                          <td style={{ padding:"8px", borderBottom:`1px solid ${COLORS.border}`, color:m.estado === "conciliado" ? COLORS.success : COLORS.warning }}>{m.estado === "conciliado" ? "Conciliado" : "Por revisar"}</td>
                           <td style={{ padding:"8px", borderBottom:`1px solid ${COLORS.border}` }}>
+                            <span style={{
+                              display:"inline-block",
+                              padding:"3px 8px",
+                              borderRadius:999,
+                              background:(m.categoria && m.categoria !== "Por revisar") ? "rgba(90,158,111,.16)" : "rgba(200,148,58,.14)",
+                              color:(m.categoria && m.categoria !== "Por revisar") ? COLORS.success : COLORS.warning,
+                              fontWeight:700
+                            }}>
+                              {m.categoria || "Por revisar"}
+                            </span>
+                          </td>
+                          <td style={{ padding:"8px", borderBottom:`1px solid ${COLORS.border}`, color:m.estado === "conciliado" ? COLORS.success : COLORS.warning }}>{m.estado === "conciliado" ? "Clasificado" : "Por revisar"}</td>
+                          <td style={{ padding:"8px", borderBottom:`1px solid ${COLORS.border}` }}>
+                            <div style={{ display:"flex", gap:6, flexWrap:"wrap", alignItems:"center" }}>
+                              <button onClick={() => abrirClasificacionCartola(m)} style={{ background:COLORS.accent, color:"#111", border:"none", borderRadius:7, padding:"6px 9px", cursor:"pointer", fontSize:11, fontWeight:800 }}>Clasificar</button>
+                              {Number(m.abono || 0) > 0 && <button onClick={() => { setModalClasificarCartola(m); setCategoriaCartolaSeleccionada("Abono CxC"); setBusquedaCategoriaCartola(""); setBusquedaCxcCartola(""); setCxcSeleccionadaCartola(null); setTipoAbonoCartola("abono"); }} style={{ background:COLORS.success, color:"#fff", border:"none", borderRadius:7, padding:"6px 8px", cursor:"pointer", fontSize:11 }}>Abono CxC</button>}
+                              <span style={{ color:COLORS.muted, fontSize:11 }}>{m.nota_venta_id ? `Doc asociado #${m.nota_venta_id}` : (m.observacion || "")}</span>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </section>
+        )}
+
+        
+        {tab==="cxc" && (
+          <section style={{ maxWidth:1200, margin:"0 auto" }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-end", gap:12, flexWrap:"wrap", marginBottom:14 }}>
+              <div>
+                <h2 style={{ color:COLORS.accent, fontFamily:"Georgia,serif", margin:"0 0 6px" }}>💰 Cuentas por cobrar</h2>
+                <p style={{ color:COLORS.muted, margin:0, fontSize:13 }}>
+                  Saldos conectados con Notas de Venta, Barranes, abonos y Producción.
+                </p>
+              </div>
+              <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}>
+                <button onClick={() => setMesCxc(cambiarMesSimple(mesCxc, -1))} style={{ background:COLORS.surface, border:`1px solid ${COLORS.border}`, color:COLORS.text, borderRadius:8, padding:"8px 10px", cursor:"pointer" }}>
+                  ←
+                </button>
+
+                <input
+                  type="month"
+                  value={mesCxc}
+                  onChange={e=>setMesCxc(e.target.value)}
+                  style={{ background:COLORS.surface, border:`1px solid ${COLORS.border}`, color:COLORS.text, borderRadius:8, padding:"8px 10px" }}
+                />
+
+                <button onClick={() => setMesCxc(cambiarMesSimple(mesCxc, 1))} style={{ background:COLORS.surface, border:`1px solid ${COLORS.border}`, color:COLORS.text, borderRadius:8, padding:"8px 10px", cursor:"pointer" }}>
+                  →
+                </button>
+
+                <button onClick={() => setMesCxc(mesActual)} style={{ background:COLORS.accent, border:"none", color:"#0f0e0c", borderRadius:8, padding:"8px 10px", fontWeight:700, cursor:"pointer" }}>
+                  Mes actual
+                </button>
+
+                <input
+                  value={busquedaCxcCartola}
+                  onChange={e=>setBusquedaCxcCartola(e.target.value)}
+                  placeholder="Buscar cliente, NV, barrán, detalle..."
+                  style={{ minWidth:260, background:COLORS.surface, border:`1px solid ${COLORS.border}`, color:COLORS.text, borderRadius:8, padding:"9px 11px" }}
+                />
+              </div>
+            </div>
+
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))", gap:12, marginBottom:16 }}>
+              <StatCard label="Total por cobrar" value={fmt(totalCxcNotas)} sub={`${detalleCxcNotas.length} documentos`} icon="💰" color={COLORS.accent}/>
+              <StatCard label="Saldos pendientes" value={fmt(totalCxcSaldosPendientes)} sub={`${cxcSaldosPendientes.length} documentos`} icon="🟡" color={COLORS.warning}/>
+              <StatCard label="Entregadas por confirmar" value={fmt(totalCxcEntregadasPorConfirmar)} sub={`${cxcEntregadasPorConfirmar.length} revisar`} icon="🔴" color={COLORS.danger}/>
+              <StatCard label="Crédito autorizado" value={fmt(totalCxcCreditoAutorizado)} sub={`${cxcCreditoAutorizado.length} documentos`} icon="🟣" color="#a78bfa"/>
+            </div>
+
+            {cxcCreditoAutorizado.length > 0 && (
+              <div style={{ background:COLORS.card, border:`1px solid ${COLORS.border}`, borderRadius:12, padding:14, marginBottom:16 }}>
+                <div style={{ fontSize:12, color:COLORS.accent, fontWeight:800, marginBottom:8 }}>🟣 Desglose crédito autorizado</div>
+                <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))", gap:8 }}>
+                  {Object.values(cxcCreditoAutorizado.reduce((acc, item) => {
+                    const cliente = item.cliente || "Sin cliente";
+                    if (!acc[cliente]) acc[cliente] = { cliente, saldo:0, docs:0 };
+                    acc[cliente].saldo += Number(item.saldo || 0);
+                    acc[cliente].docs += 1;
+                    return acc;
+                  }, {})).map(c => (
+                    <div key={c.cliente} style={{ background:COLORS.surface, border:`1px solid ${COLORS.border}`, borderRadius:8, padding:10 }}>
+                      <div style={{ fontWeight:800, color:COLORS.text, fontSize:13 }}>{c.cliente}</div>
+                      <div style={{ color:"#a78bfa", fontWeight:800 }}>{fmt(c.saldo)}</div>
+                      <div style={{ color:COLORS.muted, fontSize:11 }}>{c.docs} documento(s)</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div style={{ background:COLORS.card, border:`1px solid ${COLORS.border}`, borderRadius:12, overflow:"hidden" }}>
+              {detalleCxcFiltrado.length === 0 ? (
+                <div style={{ padding:18, color:COLORS.muted }}>No hay CxC pendientes con los filtros actuales.</div>
+              ) : (
+                <div style={{ overflowX:"auto" }}>
+                  <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12, minWidth:980 }}>
+                    <thead>
+                      <tr style={{ color:COLORS.muted, textAlign:"left", background:COLORS.surface }}>
+                        <th style={{ padding:10, borderBottom:`1px solid ${COLORS.border}` }}>Estado</th>
+                        <th style={{ padding:10, borderBottom:`1px solid ${COLORS.border}` }}>Documento</th>
+                        <th style={{ padding:10, borderBottom:`1px solid ${COLORS.border}` }}>Cliente / Detalle</th>
+                        <th style={{ padding:10, borderBottom:`1px solid ${COLORS.border}`, textAlign:"right" }}>Total</th>
+                        <th style={{ padding:10, borderBottom:`1px solid ${COLORS.border}`, textAlign:"right" }}>Abonado</th>
+                        <th style={{ padding:10, borderBottom:`1px solid ${COLORS.border}`, textAlign:"right" }}>Saldo</th>
+                        <th style={{ padding:10, borderBottom:`1px solid ${COLORS.border}` }}>Producción</th>
+                        <th style={{ padding:10, borderBottom:`1px solid ${COLORS.border}` }}>Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {detalleCxcFiltrado.map(item => (
+                        <tr key={item.id}>
+                          <td style={{ padding:10, borderBottom:`1px solid ${COLORS.border}` }}>
+                            <span style={{
+                              padding:"4px 8px",
+                              borderRadius:999,
+                              background:`${item.estado.color}22`,
+                              color:item.estado.color,
+                              fontWeight:800,
+                              whiteSpace:"nowrap"
+                            }}>
+                              {item.estado.icon} {item.estado.label}
+                            </span>
+                            {item.estado.key === "entregada_por_confirmar" && (
+                              <div style={{ marginTop:5, color:COLORS.danger, fontSize:10.5, lineHeight:1.25 }}>
+                                Esta venta fue marcada como entregada. Confirmar si el saldo fue pagado.
+                              </div>
+                            )}
+                          </td>
+                          <td style={{ padding:10, borderBottom:`1px solid ${COLORS.border}`, color:COLORS.accent, fontWeight:800 }}>{item.tipo} #{item.numero}</td>
+                          <td style={{ padding:10, borderBottom:`1px solid ${COLORS.border}` }}>
+                            <div style={{ color:COLORS.text, fontWeight:800 }}>{item.cliente}</div>
+                            <div style={{ color:COLORS.muted, fontSize:11 }}>{item.fecha ? fmtDate(item.fecha) : ""} {item.detalleTexto ? `· ${item.detalleTexto}` : ""}</div>
+                          </td>
+                          <td style={{ padding:10, borderBottom:`1px solid ${COLORS.border}`, textAlign:"right" }}>{fmt(item.total)}</td>
+                          <td style={{ padding:10, borderBottom:`1px solid ${COLORS.border}`, textAlign:"right", color:COLORS.success }}>{fmt(item.abonado)}</td>
+                          <td style={{ padding:10, borderBottom:`1px solid ${COLORS.border}`, textAlign:"right", color:item.estado.color, fontWeight:900 }}>{fmt(item.saldo)}</td>
+                          <td style={{ padding:10, borderBottom:`1px solid ${COLORS.border}` }}>
+                            <div style={{ color:COLORS.text }}>{item.proceso || "en espera"}</div>
+                            {item.fechaEntrega && <div style={{ color:COLORS.muted, fontSize:11 }}>Entrega: {fmtDate(item.fechaEntrega)}</div>}
+                          </td>
+                          <td style={{ padding:10, borderBottom:`1px solid ${COLORS.border}` }}>
                             <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
-                              {Number(m.abono || 0) > 0 && <button onClick={() => registrarCartolaComoAbonoNV(m)} style={{ background:COLORS.success, color:"#fff", border:"none", borderRadius:7, padding:"6px 8px", cursor:"pointer", fontSize:11 }}>Abono NV</button>}
-                              {Number(m.cargo || 0) > 0 && <button onClick={() => registrarCartolaComoPagoCuenta(m)} style={{ background:COLORS.warning, color:"#111", border:"none", borderRadius:7, padding:"6px 8px", cursor:"pointer", fontSize:11 }}>Pago CxP</button>}
-                              <button onClick={() => registrarCartolaComoMovimientoContable(m)} style={{ background:COLORS.surface, color:COLORS.text, border:`1px solid ${COLORS.border}`, borderRadius:7, padding:"6px 8px", cursor:"pointer", fontSize:11 }}>Asiento</button>
+                              <button
+                                onClick={() => setModalAbonoCxc(item)}
+                                style={{ background:COLORS.success, color:"#fff", border:"none", borderRadius:7, padding:"6px 8px", cursor:"pointer", fontSize:11, fontWeight:800 }}
+                              >
+                                Registrar abono
+                              </button>
+                              <button
+                                onClick={() => toggleCreditoAutorizadoCliente(item.cliente)}
+                                style={{ background:clienteTieneCreditoAutorizado(item.cliente) ? "#a78bfa" : COLORS.surface, color:clienteTieneCreditoAutorizado(item.cliente) ? "#111" : COLORS.text, border:`1px solid ${clienteTieneCreditoAutorizado(item.cliente) ? "#a78bfa" : COLORS.border}`, borderRadius:7, padding:"6px 8px", cursor:"pointer", fontSize:11, fontWeight:800 }}
+                              >
+                                {clienteTieneCreditoAutorizado(item.cliente) ? "Quitar crédito" : "Crédito autorizado"}
+                              </button>
+                              <button
+                                onClick={() => setModalNV(item.nota)}
+                                style={{ background:COLORS.surface, color:COLORS.text, border:`1px solid ${COLORS.border}`, borderRadius:7, padding:"6px 8px", cursor:"pointer", fontSize:11 }}
+                              >
+                                Ver detalle
+                              </button>
                             </div>
                           </td>
                         </tr>
@@ -9700,28 +10412,21 @@ const renderTarjetaProduccion = (n) => (
                 <h2 style={{ margin:"0 0 6px", fontFamily:"Georgia,serif", color:COLORS.accent, fontSize:17 }}>📚 Contabilidad</h2>
                 <p style={{ margin:0, fontSize:12, color:COLORS.muted }}>Libro diario simple con Debe, Haber, IVA CF/DF, Banco, Caja y CxC Clientes.</p>
               </div>
-              <div style={{ display:"flex", gap:8, flexWrap:"wrap", alignItems:"flex-end" }}>
-                <div>
-                  <label style={{ display:"block", fontSize:10, color:COLORS.muted, marginBottom:5 }}>Mes</label>
-                  <input
-                    type="month"
-                    value={mesContabilidad}
-                    onChange={(e) => setMesContabilidad(e.target.value)}
-                    style={{ background:COLORS.surface, border:`1px solid ${COLORS.border}`, color:COLORS.text, borderRadius:8, padding:"8px 10px" }}
-                  />
-                </div>
-                <button onClick={() => setModalGestionContable("compra")} style={{ background:COLORS.accent, color:"#111", border:"none", borderRadius:8, padding:"10px 12px", fontWeight:700, cursor:"pointer" }}>+ Compra</button>
-                <button onClick={() => setModalGestionContable("venta")} style={{ background:COLORS.success, color:"#fff", border:"none", borderRadius:8, padding:"10px 12px", fontWeight:700, cursor:"pointer" }}>+ Venta</button>
-                <button onClick={() => setModalGestionContable("pago_cliente")} style={{ background:COLORS.surface, color:COLORS.text, border:`1px solid ${COLORS.border}`, borderRadius:8, padding:"10px 12px", fontWeight:700, cursor:"pointer" }}>+ Pago cliente</button>
-                <button onClick={() => setModalGestionContable("pago_proveedor")} style={{ background:COLORS.surface, color:COLORS.text, border:`1px solid ${COLORS.border}`, borderRadius:8, padding:"10px 12px", fontWeight:700, cursor:"pointer" }}>+ Pago proveedor</button>
-                <button onClick={() => setModalGestionContable("movimiento")} style={{ background:COLORS.surface, color:COLORS.text, border:`1px solid ${COLORS.border}`, borderRadius:8, padding:"10px 12px", fontWeight:700, cursor:"pointer" }}>+ Caja/Banco</button>
-                <button
-                  onClick={() => setModalContabilidad({})}
-                  style={{ background:"transparent", color:COLORS.muted, border:`1px solid ${COLORS.border}`, borderRadius:8, padding:"10px 12px", fontWeight:700, cursor:"pointer" }}
-                >
-                  + Asiento manual
-                </button>
-              </div>
+              <div style={{ display:"flex", gap:6, alignItems:"center", flexWrap:"wrap" }}>
+  <button onClick={() => setMesContabilidad(cambiarMesSimple(mesContabilidad, -1))} style={{ background:COLORS.surface, border:`1px solid ${COLORS.border}`, color:COLORS.text, borderRadius:8, padding:"8px 10px", cursor:"pointer" }}>
+    ←
+  </button>
+
+  <input type="month" value={mesContabilidad} onChange={e=>setMesContabilidad(e.target.value)} style={{ background:COLORS.surface, border:`1px solid ${COLORS.border}`, color:COLORS.text, borderRadius:8, padding:"8px 10px" }} />
+
+  <button onClick={() => setMesContabilidad(cambiarMesSimple(mesContabilidad, 1))} style={{ background:COLORS.surface, border:`1px solid ${COLORS.border}`, color:COLORS.text, borderRadius:8, padding:"8px 10px", cursor:"pointer" }}>
+    →
+  </button>
+
+  <button onClick={() => setMesContabilidad(mesActual)} style={{ background:COLORS.accent, border:"none", color:"#0f0e0c", borderRadius:8, padding:"8px 10px", fontWeight:700, cursor:"pointer" }}>
+    Mes actual
+  </button>
+</div>
             </div>
 
             <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))", gap:12, marginBottom:14 }}>
@@ -9878,6 +10583,76 @@ const renderTarjetaProduccion = (n) => (
             </div>
             <label>Detalle<textarea name="detalle" style={{ width:"100%", minHeight:70, boxSizing:"border-box", padding:10, margin:"6px 0 10px", borderRadius:8, border:`1px solid ${COLORS.border}`, background:COLORS.surface, color:COLORS.text }}/></label>
             <div style={{ display:"flex", justifyContent:"flex-end", gap:10 }}><button type="button" onClick={() => setModalCuentaPagar(false)}>Cancelar</button><button type="submit" style={{ background:COLORS.success, color:"#fff", border:"none", borderRadius:8, padding:"9px 14px", fontWeight:700 }}>Guardar</button></div>
+          </form>
+        </div>
+      )}
+
+      {modalAbonoCxc && (
+        <div onClick={() => setModalAbonoCxc(null)} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.65)", display:"flex", alignItems:"flex-start", justifyContent:"center", zIndex:9999, overflowY:"auto", padding:"20px 10px" }}>
+          <form
+            onSubmit={async (e) => {
+              e.preventDefault();
+              const fd = new FormData(e.currentTarget);
+              const monto = Number(String(fd.get("monto") || "0").replace(/[^0-9]/g, ""));
+              const fecha = fd.get("fecha") || new Date().toISOString().split("T")[0];
+              const medioPago = fd.get("medio_pago") || "transferencia";
+              const tipoAbono = fd.get("tipo_abono") || "abono";
+              const observacion = fd.get("observacion") || "Registrado desde CxC";
+
+              const ok = await registrarAbonoDocumento({
+                nota: modalAbonoCxc.nota,
+                monto,
+                fecha,
+                medioPago,
+                tipoAbono,
+                observacion
+              });
+
+              if (ok) setModalAbonoCxc(null);
+            }}
+            onClick={e=>e.stopPropagation()}
+            style={{ background:COLORS.card, border:`1px solid ${COLORS.border}`, borderRadius:14, padding:20, width:"430px", maxWidth:"94vw", color:COLORS.text }}
+          >
+            <h2 style={{ marginTop:0, color:COLORS.accent }}>Registrar abono CxC</h2>
+            <p style={{ marginTop:0, lineHeight:1.45 }}>
+              <b>{modalAbonoCxc.tipo} #{modalAbonoCxc.numero}</b><br/>
+              <span style={{ color:COLORS.text }}>{modalAbonoCxc.cliente}</span><br/>
+              <span style={{ color:COLORS.muted }}>Total: {fmt(modalAbonoCxc.total)} · Abonado: {fmt(modalAbonoCxc.abonado)} · Saldo: {fmt(modalAbonoCxc.saldo)}</span>
+            </p>
+
+            <label style={{ display:"block", fontSize:12, color:COLORS.muted }}>Monto
+              <input name="monto" type="number" required defaultValue={modalAbonoCxc.saldo} style={{ width:"100%", boxSizing:"border-box", padding:10, margin:"6px 0 10px", borderRadius:8, border:`1px solid ${COLORS.border}`, background:COLORS.surface, color:COLORS.text }} />
+            </label>
+
+            <label style={{ display:"block", fontSize:12, color:COLORS.muted }}>Tipo de abono
+              <select name="tipo_abono" defaultValue="abono_saldo" style={{ width:"100%", boxSizing:"border-box", padding:10, margin:"6px 0 10px", borderRadius:8, border:`1px solid ${COLORS.border}`, background:COLORS.surface, color:COLORS.text }}>
+                <option value="abono_inicial">Abono inicial</option>
+                <option value="abono">Abono parcial</option>
+                <option value="abono_retiro_parcial">Abono retiro parcial</option>
+                <option value="abono_saldo">Abono saldo</option>
+              </select>
+            </label>
+
+            <label style={{ display:"block", fontSize:12, color:COLORS.muted }}>Fecha
+              <input name="fecha" type="date" defaultValue={new Date().toISOString().split("T")[0]} style={{ width:"100%", boxSizing:"border-box", padding:10, margin:"6px 0 10px", borderRadius:8, border:`1px solid ${COLORS.border}`, background:COLORS.surface, color:COLORS.text }} />
+            </label>
+
+            <label style={{ display:"block", fontSize:12, color:COLORS.muted }}>Medio de pago
+              <select name="medio_pago" defaultValue="transferencia" style={{ width:"100%", boxSizing:"border-box", padding:10, margin:"6px 0 10px", borderRadius:8, border:`1px solid ${COLORS.border}`, background:COLORS.surface, color:COLORS.text }}>
+                <option value="transferencia">Transferencia</option>
+                <option value="efectivo">Efectivo</option>
+                <option value="cheque">Cheque</option>
+              </select>
+            </label>
+
+            <label style={{ display:"block", fontSize:12, color:COLORS.muted }}>Observación
+              <input name="observacion" defaultValue="Registrado desde CxC" style={{ width:"100%", boxSizing:"border-box", padding:10, margin:"6px 0 14px", borderRadius:8, border:`1px solid ${COLORS.border}`, background:COLORS.surface, color:COLORS.text }} />
+            </label>
+
+            <div style={{ display:"flex", justifyContent:"flex-end", gap:10 }}>
+              <button type="button" onClick={() => setModalAbonoCxc(null)} style={{ background:COLORS.subtle, border:`1px solid ${COLORS.border}`, color:COLORS.text, borderRadius:8, padding:"9px 14px", cursor:"pointer" }}>Cancelar</button>
+              <button type="submit" style={{ background:COLORS.success, color:"#fff", border:"none", borderRadius:8, padding:"9px 14px", fontWeight:700, cursor:"pointer" }}>Guardar abono</button>
+            </div>
           </form>
         </div>
       )}
@@ -10133,6 +10908,116 @@ const renderTarjetaProduccion = (n) => (
     </div>
   </div>
 )}
+
+      {modalClasificarCartola && (
+        <div
+          onClick={cerrarClasificacionCartola}
+          style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.62)", display:"flex", alignItems:"flex-start", justifyContent:"center", zIndex:10000, padding:"20px 10px", overflowY:"auto" }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{ background:COLORS.card, border:`1px solid ${COLORS.border}`, borderRadius:14, padding:18, width:"min(920px, 96vw)", color:COLORS.text, boxSizing:"border-box" }}
+          >
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:12, marginBottom:14 }}>
+              <div>
+                <h2 style={{ margin:"0 0 4px", color:COLORS.accent }}>Clasificar movimiento de cartola</h2>
+                <div style={{ fontSize:12, color:COLORS.muted }}>{fmtDate(modalClasificarCartola.fecha)} · {modalClasificarCartola.descripcion}</div>
+                <div style={{ marginTop:6, fontSize:18, fontWeight:900, color:Number(modalClasificarCartola.abono || 0) > 0 ? COLORS.success : COLORS.danger }}>
+                  {Number(modalClasificarCartola.abono || 0) > 0 ? fmt(modalClasificarCartola.abono) : fmt(modalClasificarCartola.cargo)}
+                </div>
+              </div>
+              <button onClick={cerrarClasificacionCartola} style={{ background:COLORS.danger, color:"#fff", border:"none", borderRadius:8, padding:"8px 10px", cursor:"pointer", fontWeight:800 }}>Cerrar</button>
+            </div>
+
+            <div style={{ display:"grid", gridTemplateColumns:"minmax(260px, 360px) 1fr", gap:14 }}>
+              <div style={{ background:COLORS.surface, border:`1px solid ${COLORS.border}`, borderRadius:12, padding:12 }}>
+                <div style={{ fontSize:12, color:COLORS.accent, fontWeight:800, marginBottom:8 }}>1. Categoría</div>
+                <input
+                  value={busquedaCategoriaCartola}
+                  onChange={e=>setBusquedaCategoriaCartola(e.target.value)}
+                  placeholder="Buscar categoría..."
+                  style={{ width:"100%", boxSizing:"border-box", background:COLORS.card, border:`1px solid ${COLORS.border}`, color:COLORS.text, borderRadius:8, padding:"9px 10px", marginBottom:8 }}
+                />
+                <div style={{ display:"grid", gap:6, maxHeight:360, overflowY:"auto" }}>
+                  {categoriasCartolaFiltradas.map(c => (
+                    <button
+                      key={c.nombre}
+                      onClick={() => setCategoriaCartolaSeleccionada(c.nombre)}
+                      style={{ textAlign:"left", background:categoriaCartolaSeleccionada === c.nombre ? COLORS.accent : COLORS.card, color:categoriaCartolaSeleccionada === c.nombre ? "#111" : COLORS.text, border:`1px solid ${categoriaCartolaSeleccionada === c.nombre ? COLORS.accent : COLORS.border}`, borderRadius:8, padding:"9px 10px", cursor:"pointer" }}
+                    >
+                      <div style={{ fontWeight:900 }}>{c.nombre}</div>
+                      <div style={{ fontSize:10.5, opacity:.82 }}>{c.descripcion}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div style={{ background:COLORS.surface, border:`1px solid ${COLORS.border}`, borderRadius:12, padding:12 }}>
+                <div style={{ fontSize:12, color:COLORS.accent, fontWeight:800, marginBottom:8 }}>2. Detalle</div>
+
+                {categoriaCartolaSeleccionada === "Abono CxC" ? (
+                  <div>
+                    <div style={{ display:"grid", gridTemplateColumns:"1fr 170px", gap:10, marginBottom:10 }}>
+                      <input
+                        value={busquedaCxcCartola}
+                        onChange={e=>setBusquedaCxcCartola(e.target.value)}
+                        placeholder="Buscar NV, barrán o cliente..."
+                        style={{ width:"100%", boxSizing:"border-box", background:COLORS.card, border:`1px solid ${COLORS.border}`, color:COLORS.text, borderRadius:8, padding:"9px 10px" }}
+                      />
+                      <select
+                        value={tipoAbonoCartola}
+                        onChange={e=>setTipoAbonoCartola(e.target.value)}
+                        style={{ width:"100%", boxSizing:"border-box", background:COLORS.card, border:`1px solid ${COLORS.border}`, color:COLORS.text, borderRadius:8, padding:"9px 10px" }}
+                      >
+                        <option value="abono_inicial">Abono inicial</option>
+                        <option value="abono">Abono parcial</option>
+                        <option value="abono_retiro_parcial">Abono retiro parcial</option>
+                        <option value="abono_saldo">Abono saldo</option>
+                      </select>
+                    </div>
+
+                    {cxcSeleccionadaCartola && (
+                      <div style={{ background:"rgba(90,158,111,.12)", border:`1px solid ${COLORS.success}`, borderRadius:10, padding:10, marginBottom:10 }}>
+                        <div style={{ color:COLORS.success, fontWeight:900 }}>Seleccionado: {cxcSeleccionadaCartola.tipo} #{cxcSeleccionadaCartola.numero}</div>
+                        <div style={{ fontSize:12, color:COLORS.text }}>{cxcSeleccionadaCartola.cliente}</div>
+                        <div style={{ fontSize:12, color:COLORS.muted }}>Saldo actual: {fmt(cxcSeleccionadaCartola.saldo)}</div>
+                      </div>
+                    )}
+
+                    <div style={{ maxHeight:300, overflowY:"auto", display:"grid", gap:6 }}>
+                      {opcionesCxcCartola.slice(0, 60).map(item => (
+                        <button
+                          key={item.id}
+                          onClick={() => setCxcSeleccionadaCartola(item)}
+                          style={{ textAlign:"left", background:cxcSeleccionadaCartola?.id === item.id ? COLORS.accent : COLORS.card, color:cxcSeleccionadaCartola?.id === item.id ? "#111" : COLORS.text, border:`1px solid ${cxcSeleccionadaCartola?.id === item.id ? COLORS.accent : COLORS.border}`, borderRadius:8, padding:"9px 10px", cursor:"pointer" }}
+                        >
+                          <div style={{ display:"flex", justifyContent:"space-between", gap:10 }}>
+                            <b>{item.tipo} #{item.numero} · {item.cliente}</b>
+                            <b>{fmt(item.saldo)}</b>
+                          </div>
+                          <div style={{ fontSize:10.5, opacity:.82 }}>{item.estado.icon} {item.estado.label} {item.detalleTexto ? `· ${item.detalleTexto}` : ""}</div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ color:COLORS.muted, fontSize:13, lineHeight:1.5 }}>
+                    {categoriaCartolaSeleccionada
+                      ? "Esta categoría quedará registrada en la cartola. Si corresponde a Factura compra, se mostrará como flujo, pero no se duplicará con el resumen tributario manual del programa externo."
+                      : "Selecciona una categoría desde el listado."}
+                  </div>
+                )}
+
+                <div style={{ display:"flex", justifyContent:"flex-end", gap:8, marginTop:14 }}>
+                  <button onClick={cerrarClasificacionCartola} style={{ background:COLORS.subtle, color:COLORS.text, border:`1px solid ${COLORS.border}`, borderRadius:8, padding:"9px 12px", cursor:"pointer", fontWeight:800 }}>Cancelar</button>
+                  <button onClick={guardarClasificacionCartola} style={{ background:COLORS.success, color:"#fff", border:"none", borderRadius:8, padding:"9px 12px", cursor:"pointer", fontWeight:900 }}>Guardar clasificación</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <LoginAdminModal
         open={modalLogin}
         onClose={() => { setModalLogin(false); setLoginUser(""); setLoginPass(""); }}
