@@ -134,13 +134,13 @@ export function AnalisisDatos({ colors: COLORS }) {
 
   function encontrarFaltantes(nums) {
     if (nums.length < 2) return [];
-    const faltantes = [];
-    for (let i = nums[0]; i <= nums[nums.length - 1]; i++) {
-      if (!nums.includes(i)) faltantes.push(i);
-    }
-    // Limitar a 200 para no saturar
-    return faltantes.slice(0, 200);
+    const min = nums[0]; const max = nums[nums.length - 1];
+    if (max - min > 2000) return [];
+    const set = new Set(nums); const faltantes = [];
+    for (let i = min; i <= max; i++) { if (!set.has(i)) faltantes.push(i); if (faltantes.length >= 200) break; }
+    return faltantes;
   }
+
 
   function verDetalleCliente(cliente) {
     const transacciones = todosLosDatos
