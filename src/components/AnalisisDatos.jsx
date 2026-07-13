@@ -18,31 +18,20 @@ export function AnalisisDatos({ colors: COLORS }) {
   useEffect(() => { cargarDatos(); }, [filtro]);
 
   async function fetchTodos() {
-    // Traer datos en páginas de 500 para no sobrecargar
-    let todos = [];
-    let page = 0;
-    const pageSize = 500;
-    while (true) {
-      let q = supabase
-        .from('transacciones_historicas')
-        .select('cliente, total, fecha, tipo, numero_cotizacion, numero_nota_venta')
-        .eq('es_historico', true)
-        .range(page * pageSize, (page + 1) * pageSize - 1);
+    let q = supabase
+      .from('transacciones_historicas')
+      .select('cliente, total, fecha, tipo, numero_cotizacion, numero_nota_venta')
+      .eq('es_historico', true);
 
-      if (filtro !== 'todo') {
-        const desde = new Date();
-        desde.setMonth(desde.getMonth() - parseInt(filtro));
-        q = q.gte('fecha', desde.toISOString().split('T')[0]);
-      }
-
-      const { data, error } = await q;
-      if (error) throw error;
-      if (!data || data.length === 0) break;
-      todos = todos.concat(data);
-      if (data.length < pageSize) break;
-      page++;
+    if (filtro !== 'todo') {
+      const desde = new Date();
+      desde.setMonth(desde.getMonth() - parseInt(filtro));
+      q = q.gte('fecha', desde.toISOString().split('T')[0]);
     }
-    return todos;
+
+    const { data, error } = await q;
+    if (error) throw error;
+    return data || [];
   }
 
   async function cargarDatos() {
