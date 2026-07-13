@@ -22,18 +22,31 @@ export function AnalisisDatos({ colors: COLORS }) {
     setCargando(true);
     setError(null);
     try {
-      let q = supabase
-        .from('transacciones_historicas')
-        .select('cliente, total, fecha, tipo, numero_cotizacion, numero_nota_venta')
-        .eq('es_historico', true);
-
-      if (filtro !== 'todo') {
+      const fechaFiltro = filtro !== 'todo' ? (() => {
         const desde = new Date();
         desde.setMonth(desde.getMonth() - parseInt(filtro));
-        q = q.gte('fecha', desde.toISOString().split('T')[0]);
-      }
+        return desde.toISOString().split('T')[0];
+      })() : null;
 
-      const { data, error: err } = await q.limit(2000);
+      const buildQ = (from, to) => {
+        let q = supabase
+          .from('transacciones_historicas')
+          .select('cliente, total, fecha, tipo, numero_cotizacion, numero_nota_venta')
+          .eq('es_historico', true)
+          .range(from, to);
+        if (fechaFiltro) q = q.gte('fecha', fechaFiltro);
+        return q;
+      };
+
+      const [r1, r2, r3] = await Promise.all([
+        buildQ(0, 999),
+        buildQ(1000, 1999),
+        buildQ(2000, 2999),
+      ]);
+
+      if (r1.error) throw r1.error;
+      const data = [...(r1.data || []), ...(r2.data || []), ...(r3.data || [])];
+      const err = null;
       if (err) throw err;
       if (!data || data.length === 0) {
         setError('No se encontraron datos.');
