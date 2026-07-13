@@ -7,10 +7,9 @@ export function AnalisisDatos({ colors: COLORS }) {
   const [error, setError] = useState(null);
   const [kpis, setKpis] = useState({ totalIngresos: 0, transacciones: 0, clientesUnicos: 0, promedio: 0 });
   const [porMes, setPorMes] = useState([]);
-  const [todosClientes, setTodosClientes] = useState([]);
+  const [topClientes, setTopClientes] = useState([]);
   const [tipos, setTipos] = useState([]);
   const [filtro, setFiltro] = useState('todo');
-  const [topN, setTopN] = useState(5);
   const [clienteSeleccionado, setClienteSeleccionado] = useState(null);
   const [detalleCliente, setDetalleCliente] = useState([]);
   const [vistaActiva, setVistaActiva] = useState('dashboard');
@@ -18,37 +17,43 @@ export function AnalisisDatos({ colors: COLORS }) {
 
   useEffect(() => { cargarDatos(); }, [filtro]);
 
+  async function fetchTodos() {
+    let q = supabase
+      .from('transacciones_historicas')
+      .select('cliente, total, fecha, tipo, numero_cotizacion, numero_nota_venta')
+      .eq('es_historico', true);
+
+    if (filtro !== 'todo') {
+      const desde = new Date();
+      desde.setMonth(desde.getMonth() - parseInt(filtro));
+      q = q.gte('fecha', desde.toISOString().split('T')[0]);
+    }
+
+    const { data, error } = await q;
+    if (error) throw error;
+    return data || [];
+  }
+
   async function cargarDatos() {
     setCargando(true);
     setError(null);
     try {
-      let q = supabase
-        .from('transacciones_historicas')
-        .select('cliente, total, fecha, tipo, numero_cotizacion, numero_nota_venta')
-        .eq('es_historico', true);
+      const data = await fetchTodos();
 
-      if (filtro !== 'todo') {
-        const desde = new Date();
-        desde.setMonth(desde.getMonth() - parseInt(filtro));
-        q = q.gte('fecha', desde.toISOString().split('T')[0]);
-      }
-
-      const { data, error: err } = await q;
-      if (err) throw err;
       if (!data || data.length === 0) {
-        setError('No se encontraron datos.');
+        setError('No se encontraron datos en la tabla transacciones_historicas.');
         setCargando(false);
         return;
       }
 
-      // Solo NV y barranes = ingresos reales
+      // KPIs (solo notas y barranes cuentan como ingresos)
       const ventas = data.filter(d => d.tipo === 'nota_venta' || d.tipo === 'barran');
       const totalIngresos = ventas.reduce((s, d) => s + (Number(d.total) || 0), 0);
       const clientesUnicos = new Set(data.map(d => d.cliente)).size;
       const promedio = ventas.length > 0 ? totalIngresos / ventas.length : 0;
       setKpis({ totalIngresos, transacciones: data.length, clientesUnicos, promedio });
 
-      // Por mes
+      // Ingresos por mes
       const mesMap = {};
       ventas.forEach(d => {
         const mes = (d.fecha || '').substring(0, 7);
@@ -56,25 +61,32 @@ export function AnalisisDatos({ colors: COLORS }) {
         mesMap[mes] = (mesMap[mes] || 0) + (Number(d.total) || 0);
       });
       setPorMes(
-        Object.entries(mesMap).sort(([a],[b]) => a.localeCompare(b)).map(([mes, total]) => {
-          const [y, m] = mes.split('-');
-          const nombres = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
-          return { mes: `${nombres[parseInt(m)-1]} ${y.slice(-2)}`, total: Math.round(total) };
-        })
+        Object.entries(mesMap)
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([mes, total]) => {
+            const [y, m] = mes.split('-');
+            const meses = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+            return { mes: `${meses[parseInt(m)-1]} ${y.slice(-2)}`, total: Math.round(total) };
+          })
       );
 
-      // Todos los clientes ordenados (se filtra por topN en el render)
-      const cliMap = {}, cliCount = {};
+      // Top 5 clientes
+      const cliMap = {};
+      const cliCount = {};
       ventas.forEach(d => {
         cliMap[d.cliente] = (cliMap[d.cliente] || 0) + (Number(d.total) || 0);
         cliCount[d.cliente] = (cliCount[d.cliente] || 0) + 1;
       });
-      setTodosClientes(
-        Object.entries(cliMap).sort(([,a],[,b]) => b - a).map(([cliente, total], i) => ({
-          rank: i + 1, cliente, total: Math.round(total),
-          pct: totalIngresos > 0 ? ((total / totalIngresos) * 100).toFixed(1) : '0',
-          transacciones: cliCount[cliente] || 0
-        }))
+      setTopClientes(
+        Object.entries(cliMap)
+          .sort(([,a],[,b]) => b - a)
+          .slice(0, 5)
+          .map(([cliente, total], i) => ({
+            rank: i + 1, cliente,
+            total: Math.round(total),
+            pct: totalIngresos > 0 ? ((total / totalIngresos) * 100).toFixed(1) : '0',
+            transacciones: cliCount[cliente] || 0
+          }))
       );
 
       // Tipos
@@ -86,10 +98,21 @@ export function AnalisisDatos({ colors: COLORS }) {
         { name: 'Barranes', value: conteo.barran, color: '#5a7ace' },
       ].filter(t => t.value > 0));
 
-      // Faltantes
-      const nvNums = [...new Set(data.filter(d => d.numero_nota_venta && !isNaN(parseInt(d.numero_nota_venta))).map(d => parseInt(d.numero_nota_venta)))].sort((a,b) => a-b);
-      const cotNums = [...new Set(data.filter(d => d.numero_cotizacion && !isNaN(parseInt(d.numero_cotizacion))).map(d => parseInt(d.numero_cotizacion)))].sort((a,b) => a-b);
-      setFaltantes({ notas: hallarFaltantes(nvNums), cotizaciones: hallarFaltantes(cotNums) });
+      // Faltantes (sin crear arrays masivos)
+      const nvNums = [...new Set(
+        data.filter(d => d.numero_nota_venta && d.numero_nota_venta !== '' && !isNaN(parseInt(d.numero_nota_venta)))
+            .map(d => parseInt(d.numero_nota_venta))
+      )].sort((a, b) => a - b);
+
+      const cotNums = [...new Set(
+        data.filter(d => d.numero_cotizacion && d.numero_cotizacion !== '' && !isNaN(parseInt(d.numero_cotizacion)))
+            .map(d => parseInt(d.numero_cotizacion))
+      )].sort((a, b) => a - b);
+
+      setFaltantes({
+        notas: hallarFaltantes(nvNums),
+        cotizaciones: hallarFaltantes(cotNums)
+      });
 
     } catch (e) {
       setError('Error: ' + e.message);
@@ -99,9 +122,11 @@ export function AnalisisDatos({ colors: COLORS }) {
 
   function hallarFaltantes(nums) {
     if (nums.length < 2) return [];
-    const min = nums[0], max = nums[nums.length - 1];
-    if (max - min > 5000) return [];
-    const set = new Set(nums), result = [];
+    const min = nums[0];
+    const max = nums[nums.length - 1];
+    if (max - min > 1000) return []; // Rango muy amplio, omitir
+    const set = new Set(nums);
+    const result = [];
     for (let i = min; i <= max && result.length < 200; i++) {
       if (!set.has(i)) result.push(i);
     }
@@ -112,28 +137,30 @@ export function AnalisisDatos({ colors: COLORS }) {
     const { data } = await supabase
       .from('transacciones_historicas')
       .select('cliente, total, fecha, tipo, numero_cotizacion, numero_nota_venta')
-      .eq('es_historico', true).eq('cliente', cliente).order('fecha', { ascending: false });
+      .eq('es_historico', true)
+      .eq('cliente', cliente)
+      .order('fecha', { ascending: false });
     setDetalleCliente(data || []);
     setClienteSeleccionado(cliente);
   }
 
   const fmt = n => '$' + Math.round(Number(n)).toLocaleString('es-CL');
   const fmtF = f => f ? new Date(f + 'T12:00:00').toLocaleDateString('es-CL') : '-';
-  const topClientes = todosClientes.slice(0, topN);
 
-  // CARGANDO
   if (cargando) return (
     <div style={{ padding: 40, textAlign: 'center', color: COLORS.muted }}>
       <div style={{ fontSize: 32, marginBottom: 16 }}>⏳</div>
       <div>Cargando datos históricos...</div>
+      <div style={{ fontSize: 12, marginTop: 8 }}>Esto puede tomar unos segundos</div>
     </div>
   );
 
-  // ERROR
   if (error) return (
-    <div style={{ padding: 40, color: COLORS.danger, fontSize: 14 }}>
+    <div style={{ padding: 40, color: COLORS.danger, fontSize: 14, lineHeight: 1.8 }}>
       <b>❌ {error}</b><br/><br/>
-      <button onClick={cargarDatos} style={{ background: COLORS.accent, color: '#111', border: 'none', borderRadius: 8, padding: '10px 20px', cursor: 'pointer', fontWeight: 700 }}>🔄 Reintentar</button>
+      <button onClick={cargarDatos} style={{ background: COLORS.accent, color: '#111', border: 'none', borderRadius: 8, padding: '10px 20px', cursor: 'pointer', fontWeight: 700 }}>
+        🔄 Reintentar
+      </button>
     </div>
   );
 
@@ -148,7 +175,8 @@ export function AnalisisDatos({ colors: COLORS }) {
           ← Volver
         </button>
         <h2 style={{ color: COLORS.accent, margin: '0 0 4px' }}>👤 {clienteSeleccionado}</h2>
-        <p style={{ color: COLORS.muted, fontSize: 13, margin: '0 0 20px' }}>{detalleCliente.length} transacciones registradas</p>
+        <p style={{ color: COLORS.muted, fontSize: 13, margin: '0 0 20px' }}>{detalleCliente.length} transacciones</p>
+
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 14, marginBottom: 24 }}>
           {[
             { label: '💰 Total Ingresos', v: fmt(totalVentas) },
@@ -164,6 +192,7 @@ export function AnalisisDatos({ colors: COLORS }) {
             </div>
           ))}
         </div>
+
         <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, padding: 16 }}>
           <h3 style={{ margin: '0 0 16px', color: COLORS.text, fontSize: 14 }}>📋 Historial</h3>
           <div style={{ overflowX: 'auto' }}>
@@ -210,7 +239,8 @@ export function AnalisisDatos({ colors: COLORS }) {
           ← Volver
         </button>
         <h2 style={{ color: COLORS.accent, margin: '0 0 4px' }}>🔍 Números Faltantes</h2>
-        <p style={{ color: COLORS.muted, fontSize: 13, margin: '0 0 24px' }}>Correlativos no registrados. Puede que no se hayan extraído o no existan.</p>
+        <p style={{ color: COLORS.muted, fontSize: 13, margin: '0 0 24px' }}>Correlativos no registrados en la base de datos.</p>
+
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 20 }}>
           {[
             { titulo: '📋 Cotizaciones faltantes', nums: faltantes.cotizaciones, color: COLORS.accent },
@@ -219,7 +249,7 @@ export function AnalisisDatos({ colors: COLORS }) {
             <div key={titulo} style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, padding: 16 }}>
               <h3 style={{ margin: '0 0 8px', color, fontSize: 14 }}>{titulo}</h3>
               <p style={{ color: COLORS.muted, fontSize: 12, margin: '0 0 12px' }}>
-                {nums.length === 0 ? '✅ Sin faltantes detectados' : `${nums.length} faltante(s)`}
+                {nums.length === 0 ? '✅ Sin faltantes detectados (o rango muy amplio)' : `${nums.length} faltante(s)`}
               </p>
               {nums.length > 0 && (
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, maxHeight: 300, overflowY: 'auto' }}>
@@ -238,11 +268,9 @@ export function AnalisisDatos({ colors: COLORS }) {
   // DASHBOARD PRINCIPAL
   return (
     <div style={{ padding: 20, background: COLORS.bg, minHeight: '100vh' }}>
-
-      {/* Header con controles */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', gap: 10 }}>
         <h2 style={{ margin: 0, color: COLORS.accent, fontSize: 18 }}>📊 Análisis Histórico</h2>
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: 10 }}>
           <button onClick={() => setVistaActiva('faltantes')}
             style={{ background: COLORS.subtle, border: `1px solid ${COLORS.border}`, color: COLORS.text, borderRadius: 8, padding: '8px 14px', cursor: 'pointer', fontSize: 13, fontWeight: 700 }}>
             🔍 Ver Faltantes
@@ -258,7 +286,6 @@ export function AnalisisDatos({ colors: COLORS }) {
         </div>
       </div>
 
-      {/* KPIs */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16, marginBottom: 24 }}>
         {[
           { label: '💰 Ingresos Totales (NV + Barranes)', v: fmt(kpis.totalIngresos) },
@@ -273,7 +300,6 @@ export function AnalisisDatos({ colors: COLORS }) {
         ))}
       </div>
 
-      {/* Gráficos */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: 20, marginBottom: 24 }}>
         <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, padding: 16 }}>
           <h3 style={{ margin: '0 0 16px', color: COLORS.text, fontSize: 14 }}>📈 Ingresos por Mes</h3>
@@ -301,19 +327,9 @@ export function AnalisisDatos({ colors: COLORS }) {
         </div>
       </div>
 
-      {/* Top Clientes */}
       <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, padding: 16 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-          <h3 style={{ margin: 0, color: COLORS.text, fontSize: 14 }}>🏆 Top {topN} Clientes</h3>
-          <select value={topN} onChange={e => setTopN(parseInt(e.target.value))}
-            style={{ background: COLORS.subtle, border: `1px solid ${COLORS.border}`, color: COLORS.text, borderRadius: 8, padding: '6px 10px', fontSize: 12 }}>
-            <option value={5}>Top 5</option>
-            <option value={10}>Top 10</option>
-            <option value={20}>Top 20</option>
-            <option value={50}>Top 50</option>
-          </select>
-        </div>
-        <p style={{ color: COLORS.muted, fontSize: 12, margin: '4px 0 16px' }}>Click en un cliente para ver su historial completo</p>
+        <h3 style={{ margin: '0 0 4px', color: COLORS.text, fontSize: 14 }}>🏆 Top 5 Clientes</h3>
+        <p style={{ color: COLORS.muted, fontSize: 12, margin: '0 0 16px' }}>Click en un cliente para ver su historial completo</p>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
           <thead>
             <tr style={{ borderBottom: `1px solid ${COLORS.border}` }}>
@@ -338,7 +354,6 @@ export function AnalisisDatos({ colors: COLORS }) {
           </tbody>
         </table>
       </div>
-
     </div>
   );
 }
