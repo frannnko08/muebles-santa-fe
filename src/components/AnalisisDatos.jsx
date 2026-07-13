@@ -33,7 +33,7 @@ export function AnalisisDatos({ colors: COLORS }) {
         q = q.gte('fecha', desde.toISOString().split('T')[0]);
       }
 
-      const { data, error: err } = await q;
+      const { data, error: err } = await q.limit(2000);
       if (err) throw err;
       if (!data || data.length === 0) {
         setError('No se encontraron datos.');
