@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from '../lib/supabase'
+import { AnalisisDatos } from './components/AnalisisDatos'
 import { obtenerCotizaciones, obtenerNotasVenta, editarNumeroNotaVenta, importarNotaVentaExcel, eliminarNotaVenta, importarCotizacionExcel, obtenerDetallesCotizaciones } from '../lib/cotizaciones'
 import * as XLSX from 'xlsx'
 
@@ -8082,6 +8083,7 @@ const renderTarjetaProduccion = (n) => (
     {key:"venta_laminas",label:`🧾 Venta de Láminas (${ventasLaminasDelMes.length})`},
     {key:"cuentas_pagar",label:`💸 Cuentas por pagar (${pagosPendientesMes.length})`},
     {key:"dashboard",label:"📊 Resumen"},
+    {key:"analisis",label:"📈 Análisis Histórico"},
   ];
 
   const tabsAdmin=[
@@ -8328,6 +8330,7 @@ const renderTarjetaProduccion = (n) => (
             </div>
           </div>
         )}
+        {tab==="analisis" && <AnalisisDatos colors={COLORS} />}
         {tab==="dashboard" && (
           <div>
             <div style={{ background:COLORS.card, border:`1px solid ${COLORS.border}`, borderRadius:12, padding:16, marginBottom:18 }}>
