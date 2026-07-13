@@ -10,6 +10,7 @@ export function AnalisisDatos({ colors: COLORS }) {
   const [topClientes, setTopClientes] = useState([]);
   const [tipos, setTipos] = useState([]);
   const [filtro, setFiltro] = useState('todo');
+  const [topN, setTopN] = useState(5);
   const [clienteSeleccionado, setClienteSeleccionado] = useState(null);
   const [detalleCliente, setDetalleCliente] = useState([]);
   const [vistaActiva, setVistaActiva] = useState('dashboard');
@@ -80,7 +81,7 @@ export function AnalisisDatos({ colors: COLORS }) {
       setTopClientes(
         Object.entries(cliMap)
           .sort(([,a],[,b]) => b - a)
-          .slice(0, 5)
+          .slice(0, topN)
           .map(([cliente, total], i) => ({
             rank: i + 1, cliente,
             total: Math.round(total),
@@ -270,11 +271,18 @@ export function AnalisisDatos({ colors: COLORS }) {
     <div style={{ padding: 20, background: COLORS.bg, minHeight: '100vh' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', gap: 10 }}>
         <h2 style={{ margin: 0, color: COLORS.accent, fontSize: 18 }}>📊 Análisis Histórico</h2>
-        <div style={{ display: 'flex', gap: 10 }}>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
           <button onClick={() => setVistaActiva('faltantes')}
             style={{ background: COLORS.subtle, border: `1px solid ${COLORS.border}`, color: COLORS.text, borderRadius: 8, padding: '8px 14px', cursor: 'pointer', fontSize: 13, fontWeight: 700 }}>
             🔍 Ver Faltantes
           </button>
+          <select value={topN} onChange={e => setTopN(parseInt(e.target.value))}
+            style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, color: COLORS.text, borderRadius: 8, padding: '8px 12px', fontSize: 13 }}>
+            <option value={5}>Top 5</option>
+            <option value={10}>Top 10</option>
+            <option value={20}>Top 20</option>
+            <option value={50}>Top 50</option>
+          </select>
           <select value={filtro} onChange={e => setFiltro(e.target.value)}
             style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, color: COLORS.text, borderRadius: 8, padding: '8px 12px', fontSize: 13 }}>
             <option value="todo">Todo el período</option>
@@ -285,6 +293,52 @@ export function AnalisisDatos({ colors: COLORS }) {
           </select>
         </div>
       </div>
+
+      {/* KPIs */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16, marginBottom: 24 }}>
+        {[
+          { label: '💰 Ingresos Totales (NV + Barranes)', v: fmt(kpis.totalIngresos) },
+          { label: '📝 Total Transacciones', v: kpis.transacciones.toLocaleString('es-CL') },
+          { label: '👥 Clientes Únicos', v: kpis.clientesUnicos.toLocaleString('es-CL') },
+          { label: '📊 Promedio por Venta', v: fmt(kpis.promedio) },
+        ].map(k => (
+          <div key={k.label} style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, padding: 16 }}>
+            <div style={{ color: COLORS.muted, fontSize: 12, marginBottom: 8 }}>{k.label}</div>
+            <div style={{ color: COLORS.accent, fontSize: 22, fontWeight: 900 }}>{k.v}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Gráficos */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: 20, marginBottom: 24 }}>
+        <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, padding: 16 }}>
+          <h3 style={{ margin: '0 0 16px', color: COLORS.text, fontSize: 14 }}>📈 Ingresos por Mes</h3>
+          <ResponsiveContainer width="100%" height={280}>
+            <LineChart data={porMes}>
+              <CartesianGrid strokeDasharray="3 3" stroke={COLORS.border} />
+              <XAxis dataKey="mes" stroke={COLORS.muted} tick={{ fontSize: 11 }} />
+              <YAxis stroke={COLORS.muted} tick={{ fontSize: 11 }} tickFormatter={v => '$' + (v/1000000).toFixed(1) + 'M'} />
+              <Tooltip contentStyle={{ background: COLORS.surface, border: `1px solid ${COLORS.border}`, borderRadius: 8, color: COLORS.text, fontSize: 12 }} formatter={v => [fmt(v), 'Ingresos']} />
+              <Line type="monotone" dataKey="total" stroke={COLORS.accent} strokeWidth={2} dot={false} />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+
+        <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, padding: 16 }}>
+          <h3 style={{ margin: '0 0 16px', color: COLORS.text, fontSize: 14 }}>🔄 Tipos de Transacciones</h3>
+          <ResponsiveContainer width="100%" height={280}>
+            <PieChart>
+              <Pie data={tipos} cx="50%" cy="50%" outerRadius={90} dataKey="value" label={({ name, value }) => `${name}: ${value}`} labelLine={false}>
+                {tipos.map((e, i) => <Cell key={i} fill={e.color} />)}
+              </Pie>
+              <Tooltip formatter={v => v.toLocaleString('es-CL')} />
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, padding: 16 }}>
+        <h3 style={{ margin: '0 0 4px', color: COLORS.text, fontSize: 14 }}>🏆 Top {topN} Clientes</h3>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16, marginBottom: 24 }}>
         {[
@@ -328,7 +382,7 @@ export function AnalisisDatos({ colors: COLORS }) {
       </div>
 
       <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, padding: 16 }}>
-        <h3 style={{ margin: '0 0 4px', color: COLORS.text, fontSize: 14 }}>🏆 Top 5 Clientes</h3>
+        <h3 style={{ margin: '0 0 4px', color: COLORS.text, fontSize: 14 }}>🏆 Top {topN} Clientes</h3>
         <p style={{ color: COLORS.muted, fontSize: 12, margin: '0 0 16px' }}>Click en un cliente para ver su historial completo</p>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
           <thead>
