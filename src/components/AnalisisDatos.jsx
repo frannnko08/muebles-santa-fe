@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 export function AnalisisDatos({ colors: COLORS }) {
   const [cargando, setCargando] = useState(true);
@@ -15,6 +15,11 @@ export function AnalisisDatos({ colors: COLORS }) {
   const [detalleCliente, setDetalleCliente] = useState([]);
   const [vistaActiva, setVistaActiva] = useState('dashboard');
   const [faltantes, setFaltantes] = useState({ cotizaciones: [], notas: [] });
+  const [conversionPorMes, setConversionPorMes] = useState([]);
+  const [clientesInactivos, setClientesInactivos] = useState([]);
+  const [comparacionAnual, setComparacionAnual] = useState([]);
+  const [proyeccion, setProyeccion] = useState([]);
+  const [mesesInactivo, setMesesInactivo] = useState(6);
 
   useEffect(() => { cargarDatos(); }, [filtro]);
 
@@ -22,44 +27,40 @@ export function AnalisisDatos({ colors: COLORS }) {
     setCargando(true);
     setError(null);
     try {
-      const filtroFecha = filtro !== 'todo' ? (() => {
-        const d = new Date();
-        d.setMonth(d.getMonth() - parseInt(filtro));
-        return d.toISOString().split('T')[0];
-      })() : null;
-
-      const base = () => {
-        let q = supabase
-          .from('transacciones_historicas')
-          .select('cliente, total, fecha, tipo, numero_cotizacion, numero_nota_venta')
-          .eq('es_historico', true);
-        if (filtroFecha) q = q.gte('fecha', filtroFecha);
-        return q;
-      };
+      const base = () => supabase
+        .from('transacciones_historicas')
+        .select('cliente, total, fecha, tipo, numero_cotizacion, numero_nota_venta')
+        .eq('es_historico', true);
 
       const [res1, res2] = await Promise.all([
         base().range(0, 999),
         base().range(1000, 1999),
       ]);
-
       if (res1.error) throw res1.error;
       const data = [...(res1.data || []), ...(res2.data || [])];
-      const err = null;
-      if (err) throw err;
+
       if (!data || data.length === 0) {
         setError('No se encontraron datos.');
         setCargando(false);
         return;
       }
 
-      // Solo NV y barranes = ingresos reales
-      const ventas = data.filter(d => d.tipo === 'nota_venta' || d.tipo === 'barran');
-      const totalIngresos = ventas.reduce((s, d) => s + (Number(d.total) || 0), 0);
-      const clientesUnicos = new Set(data.map(d => d.cliente)).size;
-      const promedio = ventas.length > 0 ? totalIngresos / ventas.length : 0;
-      setKpis({ totalIngresos, transacciones: data.length, clientesUnicos, promedio });
+      // Filtrar por fecha si corresponde
+      const filtrado = filtro === 'todo' ? data : (() => {
+        const desde = new Date();
+        desde.setMonth(desde.getMonth() - parseInt(filtro));
+        const desdeStr = desde.toISOString().split('T')[0];
+        return data.filter(d => d.fecha >= desdeStr);
+      })();
 
-      // Por mes
+      // KPIs
+      const ventas = filtrado.filter(d => d.tipo === 'nota_venta' || d.tipo === 'barran');
+      const totalIngresos = ventas.reduce((s, d) => s + (Number(d.total) || 0), 0);
+      const clientesUnicos = new Set(filtrado.map(d => d.cliente)).size;
+      const promedio = ventas.length > 0 ? totalIngresos / ventas.length : 0;
+      setKpis({ totalIngresos, transacciones: filtrado.length, clientesUnicos, promedio });
+
+      // Por mes (ingresos)
       const mesMap = {};
       ventas.forEach(d => {
         const mes = (d.fecha || '').substring(0, 7);
@@ -70,27 +71,28 @@ export function AnalisisDatos({ colors: COLORS }) {
         Object.entries(mesMap).sort(([a],[b]) => a.localeCompare(b)).map(([mes, total]) => {
           const [y, m] = mes.split('-');
           const nombres = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
-          return { mes: `${nombres[parseInt(m)-1]} ${y.slice(-2)}`, total: Math.round(total) };
+          return { mes: `${nombres[parseInt(m)-1]} ${y.slice(-2)}`, mesISO: mes, total: Math.round(total) };
         })
       );
 
-      // Todos los clientes ordenados (se filtra por topN en el render)
-      const cliMap = {}, cliCount = {};
+      // Top clientes
+      const cliMap = {}, cliCount = {}, cliUltima = {};
       ventas.forEach(d => {
         cliMap[d.cliente] = (cliMap[d.cliente] || 0) + (Number(d.total) || 0);
         cliCount[d.cliente] = (cliCount[d.cliente] || 0) + 1;
+        if (!cliUltima[d.cliente] || d.fecha > cliUltima[d.cliente]) cliUltima[d.cliente] = d.fecha;
       });
-      setTodosClientes(
-        Object.entries(cliMap).sort(([,a],[,b]) => b - a).map(([cliente, total], i) => ({
-          rank: i + 1, cliente, total: Math.round(total),
-          pct: totalIngresos > 0 ? ((total / totalIngresos) * 100).toFixed(1) : '0',
-          transacciones: cliCount[cliente] || 0
-        }))
-      );
+      const clientesOrdenados = Object.entries(cliMap).sort(([,a],[,b]) => b - a).map(([cliente, total], i) => ({
+        rank: i + 1, cliente, total: Math.round(total),
+        pct: totalIngresos > 0 ? ((total / totalIngresos) * 100).toFixed(1) : '0',
+        transacciones: cliCount[cliente] || 0,
+        ultimaCompra: cliUltima[cliente] || null
+      }));
+      setTodosClientes(clientesOrdenados);
 
       // Tipos
       const conteo = { nota_venta: 0, cotizacion: 0, barran: 0 };
-      data.forEach(d => { if (d.tipo in conteo) conteo[d.tipo]++; });
+      filtrado.forEach(d => { if (d.tipo in conteo) conteo[d.tipo]++; });
       setTipos([
         { name: 'Notas de Venta', value: conteo.nota_venta, color: '#5a9e6f' },
         { name: 'Cotizaciones', value: conteo.cotizacion, color: '#c8a45a' },
@@ -98,9 +100,73 @@ export function AnalisisDatos({ colors: COLORS }) {
       ].filter(t => t.value > 0));
 
       // Faltantes
-      const nvNums = [...new Set(data.filter(d => d.numero_nota_venta && !isNaN(parseInt(d.numero_nota_venta))).map(d => parseInt(d.numero_nota_venta)))].sort((a,b) => a-b);
-      const cotNums = [...new Set(data.filter(d => d.numero_cotizacion && !isNaN(parseInt(d.numero_cotizacion))).map(d => parseInt(d.numero_cotizacion)))].sort((a,b) => a-b);
+      const nvNums = [...new Set(filtrado.filter(d => d.numero_nota_venta && !isNaN(parseInt(d.numero_nota_venta))).map(d => parseInt(d.numero_nota_venta)))].sort((a,b) => a-b);
+      const cotNums = [...new Set(filtrado.filter(d => d.numero_cotizacion && !isNaN(parseInt(d.numero_cotizacion))).map(d => parseInt(d.numero_cotizacion)))].sort((a,b) => a-b);
       setFaltantes({ notas: hallarFaltantes(nvNums), cotizaciones: hallarFaltantes(cotNums) });
+
+      // === CONVERSIÓN POR MES ===
+      const convMap = {};
+      filtrado.forEach(d => {
+        const mes = (d.fecha || '').substring(0, 7);
+        if (!mes) return;
+        if (!convMap[mes]) convMap[mes] = { cotizaciones: 0, ventas: 0 };
+        if (d.tipo === 'cotizacion') convMap[mes].cotizaciones++;
+        if (d.tipo === 'nota_venta' || d.tipo === 'barran') convMap[mes].ventas++;
+      });
+      setConversionPorMes(
+        Object.entries(convMap).sort(([a],[b]) => a.localeCompare(b)).map(([mes, v]) => {
+          const [y, m] = mes.split('-');
+          const nombres = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+          const pct = v.cotizaciones > 0 ? Math.round((v.ventas / v.cotizaciones) * 100) : 0;
+          return { mes: `${nombres[parseInt(m)-1]} ${y.slice(-2)}`, cotizaciones: v.cotizaciones, ventas: v.ventas, conversion: pct };
+        })
+      );
+
+      // === COMPARACIÓN ANUAL ===
+      const anioActual = new Date().getFullYear();
+      const anioAnterior = anioActual - 1;
+      const compMap = {};
+      ventas.forEach(d => {
+        if (!d.fecha) return;
+        const anio = parseInt(d.fecha.substring(0, 4));
+        const mes = parseInt(d.fecha.substring(5, 7));
+        if (anio !== anioActual && anio !== anioAnterior) return;
+        if (!compMap[mes]) compMap[mes] = { actual: 0, anterior: 0 };
+        if (anio === anioActual) compMap[mes].actual += Number(d.total) || 0;
+        if (anio === anioAnterior) compMap[mes].anterior += Number(d.total) || 0;
+      });
+      const nombres = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+      setComparacionAnual(
+        Array.from({length: 12}, (_, i) => ({
+          mes: nombres[i],
+          [anioActual]: Math.round(compMap[i+1]?.actual || 0),
+          [anioAnterior]: Math.round(compMap[i+1]?.anterior || 0),
+        })).filter(d => d[anioActual] > 0 || d[anioAnterior] > 0)
+      );
+
+      // === PROYECCIÓN PRÓXIMOS 3 MESES ===
+      const hoy = new Date();
+      const proyArr = [];
+      for (let i = 1; i <= 3; i++) {
+        const fecha = new Date(hoy.getFullYear(), hoy.getMonth() + i, 1);
+        const mesNum = fecha.getMonth() + 1;
+        const mismoMesHistorico = ventas.filter(d => d.fecha && parseInt(d.fecha.substring(5, 7)) === mesNum);
+        const promMes = mismoMesHistorico.length > 0
+          ? mismoMesHistorico.reduce((s, d) => s + (Number(d.total) || 0), 0) / new Set(mismoMesHistorico.map(d => d.fecha.substring(0, 4))).size
+          : 0;
+        proyArr.push({ mes: `${nombres[mesNum-1]} ${fecha.getFullYear().toString().slice(-2)}`, proyectado: Math.round(promMes) });
+      }
+      setProyeccion(proyArr);
+
+      // === CLIENTES INACTIVOS (usando todos los datos sin filtro de fecha) ===
+      const hoyStr = new Date().toISOString().split('T')[0];
+      const inactivos = clientesOrdenados.filter(c => {
+        if (!c.ultimaCompra) return false;
+        const ultima = new Date(c.ultimaCompra);
+        const diffMeses = (new Date() - ultima) / (1000 * 60 * 60 * 24 * 30);
+        return diffMeses >= mesesInactivo;
+      }).slice(0, 50);
+      setClientesInactivos(inactivos);
 
     } catch (e) {
       setError('Error: ' + e.message);
@@ -131,8 +197,9 @@ export function AnalisisDatos({ colors: COLORS }) {
   const fmt = n => '$' + Math.round(Number(n)).toLocaleString('es-CL');
   const fmtF = f => f ? new Date(f + 'T12:00:00').toLocaleDateString('es-CL') : '-';
   const topClientes = todosClientes.slice(0, topN);
+  const anioActual = new Date().getFullYear();
+  const anioAnterior = anioActual - 1;
 
-  // CARGANDO
   if (cargando) return (
     <div style={{ padding: 40, textAlign: 'center', color: COLORS.muted }}>
       <div style={{ fontSize: 32, marginBottom: 16 }}>⏳</div>
@@ -140,7 +207,6 @@ export function AnalisisDatos({ colors: COLORS }) {
     </div>
   );
 
-  // ERROR
   if (error) return (
     <div style={{ padding: 40, color: COLORS.danger, fontSize: 14 }}>
       <b>❌ {error}</b><br/><br/>
@@ -221,7 +287,7 @@ export function AnalisisDatos({ colors: COLORS }) {
           ← Volver
         </button>
         <h2 style={{ color: COLORS.accent, margin: '0 0 4px' }}>🔍 Números Faltantes</h2>
-        <p style={{ color: COLORS.muted, fontSize: 13, margin: '0 0 24px' }}>Correlativos no registrados. Puede que no se hayan extraído o no existan.</p>
+        <p style={{ color: COLORS.muted, fontSize: 13, margin: '0 0 24px' }}>Correlativos no registrados en la base de datos.</p>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 20 }}>
           {[
             { titulo: '📋 Cotizaciones faltantes', nums: faltantes.cotizaciones, color: COLORS.accent },
@@ -250,7 +316,7 @@ export function AnalisisDatos({ colors: COLORS }) {
   return (
     <div style={{ padding: 20, background: COLORS.bg, minHeight: '100vh' }}>
 
-      {/* Header con controles */}
+      {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', gap: 10 }}>
         <h2 style={{ margin: 0, color: COLORS.accent, fontSize: 18 }}>📊 Análisis Histórico</h2>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -284,11 +350,11 @@ export function AnalisisDatos({ colors: COLORS }) {
         ))}
       </div>
 
-      {/* Gráficos */}
+      {/* Gráfico ingresos + comparación anual */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: 20, marginBottom: 24 }}>
         <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, padding: 16 }}>
           <h3 style={{ margin: '0 0 16px', color: COLORS.text, fontSize: 14 }}>📈 Ingresos por Mes</h3>
-          <ResponsiveContainer width="100%" height={280}>
+          <ResponsiveContainer width="100%" height={260}>
             <LineChart data={porMes}>
               <CartesianGrid strokeDasharray="3 3" stroke={COLORS.border} />
               <XAxis dataKey="mes" stroke={COLORS.muted} tick={{ fontSize: 11 }} />
@@ -300,8 +366,44 @@ export function AnalisisDatos({ colors: COLORS }) {
         </div>
 
         <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, padding: 16 }}>
+          <h3 style={{ margin: '0 0 16px', color: COLORS.text, fontSize: 14 }}>📅 {anioActual} vs {anioAnterior}</h3>
+          <ResponsiveContainer width="100%" height={260}>
+            <BarChart data={comparacionAnual}>
+              <CartesianGrid strokeDasharray="3 3" stroke={COLORS.border} />
+              <XAxis dataKey="mes" stroke={COLORS.muted} tick={{ fontSize: 11 }} />
+              <YAxis stroke={COLORS.muted} tick={{ fontSize: 11 }} tickFormatter={v => '$' + (v/1000000).toFixed(1) + 'M'} />
+              <Tooltip contentStyle={{ background: COLORS.surface, border: `1px solid ${COLORS.border}`, borderRadius: 8, color: COLORS.text, fontSize: 12 }} formatter={v => fmt(v)} />
+              <Legend />
+              <Bar dataKey={anioActual} fill={COLORS.accent} radius={[4,4,0,0]} />
+              <Bar dataKey={anioAnterior} fill={COLORS.muted} radius={[4,4,0,0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      {/* Conversión + Tipos */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: 20, marginBottom: 24 }}>
+        <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, padding: 16 }}>
+          <h3 style={{ margin: '0 0 4px', color: COLORS.text, fontSize: 14 }}>🔄 Conversión Cotización → Venta por Mes</h3>
+          <p style={{ color: COLORS.muted, fontSize: 12, margin: '0 0 12px' }}>Barras = cantidad | Línea = % conversión</p>
+          <ResponsiveContainer width="100%" height={260}>
+            <BarChart data={conversionPorMes}>
+              <CartesianGrid strokeDasharray="3 3" stroke={COLORS.border} />
+              <XAxis dataKey="mes" stroke={COLORS.muted} tick={{ fontSize: 11 }} />
+              <YAxis yAxisId="left" stroke={COLORS.muted} tick={{ fontSize: 11 }} />
+              <YAxis yAxisId="right" orientation="right" stroke={COLORS.success} tick={{ fontSize: 11 }} tickFormatter={v => v + '%'} />
+              <Tooltip contentStyle={{ background: COLORS.surface, border: `1px solid ${COLORS.border}`, borderRadius: 8, color: COLORS.text, fontSize: 12 }} />
+              <Legend />
+              <Bar yAxisId="left" dataKey="cotizaciones" fill={COLORS.accentDim} name="Cotizaciones" radius={[4,4,0,0]} />
+              <Bar yAxisId="left" dataKey="ventas" fill={COLORS.success} name="Ventas" radius={[4,4,0,0]} />
+              <Line yAxisId="right" type="monotone" dataKey="conversion" stroke="#fff" strokeWidth={2} dot={false} name="% Conversión" />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+
+        <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, padding: 16 }}>
           <h3 style={{ margin: '0 0 16px', color: COLORS.text, fontSize: 14 }}>🔄 Tipos de Transacciones</h3>
-          <ResponsiveContainer width="100%" height={280}>
+          <ResponsiveContainer width="100%" height={260}>
             <PieChart>
               <Pie data={tipos} cx="50%" cy="50%" outerRadius={90} dataKey="value" label={({ name, value }) => `${name}: ${value}`} labelLine={false}>
                 {tipos.map((e, i) => <Cell key={i} fill={e.color} />)}
@@ -309,6 +411,63 @@ export function AnalisisDatos({ colors: COLORS }) {
               <Tooltip formatter={v => v.toLocaleString('es-CL')} />
             </PieChart>
           </ResponsiveContainer>
+        </div>
+      </div>
+
+      {/* Proyección + Clientes inactivos */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: 20, marginBottom: 24 }}>
+        <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, padding: 16 }}>
+          <h3 style={{ margin: '0 0 4px', color: COLORS.text, fontSize: 14 }}>🔮 Proyección Próximos 3 Meses</h3>
+          <p style={{ color: COLORS.muted, fontSize: 12, margin: '0 0 12px' }}>Basado en promedio histórico de cada mes</p>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 16 }}>
+            {proyeccion.map(p => (
+              <div key={p.mes} style={{ background: COLORS.subtle, border: `1px solid ${COLORS.border}`, borderRadius: 10, padding: 14, textAlign: 'center' }}>
+                <div style={{ color: COLORS.muted, fontSize: 12, marginBottom: 6 }}>{p.mes}</div>
+                <div style={{ color: COLORS.accent, fontSize: 16, fontWeight: 900 }}>{fmt(p.proyectado)}</div>
+              </div>
+            ))}
+          </div>
+          <p style={{ color: COLORS.muted, fontSize: 11, margin: 0 }}>⚠️ Estimación basada en el historial. No considera factores externos.</p>
+        </div>
+
+        <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, padding: 16 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+            <h3 style={{ margin: 0, color: COLORS.text, fontSize: 14 }}>😴 Clientes Inactivos</h3>
+            <select value={mesesInactivo} onChange={e => { setMesesInactivo(parseInt(e.target.value)); }}
+              style={{ background: COLORS.subtle, border: `1px solid ${COLORS.border}`, color: COLORS.text, borderRadius: 8, padding: '4px 8px', fontSize: 12 }}>
+              <option value={3}>+3 meses</option>
+              <option value={6}>+6 meses</option>
+              <option value={12}>+12 meses</option>
+            </select>
+          </div>
+          <p style={{ color: COLORS.muted, fontSize: 12, margin: '4px 0 12px' }}>Clientes sin compras hace más de {mesesInactivo} meses</p>
+          <div style={{ maxHeight: 220, overflowY: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+              <thead>
+                <tr style={{ borderBottom: `1px solid ${COLORS.border}` }}>
+                  {['Cliente', 'Última compra', 'Total histórico'].map(h => (
+                    <th key={h} style={{ textAlign: 'left', padding: '6px 8px', color: COLORS.muted, fontWeight: 700 }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {todosClientes.filter(c => {
+                  if (!c.ultimaCompra) return false;
+                  const diff = (new Date() - new Date(c.ultimaCompra + 'T12:00:00')) / (1000 * 60 * 60 * 24 * 30);
+                  return diff >= mesesInactivo;
+                }).slice(0, 20).map(c => (
+                  <tr key={c.cliente} onClick={() => verDetalleCliente(c.cliente)}
+                    style={{ borderBottom: `1px solid ${COLORS.border}`, cursor: 'pointer' }}
+                    onMouseEnter={e => e.currentTarget.style.background = COLORS.subtle}
+                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                    <td style={{ padding: '8px', color: COLORS.text }}>{c.cliente} <span style={{ color: COLORS.muted, fontSize: 10 }}>→</span></td>
+                    <td style={{ padding: '8px', color: COLORS.danger }}>{fmtF(c.ultimaCompra)}</td>
+                    <td style={{ padding: '8px', color: COLORS.text, fontWeight: 700 }}>{fmt(c.total)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
 
