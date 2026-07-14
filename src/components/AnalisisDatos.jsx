@@ -20,6 +20,11 @@ export function AnalisisDatos({ colors: COLORS }) {
   const [comparacionAnual, setComparacionAnual] = useState([]);
   const [proyeccion, setProyeccion] = useState([]);
   const [mesesInactivo, setMesesInactivo] = useState(6);
+  const [clienteGrandeVsOtros, setClienteGrandeVsOtros] = useState([]);
+  const [frecuenciaCompra, setFrecuenciaCompra] = useState([]);
+  const [pareto, setPareto] = useState([]);
+  const [conversionPorCliente, setConversionPorCliente] = useState([]);
+  const [clientesNuevosVsRepeat, setClientesNuevosVsRepeat] = useState([]);
 
   useEffect(() => { cargarDatos(); }, [filtro]);
 
@@ -167,6 +172,104 @@ export function AnalisisDatos({ colors: COLORS }) {
         return diffMeses >= mesesInactivo;
       }).slice(0, 50);
       setClientesInactivos(inactivos);
+
+      // === GRÁFICO 1: CLIENTE GRANDE VS OTROS ===
+      const CLIENTE_GRANDE = 'MUEBLES ASENJO LTDA.';
+      const mesGrandeMap = {};
+      ventas.forEach(d => {
+        const mes = (d.fecha || '').substring(0, 7);
+        if (!mes || mes < '2024-06') return;
+        if (!mesGrandeMap[mes]) mesGrandeMap[mes] = { grande: 0, otros: 0 };
+        if (d.cliente && d.cliente.toUpperCase().includes('MUEBLES ASENJO')) {
+          mesGrandeMap[mes].grande += Number(d.total) || 0;
+        } else {
+          mesGrandeMap[mes].otros += Number(d.total) || 0;
+        }
+      });
+      setClienteGrandeVsOtros(
+        Object.entries(mesGrandeMap).sort(([a],[b]) => a.localeCompare(b)).map(([mes, v]) => {
+          const [y, m] = mes.split('-');
+          const nombres = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+          return { mes: `${nombres[parseInt(m)-1]} ${y.slice(-2)}`, 'Muebles Asenjo': Math.round(v.grande), 'Otros clientes': Math.round(v.otros) };
+        })
+      );
+
+      // === GRÁFICO 2: FRECUENCIA DE COMPRA ===
+      const comprasPorCliente = {};
+      ventas.forEach(d => {
+        comprasPorCliente[d.cliente] = (comprasPorCliente[d.cliente] || 0) + 1;
+      });
+      const freq = { una: 0, pocas: 0, frecuentes: 0 };
+      Object.values(comprasPorCliente).forEach(n => {
+        if (n === 1) freq.una++;
+        else if (n <= 5) freq.pocas++;
+        else freq.frecuentes++;
+      });
+      const totalCli = freq.una + freq.pocas + freq.frecuentes;
+      setFrecuenciaCompra([
+        { name: '1 compra', value: freq.una, pct: ((freq.una/totalCli)*100).toFixed(1), color: '#c8a45a' },
+        { name: '2-5 compras', value: freq.pocas, pct: ((freq.pocas/totalCli)*100).toFixed(1), color: '#5a9e6f' },
+        { name: '6+ compras', value: freq.frecuentes, pct: ((freq.frecuentes/totalCli)*100).toFixed(1), color: '#5a7ace' },
+      ]);
+
+      // === GRÁFICO 3: PARETO ===
+      const totalIngresosPareto = clientesOrdenados.reduce((s, c) => s + c.total, 0);
+      const totalClientesPareto = clientesOrdenados.length;
+      const paretoData = [10, 20, 30, 50, 80, 100].map(pct => {
+        const n = Math.ceil(totalClientesPareto * pct / 100);
+        const ingresos = clientesOrdenados.slice(0, n).reduce((s, c) => s + c.total, 0);
+        return {
+          clientes: pct + '%',
+          ingresos: totalIngresosPareto > 0 ? Math.round((ingresos / totalIngresosPareto) * 100) : 0
+        };
+      });
+      setPareto(paretoData);
+
+      // === GRÁFICO 5: CONVERSIÓN POR CLIENTE ===
+      const cliCot = {}, cliVenta = {};
+      filtrado.forEach(d => {
+        if (d.tipo === 'cotizacion') cliCot[d.cliente] = (cliCot[d.cliente] || 0) + 1;
+        if (d.tipo === 'nota_venta' || d.tipo === 'barran') cliVenta[d.cliente] = (cliVenta[d.cliente] || 0) + 1;
+      });
+      const convClientes = Object.keys(cliCot)
+        .filter(c => cliCot[c] >= 2)
+        .map(c => ({
+          cliente: c,
+          cotizaciones: cliCot[c] || 0,
+          ventas: cliVenta[c] || 0,
+          conversion: cliCot[c] > 0 ? Math.round(((cliVenta[c] || 0) / cliCot[c]) * 100) : 0
+        }))
+        .sort((a, b) => b.conversion - a.conversion)
+        .slice(0, 15);
+      setConversionPorCliente(convClientes);
+
+      // === GRÁFICO 6: NUEVOS VS REPEAT ===
+      const primeraCompra = {};
+      ventas.forEach(d => {
+        if (!primeraCompra[d.cliente] || d.fecha < primeraCompra[d.cliente]) {
+          primeraCompra[d.cliente] = d.fecha;
+        }
+      });
+      const nvRepeatMap = {};
+      ventas.forEach(d => {
+        const mes = (d.fecha || '').substring(0, 7);
+        if (!mes) return;
+        if (!nvRepeatMap[mes]) nvRepeatMap[mes] = { nuevos: 0, repeat: 0, ingNuevos: 0, ingRepeat: 0 };
+        if (primeraCompra[d.cliente] === d.fecha) {
+          nvRepeatMap[mes].nuevos++;
+          nvRepeatMap[mes].ingNuevos += Number(d.total) || 0;
+        } else {
+          nvRepeatMap[mes].repeat++;
+          nvRepeatMap[mes].ingRepeat += Number(d.total) || 0;
+        }
+      });
+      setClientesNuevosVsRepeat(
+        Object.entries(nvRepeatMap).sort(([a],[b]) => a.localeCompare(b)).map(([mes, v]) => {
+          const [y, m] = mes.split('-');
+          const nombres = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+          return { mes: `${nombres[parseInt(m)-1]} ${y.slice(-2)}`, Nuevos: v.nuevos, Repeat: v.repeat };
+        })
+      );
 
     } catch (e) {
       setError('Error: ' + e.message);
@@ -469,6 +572,112 @@ export function AnalisisDatos({ colors: COLORS }) {
             </table>
           </div>
         </div>
+      </div>
+
+      {/* GRÁFICO 1: Cliente grande vs otros */}
+      <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, padding: 16, marginBottom: 24 }}>
+        <h3 style={{ margin: '0 0 4px', color: COLORS.text, fontSize: 14 }}>🏢 Muebles Asenjo vs Resto de Clientes</h3>
+        <p style={{ color: COLORS.muted, fontSize: 12, margin: '0 0 12px' }}>Ingresos mensuales desde Jun 2024</p>
+        <ResponsiveContainer width="100%" height={260}>
+          <LineChart data={clienteGrandeVsOtros}>
+            <CartesianGrid strokeDasharray="3 3" stroke={COLORS.border} />
+            <XAxis dataKey="mes" stroke={COLORS.muted} tick={{ fontSize: 11 }} />
+            <YAxis stroke={COLORS.muted} tick={{ fontSize: 11 }} tickFormatter={v => '$' + (v/1000000).toFixed(1) + 'M'} />
+            <Tooltip contentStyle={{ background: COLORS.surface, border: `1px solid ${COLORS.border}`, borderRadius: 8, color: COLORS.text, fontSize: 12 }} formatter={v => fmt(v)} />
+            <Legend />
+            <Line type="monotone" dataKey="Muebles Asenjo" stroke={COLORS.danger} strokeWidth={2} dot={false} />
+            <Line type="monotone" dataKey="Otros clientes" stroke={COLORS.accent} strokeWidth={2} dot={false} />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+
+      {/* GRÁFICOS 2 y 3: Frecuencia + Pareto */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: 20, marginBottom: 24 }}>
+        <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, padding: 16 }}>
+          <h3 style={{ margin: '0 0 4px', color: COLORS.text, fontSize: 14 }}>🔁 Frecuencia de Compra por Cliente</h3>
+          <p style={{ color: COLORS.muted, fontSize: 12, margin: '0 0 12px' }}>¿Cuántas veces compra cada cliente?</p>
+          <ResponsiveContainer width="100%" height={220}>
+            <PieChart>
+              <Pie data={frecuenciaCompra} cx="50%" cy="50%" outerRadius={80} dataKey="value"
+                label={({ name, pct }) => `${name}: ${pct}%`} labelLine={false}>
+                {frecuenciaCompra.map((e, i) => <Cell key={i} fill={e.color} />)}
+              </Pie>
+              <Tooltip formatter={(v, name, props) => [`${v} clientes (${props.payload.pct}%)`, name]} />
+            </PieChart>
+          </ResponsiveContainer>
+          <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
+            {frecuenciaCompra.map(f => (
+              <div key={f.name} style={{ textAlign: 'center' }}>
+                <div style={{ color: f.color, fontWeight: 700, fontSize: 18 }}>{f.value}</div>
+                <div style={{ color: COLORS.muted, fontSize: 11 }}>{f.name}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, padding: 16 }}>
+          <h3 style={{ margin: '0 0 4px', color: COLORS.text, fontSize: 14 }}>📊 Distribución Pareto de Clientes</h3>
+          <p style={{ color: COLORS.muted, fontSize: 12, margin: '0 0 12px' }}>% clientes → % de ingresos totales</p>
+          <ResponsiveContainer width="100%" height={260}>
+            <BarChart data={pareto}>
+              <CartesianGrid strokeDasharray="3 3" stroke={COLORS.border} />
+              <XAxis dataKey="clientes" stroke={COLORS.muted} tick={{ fontSize: 11 }} label={{ value: '% clientes', position: 'insideBottom', offset: -2, fill: COLORS.muted, fontSize: 11 }} />
+              <YAxis stroke={COLORS.muted} tick={{ fontSize: 11 }} tickFormatter={v => v + '%'} domain={[0, 100]} />
+              <Tooltip formatter={v => v + '% de ingresos'} contentStyle={{ background: COLORS.surface, border: `1px solid ${COLORS.border}`, borderRadius: 8, color: COLORS.text, fontSize: 12 }} />
+              <Bar dataKey="ingresos" fill={COLORS.accent} radius={[4,4,0,0]} name="% Ingresos" />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      {/* GRÁFICO 5: Conversión por cliente */}
+      <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, padding: 16, marginBottom: 24 }}>
+        <h3 style={{ margin: '0 0 4px', color: COLORS.text, fontSize: 14 }}>🎯 Tasa de Conversión por Cliente (Top 15)</h3>
+        <p style={{ color: COLORS.muted, fontSize: 12, margin: '0 0 12px' }}>Solo clientes con 2+ cotizaciones. Ordenado por % conversión.</p>
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+            <thead>
+              <tr style={{ borderBottom: `1px solid ${COLORS.border}` }}>
+                {['Cliente','Cotizaciones','Ventas','% Conversión'].map(h => (
+                  <th key={h} style={{ textAlign: h === '% Conversión' ? 'right' : 'left', padding: '8px', color: COLORS.muted, fontWeight: 700 }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {conversionPorCliente.map((c, i) => (
+                <tr key={i} style={{ borderBottom: `1px solid ${COLORS.border}` }}>
+                  <td style={{ padding: '10px 8px', color: COLORS.text }}>{c.cliente}</td>
+                  <td style={{ padding: '10px 8px', color: COLORS.muted }}>{c.cotizaciones}</td>
+                  <td style={{ padding: '10px 8px', color: COLORS.muted }}>{c.ventas}</td>
+                  <td style={{ padding: '10px 8px', textAlign: 'right' }}>
+                    <span style={{
+                      background: c.conversion >= 70 ? '#1a3a25' : c.conversion >= 40 ? '#3a2e12' : '#3a1a1a',
+                      color: c.conversion >= 70 ? COLORS.success : c.conversion >= 40 ? COLORS.accent : COLORS.danger,
+                      padding: '2px 10px', borderRadius: 6, fontWeight: 700, fontSize: 13
+                    }}>{c.conversion}%</span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* GRÁFICO 6: Nuevos vs Repeat */}
+      <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, padding: 16, marginBottom: 24 }}>
+        <h3 style={{ margin: '0 0 4px', color: COLORS.text, fontSize: 14 }}>👥 Clientes Nuevos vs Recurrentes por Mes</h3>
+        <p style={{ color: COLORS.muted, fontSize: 12, margin: '0 0 12px' }}>Nuevos = primera compra ese mes | Recurrentes = ya habían comprado antes</p>
+        <ResponsiveContainer width="100%" height={260}>
+          <BarChart data={clientesNuevosVsRepeat}>
+            <CartesianGrid strokeDasharray="3 3" stroke={COLORS.border} />
+            <XAxis dataKey="mes" stroke={COLORS.muted} tick={{ fontSize: 11 }} />
+            <YAxis stroke={COLORS.muted} tick={{ fontSize: 11 }} />
+            <Tooltip contentStyle={{ background: COLORS.surface, border: `1px solid ${COLORS.border}`, borderRadius: 8, color: COLORS.text, fontSize: 12 }} />
+            <Legend />
+            <Bar dataKey="Nuevos" fill={COLORS.accent} radius={[4,4,0,0]} stackId="a" />
+            <Bar dataKey="Repeat" fill={COLORS.success} radius={[4,4,0,0]} stackId="a" />
+          </BarChart>
+        </ResponsiveContainer>
       </div>
 
       {/* Top Clientes */}
