@@ -4607,141 +4607,83 @@ if (!errorDocumentosTrabajadores) {
   }, [seguimiento]);
 
 
-  // Panel de Gestión: Supabase como fuente principal y localStorage como respaldo.
+  // Panel de Gestión: datos manuales mensuales con respaldo local.
+  // Se deja preparado para que la aplicación funcione aunque todavía no existan tablas nuevas en Supabase.
   useEffect(() => {
-    let activo = true;
-    const cargarPanelGestion = async () => {
-      let marketingLocal = {};
-      let accionesLocal = {};
-      try {
-        marketingLocal = JSON.parse(localStorage.getItem("sf-marketing-mensual") || "{}");
-        accionesLocal = JSON.parse(localStorage.getItem("sf-planes-accion") || "{}");
-      } catch (e) {
-        console.warn("No se pudo leer el respaldo local del Panel de Gestión.", e);
-      }
-
-      const [{ data: marketingNube, error: errorMarketing }, { data: accionesNube, error: errorAcciones }] = await Promise.all([
-        supabase.from("metricas_comerciales_mensuales").select("*"),
-        supabase.from("planes_accion").select("*").order("fecha", { ascending:true })
-      ]);
-
-      if (!activo) return;
-
-      if (!errorMarketing) {
-        const mapa = {};
-        (marketingNube || []).forEach(f => {
-          mapa[f.mes] = {
-            publicaciones:Number(f.publicaciones || 0),
-            historias_videos:Number(f.historias_videos || 0),
-            proyectos_publicados:Number(f.proyectos_publicados || 0),
-            google_business:Number(f.google_business || 0),
-            campanas:Number(f.campanas || 0),
-            inversion:Number(f.inversion || 0),
-            consultas_identificadas:Number(f.consultas_identificadas || 0),
-            observacion:f.observacion || ""
-          };
-        });
-        setMarketingMensual(mapa);
-        try { localStorage.setItem("sf-marketing-mensual", JSON.stringify(mapa)); } catch (e) {}
-      } else {
-        setMarketingMensual(marketingLocal);
-        console.warn("Marketing mensual cargado desde respaldo local.", errorMarketing);
-      }
-
-      if (!errorAcciones) {
-        const mapa = {};
-        (accionesNube || []).forEach(a => {
-          const mes = a.fecha ? String(a.fecha).slice(0,7) : (a.mes || new Date().toISOString().slice(0,7));
-          if (!mapa[mes]) mapa[mes] = [];
-          mapa[mes].push({ id:a.id, accion:a.accion, responsable:a.responsable || "", fecha:a.fecha || "", estado:a.estado || "pendiente" });
-        });
-        setPlanesAccion(mapa);
-        try { localStorage.setItem("sf-planes-accion", JSON.stringify(mapa)); } catch (e) {}
-      } else {
-        setPlanesAccion(accionesLocal);
-        console.warn("Planes de acción cargados desde respaldo local.", errorAcciones);
-      }
-    };
-    cargarPanelGestion();
-    return () => { activo = false; };
+    try {
+      const marketing = localStorage.getItem("sf-marketing-mensual");
+      const acciones = localStorage.getItem("sf-planes-accion");
+      if (marketing) setMarketingMensual(JSON.parse(marketing));
+      if (acciones) setPlanesAccion(JSON.parse(acciones));
+    } catch (e) {
+      console.warn("No se pudieron cargar los registros manuales del Panel de Gestión.", e);
+    }
   }, []);
 
   const actualizarMarketingMes = useCallback((campo, valor) => {
-    let registroActualizado = null;
     setMarketingMensual(prev => {
-      registroActualizado = {
-        publicaciones:0, historias_videos:0, proyectos_publicados:0, google_business:0,
-        campanas:0, inversion:0, consultas_identificadas:0, observacion:"",
-        ...(prev[mesGestion] || {}), [campo]:valor
+      const actualizado = {
+        ...prev,
+        [mesGestion]: {
+          publicaciones:0,
+          historias_videos:0,
+          proyectos_publicados:0,
+          google_business:0,
+          campanas:0,
+          inversion:0,
+          consultas_identificadas:0,
+          observacion:"",
+          ...(prev[mesGestion] || {}),
+          [campo]: valor
+        }
       };
-      const actualizado = { ...prev, [mesGestion]:registroActualizado };
       try { localStorage.setItem("sf-marketing-mensual", JSON.stringify(actualizado)); } catch (e) {}
       return actualizado;
     });
-    setTimeout(async () => {
-      if (!registroActualizado) return;
-      const { error } = await supabase.from("metricas_comerciales_mensuales").upsert({
-        mes:mesGestion, ...registroActualizado, updated_at:new Date().toISOString()
-      }, { onConflict:"mes" });
-      if (error) {
-        console.error(error);
-        toast("El dato de marketing quedó respaldado localmente, pero no pudo sincronizarse con Supabase.", "warning");
-      }
-    }, 0);
   }, [mesGestion]);
 
-  const agregarAccionGestion = useCallback(async () => {
+  const agregarAccionGestion = useCallback(() => {
     if (!String(nuevaAccion.accion || "").trim()) {
       toast("Debes escribir la acción a realizar.", "warning");
       return;
     }
-    const mesDestino = nuevaAccion.fecha ? String(nuevaAccion.fecha).slice(0,7) : mesGestion;
-    const accionNueva = {
-      id:`${Date.now()}-${Math.random().toString(36).slice(2,9)}`,
-      mes:mesDestino,
-      accion:String(nuevaAccion.accion).trim(),
-      responsable:String(nuevaAccion.responsable || "").trim(),
-      fecha:nuevaAccion.fecha || null,
-      estado:"pendiente"
-    };
     setPlanesAccion(prev => {
-      const actualizado = { ...prev, [mesDestino]:[...(prev[mesDestino] || []), { ...accionNueva, fecha:accionNueva.fecha || "" }] };
+      const lista = prev[mesGestion] || [];
+      const actualizado = {
+        ...prev,
+        [mesGestion]: [...lista, {
+          id:`${Date.now()}-${Math.random().toString(36).slice(2,7)}`,
+          accion:String(nuevaAccion.accion).trim(),
+          responsable:String(nuevaAccion.responsable || "").trim(),
+          fecha:nuevaAccion.fecha || "",
+          estado:"pendiente"
+        }]
+      };
       try { localStorage.setItem("sf-planes-accion", JSON.stringify(actualizado)); } catch (e) {}
       return actualizado;
     });
     setNuevaAccion({ accion:"", responsable:"", fecha:"" });
-    const { error } = await supabase.from("planes_accion").insert(accionNueva);
-    if (error) {
-      console.error(error);
-      toast("La acción quedó guardada localmente, pero no pudo sincronizarse con Supabase.", "warning");
-    } else {
-      toast(`Acción agregada al plan de ${nombreMesResumen(mesDestino)}.`, "success");
-    }
+    toast("Acción agregada al plan mensual.", "success");
   }, [mesGestion, nuevaAccion]);
 
-  const actualizarAccionGestion = useCallback(async (id, cambios) => {
+  const actualizarAccionGestion = useCallback((id, cambios) => {
     setPlanesAccion(prev => {
-      const actualizado = { ...prev };
-      Object.keys(actualizado).forEach(mes => {
-        actualizado[mes] = (actualizado[mes] || []).map(a => a.id === id ? { ...a, ...cambios } : a);
-      });
+      const actualizado = {
+        ...prev,
+        [mesGestion]:(prev[mesGestion] || []).map(a => a.id === id ? { ...a, ...cambios } : a)
+      };
       try { localStorage.setItem("sf-planes-accion", JSON.stringify(actualizado)); } catch (e) {}
       return actualizado;
     });
-    const { error } = await supabase.from("planes_accion").update({ ...cambios, updated_at:new Date().toISOString() }).eq("id", id);
-    if (error) toast("El cambio quedó guardado localmente, pero no pudo sincronizarse con Supabase.", "warning");
-  }, []);
+  }, [mesGestion]);
 
-  const eliminarAccionGestion = useCallback(async (id) => {
+  const eliminarAccionGestion = useCallback((id) => {
     setPlanesAccion(prev => {
-      const actualizado = {};
-      Object.entries(prev).forEach(([mes, lista]) => { actualizado[mes] = (lista || []).filter(a => a.id !== id); });
+      const actualizado = { ...prev, [mesGestion]:(prev[mesGestion] || []).filter(a => a.id !== id) };
       try { localStorage.setItem("sf-planes-accion", JSON.stringify(actualizado)); } catch (e) {}
       return actualizado;
     });
-    const { error } = await supabase.from("planes_accion").delete().eq("id", id);
-    if (error) toast("La acción se eliminó localmente, pero no pudo borrarse de Supabase.", "warning");
-  }, []);
+  }, [mesGestion]);
 
   // ============= AUTENTICACIÓN DE USUARIOS =============
   // Lista de secciones que requieren rol admin (control total)
@@ -5360,15 +5302,6 @@ if (!errorDocumentosTrabajadores) {
   const cxcTotalGestion = notasVenta.reduce((sum,n) => sum + saldoNv(n), 0);
   const cxcEntregadaGestion = notasVenta.filter(n => String(n.proceso || "").toLowerCase() === "entregado").reduce((sum,n) => sum + saldoNv(n), 0);
   const cxcTerminadaGestion = notasVenta.filter(n => n.media_cana && String(n.proceso || "").toLowerCase() !== "entregado").reduce((sum,n) => sum + saldoNv(n), 0);
-  const cxcPriorizadaGestion = notasVenta
-    .map(n => {
-      const saldo = saldoNv(n);
-      const proceso = String(n.proceso || "").toLowerCase();
-      const prioridad = proceso === "entregado" ? 1 : (n.media_cana ? 2 : 3);
-      return { ...n, saldo, prioridad, etiqueta:prioridad===1?"Entregada":prioridad===2?"Terminada":"En proceso" };
-    })
-    .filter(n => n.saldo > 0)
-    .sort((a,b) => a.prioridad - b.prioridad || b.saldo - a.saldo);
 
   const saldoCuentaGestion = (cuenta) => Math.max(Number(cuenta.monto || cuenta.total || 0) - abonosCuentasPagar.filter(a => String(a.cuenta_pagar_id) === String(cuenta.id)).reduce((sum,a) => sum + Number(a.monto || 0), 0), 0);
   const hoyGestion = new Date(); hoyGestion.setHours(0,0,0,0);
@@ -8573,24 +8506,6 @@ const renderTarjetaProduccion = (n) => (
               <StatCard label="Cobertura seguimiento" value={`${coberturaSeguimiento}%`} sub={`${cotizacionesConSeguimiento.length} con registro · ${cotizacionesSinSeguimiento.length} sin registro`} icon="📞" color={coberturaSeguimiento>=60?COLORS.success:COLORS.warning}/>
             </div>
 
-            <div style={{ background:COLORS.card, border:`1px solid ${COLORS.border}`, borderRadius:12, padding:18, marginBottom:20 }}>
-              <div style={{ display:"flex", justifyContent:"space-between", gap:10, alignItems:"center", marginBottom:12 }}>
-                <div><b style={{ color:COLORS.accent }}>📥 Cuentas por cobrar priorizadas</b><div style={{ fontSize:11, color:COLORS.muted }}>Primero pedidos entregados, luego terminados y finalmente en proceso.</div></div>
-                <span style={{ color:COLORS.muted, fontSize:11 }}>{cxcPriorizadaGestion.length} saldos pendientes</span>
-              </div>
-              <div style={{ overflowX:"auto" }}>
-                <div style={{ minWidth:650 }}>
-                  {cxcPriorizadaGestion.slice(0,10).map(n => {
-                    const col=n.prioridad===1?COLORS.warning:n.prioridad===2?"#5a8abe":COLORS.muted;
-                    return <div key={n.id || n.numero} style={{ display:"grid", gridTemplateColumns:"90px 1fr 120px 120px", gap:10, alignItems:"center", padding:"9px 0", borderBottom:`1px solid ${COLORS.border}`, fontSize:12 }}>
-                      <b style={{ color:COLORS.accent }}>NV #{n.numero}</b><span>{n.cliente}</span><span style={{ color:col, fontWeight:800 }}>{n.etiqueta}</span><b style={{ textAlign:"right" }}>{fmt(n.saldo)}</b>
-                    </div>;
-                  })}
-                  {cxcPriorizadaGestion.length===0 && <div style={{ color:COLORS.muted, fontSize:12 }}>No hay cuentas por cobrar pendientes.</div>}
-                </div>
-              </div>
-            </div>
-
             <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(320px,1fr))", gap:16, marginBottom:20 }}>
               <div style={{ background:COLORS.card, border:`1px solid ${COLORS.border}`, borderRadius:12, padding:18 }}>
                 <div style={{ display:"flex", justifyContent:"space-between", gap:10, alignItems:"center", marginBottom:12 }}>
@@ -8627,7 +8542,7 @@ const renderTarjetaProduccion = (n) => (
               </div>
 
               <div style={{ background:COLORS.card, border:`1px solid ${COLORS.border}`, borderRadius:12, padding:18 }}>
-                <div style={{ marginBottom:12 }}><b style={{ color:COLORS.accent }}>📝 Plan de acción mensual</b><div style={{ fontSize:11, color:COLORS.muted }}>Las acciones se muestran en el mes correspondiente a su fecha · {nombreMesResumen(mesGestion)}</div></div>
+                <div style={{ marginBottom:12 }}><b style={{ color:COLORS.accent }}>📝 Plan de acción mensual</b><div style={{ fontSize:11, color:COLORS.muted }}>Acuerdos, responsables y fechas</div></div>
                 <div style={{ display:"grid", gridTemplateColumns:"2fr 1fr 130px auto", gap:7, marginBottom:12 }}>
                   <input value={nuevaAccion.accion} onChange={e=>setNuevaAccion(p=>({...p,accion:e.target.value}))} placeholder="Acción a realizar" style={{ minWidth:0, padding:8, borderRadius:7, border:`1px solid ${COLORS.border}`, background:COLORS.surface, color:COLORS.text }}/>
                   <input value={nuevaAccion.responsable} onChange={e=>setNuevaAccion(p=>({...p,responsable:e.target.value}))} placeholder="Responsable" style={{ minWidth:0, padding:8, borderRadius:7, border:`1px solid ${COLORS.border}`, background:COLORS.surface, color:COLORS.text }}/>
