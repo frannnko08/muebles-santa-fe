@@ -4461,7 +4461,6 @@ if (!errorDocumentosTrabajadores) {
   const [busquedaClienteAnalisis, setBusquedaClienteAnalisis] = useState("");
   const [filtroFechasAnalisis, setFiltroFechasAnalisis] = useState("mes_actual");
   const [filtroResumen, setFiltroResumen] = useState("mes_actual");
-  const [rangoProductosCm, setRangoProductosCm] = useState(10);
   const [filter, setFilter] = useState("");
   const [fechaDesde, setFechaDesde] = useState("");
   const [fechaHasta, setFechaHasta] = useState("");
@@ -5319,110 +5318,8 @@ if (!errorDocumentosTrabajadores) {
     };
   };
 
-  const normalizarMedidaCm = (valor) => {
-    if (valor === null || valor === undefined || valor === "") return 0;
-    const limpio = String(valor).trim().replace(/\s/g, "").replace(",", ".");
-    const n = Number(limpio);
-    if (!Number.isFinite(n) || n <= 0) return 0;
-    // El Excel puede guardar medidas en metros (3,00), centímetros (300) o milímetros (3000).
-    if (n <= 10) return Math.round(n * 100);
-    if (n >= 1000) return Math.round(n / 10);
-    return Math.round(n);
-  };
-
-  const normalizarTextoEstadistica = (valor) => String(valor || "")
-    .trim()
-    .replace(/\s+/g, " ");
-
-  const esDetalleProductoAnalizable = (detalle) => {
-    const largoCm = normalizarMedidaCm(detalle?.largo ?? detalle?.alto);
-    const anchoCm = normalizarMedidaCm(detalle?.ancho);
-    const texto = normalizarTextoEstadistica(detalle?.tipo ?? detalle?.descripcion).toLowerCase();
-    const excluido = /despacho|flete|traslado|instalaci[oó]n|mano de obra|servicio/.test(texto);
-    return largoCm > 0 && anchoCm > 0 && !excluido;
-  };
-
-  const clasificarTipoProducto = (detalle) => {
-    const texto = normalizarTextoEstadistica(detalle?.tipo ?? detalle?.descripcion).toLowerCase();
-    if (/180|frente 180|radio 180/.test(texto)) return "Cubierta frente 180°";
-    if (/90|frente 90|radio 90/.test(texto)) return "Cubierta frente 90°";
-    if (/espa[nñ]ol/.test(texto)) return "Frente español";
-    if (/tibur[oó]n/.test(texto)) return "Punta tiburón";
-    if (/mesa.*4|4 lados/.test(texto)) return "Mesa 4 lados";
-    if (/mesa.*3|3 lados/.test(texto)) return "Mesa 3 lados";
-    if (/mesa.*2|2 lados/.test(texto)) return "Mesa 2 lados";
-    if (/enchape/.test(texto)) return "Enchape recto";
-    if (/puerta/.test(texto)) return "Puerta postformada";
-    if (/cubierta|postform/.test(texto)) return "Cubierta sin clasificar";
-    return normalizarTextoEstadistica(detalle?.tipo ?? detalle?.descripcion) || "Otro producto";
-  };
-
-  const calcularEstadisticasProductos = (rango, intervaloCm = 10) => {
-    const idsCotizacionesPeriodo = new Set(
-      cotizaciones
-        .filter(c => estaEnRangoResumen(c.fecha, rango))
-        .map(c => Number(String(c.id || "").replace("supabase-", "")))
-        .filter(Number.isFinite)
-    );
-
-    const detallesPeriodo = detallesCotizaciones
-      .filter(d => idsCotizacionesPeriodo.has(Number(d.cotizacion_id)))
-      .filter(esDetalleProductoAnalizable)
-      .map(d => {
-        const cantidadLeida = Number(d.unidad ?? d.cantidad ?? 1);
-        return {
-          ...d,
-          cantidadEstadistica: Number.isFinite(cantidadLeida) && cantidadLeida > 0 ? cantidadLeida : 1,
-          largoCm: normalizarMedidaCm(d.largo ?? d.alto),
-          anchoCm: normalizarMedidaCm(d.ancho),
-          tipoEstadistica: clasificarTipoProducto(d),
-          colorEstadistica: normalizarTextoEstadistica(d.color) || "Sin color",
-        };
-      });
-
-    const agrupar = (obtenerClave, obtenerEtiqueta = k => k) => {
-      const mapa = new Map();
-      detallesPeriodo.forEach(d => {
-        const clave = obtenerClave(d);
-        const cantidad = d.cantidadEstadistica;
-        const actual = mapa.get(clave) || { clave, etiqueta:obtenerEtiqueta(clave, d), cantidad:0, cotizaciones:new Set() };
-        actual.cantidad += cantidad;
-        actual.cotizaciones.add(Number(d.cotizacion_id));
-        mapa.set(clave, actual);
-      });
-      return [...mapa.values()]
-        .map(x => ({ ...x, cotizaciones:x.cotizaciones.size }))
-        .sort((a,b) => b.cantidad - a.cantidad || b.cotizaciones - a.cotizaciones);
-    };
-
-    const intervalo = Math.max(5, Number(intervaloCm) || 10);
-    const rangoMedida = (cm) => Math.floor(cm / intervalo) * intervalo;
-    const etiquetaRango = inicio => `${inicio}-${inicio + intervalo - 1} cm`;
-
-    const largos = agrupar(d => rangoMedida(d.largoCm), inicio => etiquetaRango(inicio));
-    const anchos = agrupar(d => rangoMedida(d.anchoCm), inicio => etiquetaRango(inicio));
-    const tipos = agrupar(d => d.tipoEstadistica);
-    const colores = agrupar(d => d.colorEstadistica);
-    const medidasExactas = agrupar(
-      d => `${d.largoCm}x${d.anchoCm}`,
-      (_, d) => `${d.largoCm} × ${d.anchoCm} cm`
-    );
-
-    return {
-      detallesPeriodo,
-      unidades:detallesPeriodo.reduce((s,d) => s + d.cantidadEstadistica, 0),
-      cotizacionesConDetalle:new Set(detallesPeriodo.map(d => Number(d.cotizacion_id))).size,
-      largos,
-      anchos,
-      tipos,
-      colores,
-      medidasExactas,
-    };
-  };
-
   const rangoResumen = obtenerRangoResumen();
   const resumenActual = calcularMetricasResumen(rangoResumen);
-  const estadisticasProductos = calcularEstadisticasProductos(rangoResumen, rangoProductosCm);
   const rangoResumenAnterior = filtroResumen === "todo" ? null : obtenerRangoResumen(filtroResumen, filtroResumen === "año_actual" ? -12 : filtroResumen === "ultimos_6_meses" ? -6 : filtroResumen === "ultimos_3_meses" ? -3 : -1);
   const resumenAnterior = rangoResumenAnterior ? calcularMetricasResumen(rangoResumenAnterior) : null;
   const variacionPorcentual = (actual, anterior) => {
@@ -8655,76 +8552,6 @@ const renderTarjetaProduccion = (n) => (
                   <option value="todo">Todo</option>
                 </select>
               </div>
-            </div>
-
-            <div style={{ background:COLORS.card, border:`1px solid ${COLORS.border}`, borderRadius:12, padding:18, marginBottom:20 }}>
-              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:12, flexWrap:"wrap", marginBottom:14 }}>
-                <div>
-                  <h2 style={{ margin:"0 0 4px", color:COLORS.accent, fontSize:18 }}>📐 Productos y medidas cotizadas</h2>
-                  <div style={{ fontSize:12, color:COLORS.muted }}>
-                    Analiza los detalles importados de las cotizaciones del período. Las cantidades consideran el campo unidad de cada producto.
-                  </div>
-                </div>
-                <label style={{ color:COLORS.muted, fontSize:12 }}>
-                  Agrupar largos y anchos cada
-                  <select
-                    value={rangoProductosCm}
-                    onChange={e => setRangoProductosCm(Number(e.target.value))}
-                    style={{ marginLeft:8, background:COLORS.surface, border:`1px solid ${COLORS.border}`, color:COLORS.text, borderRadius:8, padding:"7px 9px" }}
-                  >
-                    <option value={5}>5 cm</option>
-                    <option value={10}>10 cm</option>
-                    <option value={20}>20 cm</option>
-                  </select>
-                </label>
-              </div>
-
-              {estadisticasProductos.detallesPeriodo.length === 0 ? (
-                <div style={{ background:COLORS.surface, border:`1px dashed ${COLORS.border}`, borderRadius:10, padding:18, color:COLORS.muted, fontSize:13, textAlign:"center" }}>
-                  No hay productos con medidas importadas en las cotizaciones de {rangoResumen.label.toLowerCase()}.
-                </div>
-              ) : (
-                <>
-                  <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(165px,1fr))", gap:10, marginBottom:16 }}>
-                    <StatCard label="Unidades cotizadas" value={estadisticasProductos.unidades.toLocaleString("es-CL")} sub={`${estadisticasProductos.cotizacionesConDetalle} cotizaciones con detalle`} icon="📦" color={COLORS.accent}/>
-                    <StatCard label="Rango de largo líder" value={estadisticasProductos.largos[0]?.etiqueta || "—"} sub={`${estadisticasProductos.largos[0]?.cantidad || 0} unidades`} icon="↔️" color="#5a8abe"/>
-                    <StatCard label="Rango de ancho líder" value={estadisticasProductos.anchos[0]?.etiqueta || "—"} sub={`${estadisticasProductos.anchos[0]?.cantidad || 0} unidades`} icon="↕️" color={COLORS.success}/>
-                    <StatCard label="Tipo más cotizado" value={estadisticasProductos.tipos[0]?.etiqueta || "—"} sub={`${estadisticasProductos.tipos[0]?.cantidad || 0} unidades`} icon="🧱" color={COLORS.warning}/>
-                    <StatCard label="Color más cotizado" value={estadisticasProductos.colores[0]?.etiqueta || "—"} sub={`${estadisticasProductos.colores[0]?.cantidad || 0} unidades`} icon="🎨" color="#9a7aaa"/>
-                  </div>
-
-                  <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(245px,1fr))", gap:12 }}>
-                    {[
-                      ["Largos solicitados", estadisticasProductos.largos, "#5a8abe"],
-                      ["Anchos solicitados", estadisticasProductos.anchos, COLORS.success],
-                      ["Tipos de producto", estadisticasProductos.tipos, COLORS.warning],
-                      ["Colores solicitados", estadisticasProductos.colores, "#9a7aaa"],
-                      ["Medidas exactas más repetidas", estadisticasProductos.medidasExactas, COLORS.accent],
-                    ].map(([titulo, datos, color]) => {
-                      const max = Math.max(...datos.slice(0,8).map(x => x.cantidad), 1);
-                      return (
-                        <div key={titulo} style={{ background:COLORS.surface, border:`1px solid ${COLORS.border}`, borderRadius:10, padding:14 }}>
-                          <div style={{ fontSize:12, color:COLORS.text, fontWeight:800, marginBottom:10 }}>{titulo}</div>
-                          <div style={{ display:"grid", gap:8 }}>
-                            {datos.slice(0,8).map(item => (
-                              <div key={String(item.clave)}>
-                                <div style={{ display:"flex", justifyContent:"space-between", gap:8, fontSize:11.5, marginBottom:3 }}>
-                                  <span style={{ color:COLORS.text, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{item.etiqueta}</span>
-                                  <b style={{ color }}>{item.cantidad}</b>
-                                </div>
-                                <div style={{ height:6, background:COLORS.subtle, borderRadius:5, overflow:"hidden" }}>
-                                  <div style={{ width:`${Math.max(3, Math.round(item.cantidad / max * 100))}%`, height:"100%", background:color }}/>
-                                </div>
-                                <div style={{ marginTop:2, fontSize:9.5, color:COLORS.muted }}>{item.cotizaciones} cotizaciones</div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </>
-              )}
             </div>
 
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:12, flexWrap:"wrap", marginBottom:14 }}>
