@@ -8384,36 +8384,16 @@ const renderTarjetaProduccion = (n) => (
     const cargo = Number(m.cargo || 0);
     const abono = Number(m.abono || 0);
 
-    if (!acc[categoria]) {
-      acc[categoria] = {
-        categoria,
-        ingresos:0,
-        egresos:0,
-        movimientos:0,
-        movimientosIngresos:0,
-        movimientosEgresos:0
-      };
-    }
-
+    if (!acc[categoria]) acc[categoria] = { categoria, ingresos:0, egresos:0, movimientos:0 };
     acc[categoria].ingresos += abono;
     acc[categoria].egresos += cargo;
     acc[categoria].movimientos += 1;
-    if (abono > 0) acc[categoria].movimientosIngresos += 1;
-    if (cargo > 0) acc[categoria].movimientosEgresos += 1;
 
     return acc;
   }, {});
 
   const resumenCartolaCategorias = Object.values(resumenFinancieroCartola)
     .sort((a, b) => (b.ingresos + b.egresos) - (a.ingresos + a.egresos));
-
-  const categoriasIngresosCartola = resumenCartolaCategorias
-    .filter(c => c.ingresos > 0)
-    .sort((a, b) => b.ingresos - a.ingresos);
-
-  const categoriasEgresosCartola = resumenCartolaCategorias
-    .filter(c => c.egresos > 0)
-    .sort((a, b) => b.egresos - a.egresos);
 
   const tabsPublicos=[
     {key:"produccion",label:`🏭 Producción`},
@@ -10752,50 +10732,20 @@ const renderTarjetaProduccion = (n) => (
               </div>
 
               <div style={{ marginBottom:12, background:COLORS.surface, border:`1px solid ${COLORS.border}`, borderRadius:10, padding:12 }}>
-                <div style={{ fontSize:12, color:COLORS.accent, fontWeight:800, marginBottom:10 }}>Resumen por categoría del mes</div>
+                <div style={{ fontSize:12, color:COLORS.accent, fontWeight:800, marginBottom:8 }}>Resumen por categoría del mes</div>
                 {resumenCartolaCategorias.length === 0 ? (
                   <div style={{ color:COLORS.muted, fontSize:12 }}>Sin movimientos clasificados.</div>
                 ) : (
-                  <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(320px,1fr))", gap:12 }}>
-                    <div style={{ background:COLORS.card, border:`1px solid ${COLORS.border}`, borderRadius:10, padding:10, minWidth:0 }}>
-                      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:8, marginBottom:8 }}>
-                        <div style={{ color:COLORS.success, fontSize:12, fontWeight:900 }}>⬆️ Categorías de ingresos</div>
-                        <div style={{ color:COLORS.muted, fontSize:10 }}>{categoriasIngresosCartola.length} categorías</div>
-                      </div>
-                      {categoriasIngresosCartola.length === 0 ? (
-                        <div style={{ color:COLORS.muted, fontSize:11, padding:"8px 2px" }}>Sin ingresos en el mes seleccionado.</div>
-                      ) : (
-                        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))", gap:8 }}>
-                          {categoriasIngresosCartola.map(c => (
-                            <div key={`ingreso-${c.categoria}`} style={{ background:COLORS.surface, border:`1px solid ${COLORS.border}`, borderRadius:8, padding:10 }}>
-                              <div style={{ fontSize:11, color:COLORS.muted, overflowWrap:"anywhere" }}>{c.categoria}</div>
-                              <div style={{ fontSize:14, color:COLORS.success, fontWeight:800 }}>{fmt(c.ingresos)}</div>
-                              <div style={{ fontSize:10, color:COLORS.muted }}>{c.movimientosIngresos} mov.</div>
-                            </div>
-                          ))}
+                  <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))", gap:8 }}>
+                    {resumenCartolaCategorias.slice(0, 8).map(c => (
+                      <div key={c.categoria} style={{ background:COLORS.card, border:`1px solid ${COLORS.border}`, borderRadius:8, padding:10 }}>
+                        <div style={{ fontSize:11, color:COLORS.muted }}>{c.categoria}</div>
+                        <div style={{ fontSize:14, color:c.ingresos > c.egresos ? COLORS.success : COLORS.danger, fontWeight:800 }}>
+                          {fmt(c.ingresos > 0 ? c.ingresos : c.egresos)}
                         </div>
-                      )}
-                    </div>
-
-                    <div style={{ background:COLORS.card, border:`1px solid ${COLORS.border}`, borderRadius:10, padding:10, minWidth:0 }}>
-                      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:8, marginBottom:8 }}>
-                        <div style={{ color:COLORS.danger, fontSize:12, fontWeight:900 }}>⬇️ Categorías de egresos</div>
-                        <div style={{ color:COLORS.muted, fontSize:10 }}>{categoriasEgresosCartola.length} categorías</div>
+                        <div style={{ fontSize:10, color:COLORS.muted }}>{c.movimientos} mov.</div>
                       </div>
-                      {categoriasEgresosCartola.length === 0 ? (
-                        <div style={{ color:COLORS.muted, fontSize:11, padding:"8px 2px" }}>Sin egresos en el mes seleccionado.</div>
-                      ) : (
-                        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))", gap:8 }}>
-                          {categoriasEgresosCartola.map(c => (
-                            <div key={`egreso-${c.categoria}`} style={{ background:COLORS.surface, border:`1px solid ${COLORS.border}`, borderRadius:8, padding:10 }}>
-                              <div style={{ fontSize:11, color:COLORS.muted, overflowWrap:"anywhere" }}>{c.categoria}</div>
-                              <div style={{ fontSize:14, color:COLORS.danger, fontWeight:800 }}>{fmt(c.egresos)}</div>
-                              <div style={{ fontSize:10, color:COLORS.muted }}>{c.movimientosEgresos} mov.</div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
+                    ))}
                   </div>
                 )}
               </div>
