@@ -4394,32 +4394,14 @@ if (!errorDocumentosImportados) {
   setDocumentosImportados(dataDocumentosImportados || []);
 }
 
-// Carga paginada: Supabase puede limitar una consulta a 1.000 filas.
-// Recorremos todas las páginas para que la cartola se muestre completa.
-let dataCartolaBancaria = [];
-let errorCartolaBancaria = null;
-const TAMANO_PAGINA_CARTOLA = 1000;
-for (let desde = 0; ; desde += TAMANO_PAGINA_CARTOLA) {
-  const { data: paginaCartola, error } = await supabase
-    .from("cartola_bancaria")
-    .select("*")
-    .order("fecha", { ascending: false })
-    .order("created_at", { ascending: false })
-    .range(desde, desde + TAMANO_PAGINA_CARTOLA - 1);
-
-  if (error) {
-    errorCartolaBancaria = error;
-    break;
-  }
-
-  dataCartolaBancaria = [...dataCartolaBancaria, ...(paginaCartola || [])];
-  if (!paginaCartola || paginaCartola.length < TAMANO_PAGINA_CARTOLA) break;
-}
+const { data: dataCartolaBancaria, error: errorCartolaBancaria } = await supabase
+  .from("cartola_bancaria")
+  .select("*")
+  .order("fecha", { ascending: false })
+  .order("created_at", { ascending: false });
 
 if (!errorCartolaBancaria) {
-  setCartolaMovimientos(dataCartolaBancaria);
-} else {
-  console.error("Error cargando cartola bancaria:", errorCartolaBancaria);
+  setCartolaMovimientos(dataCartolaBancaria || []);
 }
 const { data: dataCuentasPagar, error: errorCuentasPagar } = await supabase
   .from("cuentas_pagar")
@@ -6410,7 +6392,7 @@ const guardarClasificacionCartola = async () => {
       fecha: movimiento.fecha,
       medioPago: "transferencia",
       tipoAbono: tipoAbonoCartola || "abono",
-      observacion: String(movimiento.observacion || "").trim() || `Registrado desde cartola bancaria. ${movimiento.descripcion || ""}`,
+      observacion: `Registrado desde cartola bancaria. ${movimiento.descripcion || ""}`,
       movimiento
     });
 
@@ -6420,8 +6402,7 @@ const guardarClasificacionCartola = async () => {
 
   await actualizarMovimientoCartola(movimiento, {
     estado: "conciliado",
-    categoria,
-    observacion: String(movimiento.observacion || "").trim()
+    categoria
   });
 
   toast(`Movimiento clasificado como ${categoria}.`, "success");
@@ -8420,78 +8401,6 @@ const renderTarjetaProduccion = (n) => (
   const seccionesUsuario = usuarioActual?.secciones || [];
   const tieneAccesoTotal = seccionesUsuario.includes("all");
   const todosLosTabs = [...tabsPublicos, ...tabsAdmin];
-  const exportarFlujoCajaExcel = () => {
-    if (cartolaFiltrada.length === 0) {
-      toast("No hay movimientos de cartola para exportar con los filtros actuales.", "warning");
-      return;
-    }
-
-    const movimientosOrdenados = [...cartolaFiltrada].sort((a, b) =>
-      String(a.fecha || "").localeCompare(String(b.fecha || "")) || Number(a.id || 0) - Number(b.id || 0)
-    );
-
-    let saldoAcumulado = 0;
-    const detalle = movimientosOrdenados.map((m) => {
-      const ingreso = Number(m.abono || 0);
-      const egreso = Number(m.cargo || 0);
-      const flujoNeto = ingreso - egreso;
-      saldoAcumulado += flujoNeto;
-      return {
-        Fecha: m.fecha || "",
-        Descripcion_banco: m.descripcion || "",
-        Categoria: m.categoria || "Por revisar",
-        Detalle_ingresado: m.observacion || "",
-        Estado: m.estado === "conciliado" ? "Clasificado" : "Por revisar",
-        Ingreso: ingreso,
-        Egreso: egreso,
-        Flujo_neto: flujoNeto,
-        Saldo_acumulado_periodo: saldoAcumulado,
-        Saldo_banco: m.saldo === null || m.saldo === undefined ? "" : Number(m.saldo || 0),
-        Archivo_origen: m.archivo_origen || ""
-      };
-    });
-
-    const porCategoria = Object.values(movimientosOrdenados.reduce((acc, m) => {
-      const categoria = m.categoria || "Por revisar";
-      if (!acc[categoria]) acc[categoria] = { Categoria: categoria, Ingresos: 0, Egresos: 0, Flujo_neto: 0, Movimientos: 0 };
-      acc[categoria].Ingresos += Number(m.abono || 0);
-      acc[categoria].Egresos += Number(m.cargo || 0);
-      acc[categoria].Flujo_neto = acc[categoria].Ingresos - acc[categoria].Egresos;
-      acc[categoria].Movimientos += 1;
-      return acc;
-    }, {})).sort((a, b) => Math.abs(b.Flujo_neto) - Math.abs(a.Flujo_neto));
-
-    const porMes = Object.values(movimientosOrdenados.reduce((acc, m) => {
-      const mes = String(m.fecha || "").slice(0, 7) || "Sin fecha";
-      if (!acc[mes]) acc[mes] = { Mes: mes, Ingresos: 0, Egresos: 0, Flujo_neto: 0, Movimientos: 0 };
-      acc[mes].Ingresos += Number(m.abono || 0);
-      acc[mes].Egresos += Number(m.cargo || 0);
-      acc[mes].Flujo_neto = acc[mes].Ingresos - acc[mes].Egresos;
-      acc[mes].Movimientos += 1;
-      return acc;
-    }, {})).sort((a, b) => a.Mes.localeCompare(b.Mes));
-
-    const wb = XLSX.utils.book_new();
-    const wsDetalle = XLSX.utils.json_to_sheet(detalle);
-    const wsCategorias = XLSX.utils.json_to_sheet(porCategoria);
-    const wsMeses = XLSX.utils.json_to_sheet(porMes);
-
-    wsDetalle["!cols"] = [
-      { wch: 12 }, { wch: 42 }, { wch: 24 }, { wch: 42 }, { wch: 15 },
-      { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 22 }, { wch: 16 }, { wch: 24 }
-    ];
-    wsCategorias["!cols"] = [{ wch: 28 }, { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 14 }];
-    wsMeses["!cols"] = [{ wch: 12 }, { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 14 }];
-
-    XLSX.utils.book_append_sheet(wb, wsDetalle, "Flujo de caja");
-    XLSX.utils.book_append_sheet(wb, wsCategorias, "Resumen categorias");
-    XLSX.utils.book_append_sheet(wb, wsMeses, "Resumen mensual");
-
-    const periodo = mesCartola || "todos-los-periodos";
-    XLSX.writeFile(wb, `Flujo_de_caja_${periodo}.xlsx`);
-    toast(`Flujo de caja exportado: ${detalle.length} movimientos.`, "success");
-  };
-
   const tabs = tieneAccesoTotal
     ? todosLosTabs
     : todosLosTabs.filter(t => seccionesUsuario.includes(t.key));
@@ -10752,10 +10661,7 @@ const renderTarjetaProduccion = (n) => (
 
               <div style={{ display:"flex", justifyContent:"space-between", gap:10, flexWrap:"wrap", alignItems:"center", marginBottom:10 }}>
                 <input value={busquedaCartola} onChange={e=>setBusquedaCartola(e.target.value)} placeholder="Buscar en cartola..." style={{ minWidth:220, flex:"0 1 320px", background:COLORS.surface, border:`1px solid ${COLORS.border}`, color:COLORS.text, borderRadius:8, padding:"8px 10px" }} />
-                <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}>
-                  <span style={{ color:COLORS.muted, fontSize:12 }}>{cartolaFiltrada.length} movimientos</span>
-                  <button onClick={exportarFlujoCajaExcel} style={{ background:COLORS.success, color:"#fff", border:"none", borderRadius:8, padding:"8px 10px", cursor:"pointer", fontSize:12, fontWeight:800 }}>⬇ Exportar flujo Excel</button>
-                </div>
+                <span style={{ color:COLORS.muted, fontSize:12 }}>{cartolaFiltrada.length} movimientos</span>
               </div>
 
               {cartolaFiltrada.length === 0 ? (
@@ -10775,7 +10681,7 @@ const renderTarjetaProduccion = (n) => (
                       </tr>
                     </thead>
                     <tbody>
-                      {cartolaFiltrada.map(m => (
+                      {cartolaFiltrada.slice(0, 80).map(m => (
                         <tr key={m.id}>
                           <td style={{ padding:"8px", borderBottom:`1px solid ${COLORS.border}` }}>{fmtDate(m.fecha)}</td>
                           <td style={{ padding:"8px", borderBottom:`1px solid ${COLORS.border}`, color:COLORS.text, fontWeight:700 }}>{m.descripcion}</td>
@@ -11023,10 +10929,7 @@ const renderTarjetaProduccion = (n) => (
 
               <div style={{ display:"flex", justifyContent:"space-between", gap:10, flexWrap:"wrap", alignItems:"center", marginBottom:10 }}>
                 <input value={busquedaCartola} onChange={e=>setBusquedaCartola(e.target.value)} placeholder="Buscar en cartola..." style={{ minWidth:220, flex:"0 1 320px", background:COLORS.surface, border:`1px solid ${COLORS.border}`, color:COLORS.text, borderRadius:8, padding:"8px 10px" }} />
-                <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}>
-                  <span style={{ color:COLORS.muted, fontSize:12 }}>{cartolaFiltrada.length} movimientos</span>
-                  <button onClick={exportarFlujoCajaExcel} style={{ background:COLORS.success, color:"#fff", border:"none", borderRadius:8, padding:"8px 10px", cursor:"pointer", fontSize:12, fontWeight:800 }}>⬇ Exportar flujo Excel</button>
-                </div>
+                <span style={{ color:COLORS.muted, fontSize:12 }}>{cartolaFiltrada.length} movimientos</span>
               </div>
 
               {cartolaFiltrada.length === 0 ? (
@@ -11046,7 +10949,7 @@ const renderTarjetaProduccion = (n) => (
                       </tr>
                     </thead>
                     <tbody>
-                      {cartolaFiltrada.map(m => (
+                      {cartolaFiltrada.slice(0, 80).map(m => (
                         <tr key={m.id}>
                           <td style={{ padding:"8px", borderBottom:`1px solid ${COLORS.border}` }}>{fmtDate(m.fecha)}</td>
                           <td style={{ padding:"8px", borderBottom:`1px solid ${COLORS.border}`, color:COLORS.text, fontWeight:700 }}>{m.descripcion}</td>
@@ -11565,16 +11468,6 @@ const renderTarjetaProduccion = (n) => (
                       : "Selecciona una categoría desde el listado."}
                   </div>
                 )}
-
-                <label style={{ display:"block", marginTop:12, fontSize:12, color:COLORS.muted }}>
-                  Detalle / explicación del movimiento
-                  <textarea
-                    value={modalClasificarCartola.observacion || ""}
-                    onChange={e => setModalClasificarCartola(prev => ({ ...prev, observacion:e.target.value }))}
-                    placeholder="Ej: pago arriendo agosto, compra lámina Merino, abono NV 1254..."
-                    style={{ width:"100%", minHeight:74, boxSizing:"border-box", marginTop:6, background:COLORS.card, border:`1px solid ${COLORS.border}`, color:COLORS.text, borderRadius:8, padding:"9px 10px", resize:"vertical", fontFamily:"inherit" }}
-                  />
-                </label>
 
                 <div style={{ display:"flex", justifyContent:"flex-end", gap:8, marginTop:14 }}>
                   <button onClick={cerrarClasificacionCartola} style={{ background:COLORS.subtle, color:COLORS.text, border:`1px solid ${COLORS.border}`, borderRadius:8, padding:"9px 12px", cursor:"pointer", fontWeight:800 }}>Cancelar</button>
