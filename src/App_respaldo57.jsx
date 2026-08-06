@@ -11,42 +11,6 @@ const COLORS = {
   warning: "#c8943a",
 };
 
-
-// Catálogo financiero base. Las categorías principales se mantienen estables;
-// las subcategorías adicionales se pueden crear desde la propia APP.
-const CATALOGO_FINANCIERO_BASE = {
-  ingreso: {
-    "Ventas": ["Postformados", "Laminados", "Muebles"],
-    "Cobros pendientes": ["Saldo Nota de Venta", "Reembolso", "Otro cobro pendiente"],
-    "Préstamos recibidos": ["Préstamo"],
-    "Otros ingresos": ["Venta de activo", "Ajuste de caja", "Otro ingreso"]
-  },
-  egreso: {
-    "Materiales": ["Laminados", "MDF", "Aglomerado", "Adhesivos", "Tapacantos", "Herrajes", "Maderas", "Insumos de fabricación", "Embalaje", "Otros materiales"],
-    "Mano de obra y personal": ["Sueldos", "Anticipos de sueldo", "Honorarios", "Horas extras", "Bonos", "Finiquitos", "Cotizaciones previsionales", "Colaciones", "Movilización", "Ropa o elementos de trabajo", "Otros gastos de personal"],
-    "Operación del taller": ["Arriendo", "Electricidad", "Agua", "Gas", "Internet", "Telefonía", "Mantención de maquinaria", "Reparación de maquinaria", "Herramientas", "Aseo", "Seguridad", "Retiro de residuos", "Otros gastos del taller"],
-    "Transporte y vehículos": ["Bencina", "TAG", "Peajes", "Estacionamiento", "Mantención del vehículo", "Reparación del vehículo", "Revisión técnica", "Permiso de circulación", "Seguro vehicular", "Neumáticos", "Fletes externos", "Despachos", "Otros gastos de transporte"],
-    "Administración": ["Contabilidad", "Software y suscripciones", "Comisiones bancarias", "Papelería", "Impresiones", "Notaría", "Asesorías", "Patentes y permisos", "Capacitación", "Gastos legales", "Otros gastos administrativos"],
-    "Ventas y marketing": ["Publicidad digital", "Google Ads", "Redes sociales", "Página web", "Fotografía", "Diseño", "Comisiones de venta", "Muestras", "Promociones", "Atención a clientes", "Otros gastos comerciales"],
-    "Impuestos": ["Pago mensual de impuestos", "Patente municipal", "Tesorería o convenio tributario", "Otros impuestos"],
-    "Importaciones": ["Compra de dólares", "Pago a proveedor extranjero", "Flete internacional", "Aduana", "Agente de aduana", "Derechos aduaneros", "IVA de importación", "Transporte nacional de importación", "Almacenaje", "Costos bancarios de importación", "Otros costos de importación"],
-    "Pago de cuentas por pagar": ["Pago a proveedor", "Reembolso", "Abono de deuda"],
-    "Retiros y movimientos personales": ["Retiro del dueño", "Préstamo a trabajador", "Préstamo familiar", "Anticipo personal", "Gasto personal por regularizar", "Otro retiro"],
-    "Inversiones y activos": ["Maquinaria", "Herramientas mayores", "Vehículo", "Equipos computacionales", "Muebles de oficina", "Mejoras del taller", "Otros activos"],
-    "Otros egresos": ["Supermercado", "Comida", "Gastos hormiga", "Ajuste de caja", "Pago duplicado", "Otros gastos"]
-  },
-  traspaso: {
-    "Transferencias internas": ["Banco a efectivo", "Efectivo a banco", "Entre cuentas", "Otro traspaso"]
-  }
-};
-
-const normalizarClaveFinanciera = (valor) => String(valor || "")
-  .normalize("NFD")
-  .replace(/[\u0300-\u036f]/g, "")
-  .toLowerCase()
-  .replace(/\s+/g, " ")
-  .trim();
-
 /* ============================================================
    SISTEMA DE NOTIFICACIONES (TOASTS) Y CONFIRMACIÓN
    A nivel de módulo para que funcione en cualquier componente.
@@ -4582,19 +4546,8 @@ if (!errorDocumentosTrabajadores) {
 };
   const [busquedaCartola, setBusquedaCartola] = useState("");
   const [modalClasificarCartola, setModalClasificarCartola] = useState(null);
-  const [tipoMovimientoCartola, setTipoMovimientoCartola] = useState("");
   const [categoriaCartolaSeleccionada, setCategoriaCartolaSeleccionada] = useState("");
-  const [subcategoriaCartolaSeleccionada, setSubcategoriaCartolaSeleccionada] = useState("");
   const [busquedaCategoriaCartola, setBusquedaCategoriaCartola] = useState("");
-  const [modalDetalleCategoriaCartola, setModalDetalleCategoriaCartola] = useState(null);
-  const [modalMovimientoManual, setModalMovimientoManual] = useState(false);
-  const [modalNuevaSubcategoria, setModalNuevaSubcategoria] = useState(false);
-  const [subcategoriasPersonalizadas, setSubcategoriasPersonalizadas] = useState(() => {
-    try { return JSON.parse(localStorage.getItem("sf-subcategorias-financieras") || "[]"); }
-    catch (e) { return []; }
-  });
-  const [formNuevaSubcategoria, setFormNuevaSubcategoria] = useState({ tipo:"ingreso", categoria:"Ventas", nombre:"", descripcion:"", requiereDetalle:true });
-  const [formMovimientoManual, setFormMovimientoManual] = useState({ fecha:new Date().toISOString().split("T")[0], tipo:"egreso", categoria:"", subcategoria:"", detalle:"", monto:"", medio_pago:"efectivo" });
   const [busquedaCxcCartola, setBusquedaCxcCartola] = useState("");
   const [cxcSeleccionadaCartola, setCxcSeleccionadaCartola] = useState(null);
   const [tipoAbonoCartola, setTipoAbonoCartola] = useState("abono");
@@ -6154,26 +6107,19 @@ const convertirFechaCartola = (valor) => {
 
 const clasificarMovimientoCartola = ({ descripcion, cargo, abono }) => {
   const desc = normalizarTextoCartola(descripcion);
-  if (abono > 0) return { tipo_movimiento:"ingreso", categoria:"Por revisar", subcategoria:"" };
-  if (desc.includes("previred") || desc.includes("afp") || desc.includes("fonasa") || desc.includes("isapre")) return { tipo_movimiento:"egreso", categoria:"Mano de obra y personal", subcategoria:"Cotizaciones previsionales" };
-  if (desc.includes("sueldo") || desc.includes("remuneracion") || desc.includes("anticipo")) return { tipo_movimiento:"egreso", categoria:"Mano de obra y personal", subcategoria:desc.includes("anticipo") ? "Anticipos de sueldo" : "Sueldos" };
-  if (desc.includes("arriendo")) return { tipo_movimiento:"egreso", categoria:"Operación del taller", subcategoria:"Arriendo" };
-  if (desc.includes("bencina") || desc.includes("combustible") || desc.includes("copec") || desc.includes("shell") || desc.includes("petrobras")) return { tipo_movimiento:"egreso", categoria:"Transporte y vehículos", subcategoria:"Bencina" };
-  if (desc.includes("tag")) return { tipo_movimiento:"egreso", categoria:"Transporte y vehículos", subcategoria:"TAG" };
-  if (desc.includes("luz")) return { tipo_movimiento:"egreso", categoria:"Operación del taller", subcategoria:"Electricidad" };
-  if (desc.includes("agua")) return { tipo_movimiento:"egreso", categoria:"Operación del taller", subcategoria:"Agua" };
-  if (desc.includes("internet") || desc.includes("entel") || desc.includes("wom") || desc.includes("claro") || desc.includes("movistar")) return { tipo_movimiento:"egreso", categoria:"Operación del taller", subcategoria:"Internet" };
-  if (cargo > 0) return { tipo_movimiento:"egreso", categoria:"Por revisar", subcategoria:"" };
-  return { tipo_movimiento:"", categoria:"Por revisar", subcategoria:"" };
+  if (abono > 0) {
+    if (desc.includes("deposito") || desc.includes("transferencia") || desc.includes("abono")) return "Ingreso por revisar";
+    return "Ingreso por revisar";
+  }
+  if (desc.includes("previred") || desc.includes("afp") || desc.includes("fonasa") || desc.includes("isapre")) return "Imposiciones";
+  if (desc.includes("sueldo") || desc.includes("remuneracion") || desc.includes("anticipo")) return "Remuneraciones";
+  if (desc.includes("arriendo")) return "Arriendo";
+  if (desc.includes("bencina") || desc.includes("combustible") || desc.includes("copec") || desc.includes("shell") || desc.includes("petrobras")) return "Combustible";
+  if (desc.includes("luz") || desc.includes("agua") || desc.includes("internet") || desc.includes("entel") || desc.includes("wom") || desc.includes("claro") || desc.includes("movistar")) return "Servicios";
+  if (desc.includes("cheque")) return "Cheque por revisar";
+  if (cargo > 0) return "Egreso por revisar";
+  return "Por revisar";
 };
-
-const claveMovimientoCartola = (m) => [
-  m.fecha || "",
-  normalizarTextoCartola(m.descripcion || ""),
-  Math.round(Number(m.cargo || 0)),
-  Math.round(Number(m.abono || 0)),
-  m.saldo === null || m.saldo === undefined ? "" : Math.round(Number(m.saldo || 0))
-].join("|");
 
 const importarCartolaBancaria = async (event) => {
   const files = Array.from(event.target.files || []);
@@ -6224,7 +6170,7 @@ const importarCartolaBancaria = async (event) => {
       if (cargo === 0 && abono === 0) continue;
 
       const saldo = colSaldo >= 0 ? limpiarNumeroCartola(row[colSaldo]) : null;
-      const clasificacion = clasificarMovimientoCartola({ descripcion, cargo, abono });
+      const categoria = clasificarMovimientoCartola({ descripcion, cargo, abono });
 
       movimientosDetectados.push({
         fecha,
@@ -6232,12 +6178,8 @@ const importarCartolaBancaria = async (event) => {
         cargo,
         abono,
         saldo,
-        tipo_movimiento:clasificacion.tipo_movimiento,
-        categoria:clasificacion.categoria,
-        subcategoria:clasificacion.subcategoria,
-        detalle:"",
-        medio_pago:"banco",
-        estado:clasificacion.categoria === "Por revisar" ? "por_revisar" : "conciliado",
+        categoria,
+        estado:"por_revisar",
         archivo_origen:file.name
       });
     }
@@ -6248,29 +6190,9 @@ const importarCartolaBancaria = async (event) => {
     return;
   }
 
-  // Importación incremental: compara cantidades por huella y guarda solo
-  // las apariciones que aún no existen. El Excel se procesa en el navegador
-  // y no se almacena como archivo en Supabase.
-  const existentesPorClave = cartolaMovimientos.reduce((acc, m) => {
-    const clave = claveMovimientoCartola(m);
-    acc[clave] = (acc[clave] || 0) + 1;
-    return acc;
-  }, {});
-  const vistosEnArchivo = {};
-  const movimientosNuevos = movimientosDetectados.filter(m => {
-    const clave = claveMovimientoCartola(m);
-    vistosEnArchivo[clave] = (vistosEnArchivo[clave] || 0) + 1;
-    return vistosEnArchivo[clave] > (existentesPorClave[clave] || 0);
-  });
-
-  if (movimientosNuevos.length === 0) {
-    toast("La cartola no contiene movimientos nuevos. No se agregó ningún duplicado.", "info");
-    return;
-  }
-
   const { data, error } = await supabase
     .from("cartola_bancaria")
-    .insert(movimientosNuevos)
+    .insert(movimientosDetectados)
     .select("*");
 
   if (error) {
@@ -6281,7 +6203,7 @@ const importarCartolaBancaria = async (event) => {
 
   setCartolaMovimientos(prev => [...(data || []), ...prev]);
   setMesCartola(movimientosDetectados[0]?.fecha?.slice(0, 7) || mesCartola);
-  toast(`Cartola actualizada: ${movimientosNuevos.length} nuevos · ${movimientosDetectados.length - movimientosNuevos.length} ya existentes omitidos.`);
+  toast(`Cartola importada: ${movimientosDetectados.length} movimientos detectados.`);
 };
 
 const actualizarMovimientoCartola = async (movimiento, cambios) => {
@@ -6300,64 +6222,6 @@ const actualizarMovimientoCartola = async (movimiento, cambios) => {
 
   setCartolaMovimientos(prev => prev.map(m => m.id === movimiento.id ? data : m));
   return data;
-};
-
-const eliminarMovimientoCartola = async (movimiento) => {
-  const ok = await confirmDialog(`¿Eliminar este movimiento?\n\n${fmtDate(movimiento.fecha)} · ${movimiento.descripcion}\n${fmt(Number(movimiento.abono || movimiento.cargo || 0))}\n\nSi estaba asociado a una NV o cuenta pendiente, revisa también ese vínculo.`);
-  if (!ok) return;
-  const { error } = await supabase.from("cartola_bancaria").delete().eq("id", movimiento.id);
-  if (error) { console.error(error); toast("No se pudo eliminar el movimiento.", "error"); return; }
-  setCartolaMovimientos(prev => prev.filter(m => m.id !== movimiento.id));
-  toast("Movimiento eliminado correctamente.", "success");
-};
-
-const guardarMovimientoManual = async () => {
-  const f = formMovimientoManual;
-  const monto = Math.round(Number(f.monto || 0));
-  if (!f.fecha || !f.tipo || !f.categoria || !f.subcategoria || !monto || !String(f.detalle || "").trim()) {
-    toast("Completa fecha, tipo, categoría, subcategoría, detalle y monto.", "warning"); return;
-  }
-  const payload = {
-    fecha:f.fecha,
-    descripcion:String(f.detalle).trim(),
-    cargo:f.tipo === "egreso" ? monto : 0,
-    abono:f.tipo === "ingreso" ? monto : 0,
-    saldo:null,
-    tipo_movimiento:f.tipo,
-    categoria:f.categoria,
-    subcategoria:f.subcategoria,
-    detalle:String(f.detalle).trim(),
-    observacion:String(f.detalle).trim(),
-    medio_pago:f.medio_pago || "efectivo",
-    estado:"conciliado",
-    archivo_origen:"Movimiento manual"
-  };
-  const { data, error } = await supabase.from("cartola_bancaria").insert(payload).select("*").single();
-  if (error) { console.error(error); toast("No se pudo guardar el movimiento manual. Ejecuta el SQL de actualización.", "error"); return; }
-  setCartolaMovimientos(prev => [data, ...prev]);
-  setModalMovimientoManual(false);
-  setFormMovimientoManual({ fecha:new Date().toISOString().split("T")[0], tipo:"egreso", categoria:"", subcategoria:"", detalle:"", monto:"", medio_pago:"efectivo" });
-  toast("Movimiento manual guardado.", "success");
-};
-
-const guardarNuevaSubcategoria = () => {
-  const f = formNuevaSubcategoria;
-  const nombre = String(f.nombre || "").replace(/\s+/g, " ").trim();
-  if (!f.tipo || !f.categoria || !nombre) { toast("Completa tipo, categoría y nombre.", "warning"); return; }
-  const existentes = [
-    ...(CATALOGO_FINANCIERO_BASE[f.tipo]?.[f.categoria] || []),
-    ...subcategoriasPersonalizadas.filter(x => x.tipo === f.tipo && x.categoria === f.categoria).map(x => x.nombre)
-  ];
-  if (existentes.some(x => normalizarClaveFinanciera(x) === normalizarClaveFinanciera(nombre))) {
-    toast(`Ya existe la subcategoría “${nombre}” en ${f.categoria}.`, "warning"); return;
-  }
-  const nueva = { id:`local-${Date.now()}`, tipo:f.tipo, categoria:f.categoria, nombre, descripcion:String(f.descripcion || "").trim(), requiereDetalle:f.requiereDetalle !== false, activa:true };
-  const nuevas = [...subcategoriasPersonalizadas, nueva];
-  setSubcategoriasPersonalizadas(nuevas);
-  localStorage.setItem("sf-subcategorias-financieras", JSON.stringify(nuevas));
-  setModalNuevaSubcategoria(false);
-  setFormNuevaSubcategoria({ tipo:"ingreso", categoria:"Ventas", nombre:"", descripcion:"", requiereDetalle:true });
-  toast("Subcategoría agregada correctamente.", "success");
 };
 
 const registrarAbonoDocumento = async ({
@@ -6482,9 +6346,7 @@ const registrarAbonoDocumento = async ({
   if (movimiento) {
     await actualizarMovimientoCartola(movimiento, {
       estado: "conciliado",
-      tipo_movimiento: "ingreso",
-      categoria: "Cobros pendientes",
-      subcategoria: "Saldo Nota de Venta",
+      categoria: "Abono CxC",
       nota_venta_id: idReal
     });
   }
@@ -6495,9 +6357,7 @@ const registrarAbonoDocumento = async ({
 
 const registrarCartolaComoAbonoNV = async (movimiento) => {
   setModalClasificarCartola(movimiento);
-  setTipoMovimientoCartola("ingreso");
-  setCategoriaCartolaSeleccionada("Cobros pendientes");
-  setSubcategoriaCartolaSeleccionada("Saldo Nota de Venta");
+  setCategoriaCartolaSeleccionada("Abono CxC");
   setBusquedaCategoriaCartola("");
   setBusquedaCxcCartola("");
   setCxcSeleccionadaCartola(null);
@@ -6506,10 +6366,7 @@ const registrarCartolaComoAbonoNV = async (movimiento) => {
 
 const abrirClasificacionCartola = (movimiento) => {
   setModalClasificarCartola(movimiento);
-  const tipoDetectado = Number(movimiento?.abono || 0) > 0 ? "ingreso" : "egreso";
-  setTipoMovimientoCartola(movimiento?.tipo_movimiento || tipoDetectado);
-  setCategoriaCartolaSeleccionada(movimiento?.categoria && movimiento.categoria !== "Por revisar" ? movimiento.categoria : "");
-  setSubcategoriaCartolaSeleccionada(movimiento?.subcategoria || "");
+  setCategoriaCartolaSeleccionada("");
   setBusquedaCategoriaCartola("");
   setBusquedaCxcCartola("");
   setCxcSeleccionadaCartola(null);
@@ -6518,9 +6375,7 @@ const abrirClasificacionCartola = (movimiento) => {
 
 const cerrarClasificacionCartola = () => {
   setModalClasificarCartola(null);
-  setTipoMovimientoCartola("");
   setCategoriaCartolaSeleccionada("");
-  setSubcategoriaCartolaSeleccionada("");
   setBusquedaCategoriaCartola("");
   setBusquedaCxcCartola("");
   setCxcSeleccionadaCartola(null);
@@ -6530,41 +6385,46 @@ const cerrarClasificacionCartola = () => {
 const guardarClasificacionCartola = async () => {
   const movimiento = modalClasificarCartola;
   if (!movimiento) return;
-  const tipo = String(tipoMovimientoCartola || "").trim();
-  const categoria = String(categoriaCartolaSeleccionada || "").trim();
-  const subcategoria = String(subcategoriaCartolaSeleccionada || "").trim();
-  const detalle = String(movimiento.detalle ?? movimiento.observacion ?? "").trim();
-  if (!tipo || !categoria || !subcategoria) { toast("Selecciona tipo, categoría y subcategoría.", "warning"); return; }
-  if (!detalle) { toast("Agrega un detalle para poder reconocer el movimiento después.", "warning"); return; }
 
-  if (categoria === "Cobros pendientes" && subcategoria === "Saldo Nota de Venta") {
-    const monto = Number(movimiento.abono || 0);
-    if (!monto) { toast("Este movimiento no tiene un ingreso para asociar a una CxC.", "warning"); return; }
-    if (!cxcSeleccionadaCartola) { toast("Selecciona la NV o Barrán al que corresponde el pago.", "warning"); return; }
-    const ok = await registrarAbonoDocumento({ nota:cxcSeleccionadaCartola.nota, monto, fecha:movimiento.fecha, medioPago:"transferencia", tipoAbono:tipoAbonoCartola || "abono", observacion:detalle, movimiento });
-    if (ok) {
-      await actualizarMovimientoCartola(movimiento, { tipo_movimiento:tipo, categoria, subcategoria, detalle, observacion:detalle, medio_pago:"banco", estado:"conciliado" });
-      cerrarClasificacionCartola();
-    }
+  const categoria = String(categoriaCartolaSeleccionada || "").trim();
+  if (!categoria) {
+    toast("Selecciona una categoría.", "warning");
     return;
   }
 
-  const cambios = { tipo_movimiento:tipo, categoria, subcategoria, detalle, observacion:detalle, medio_pago:movimiento.medio_pago || "banco", estado:"conciliado" };
-
-  if (categoria === "Impuestos" && subcategoria === "Pago mensual de impuestos") {
-    const iva = Math.round(Number(movimiento.impuesto_iva || 0));
-    const ppm = Math.round(Number(movimiento.impuesto_ppm || 0));
-    const intereses = Math.round(Number(movimiento.impuesto_intereses || 0));
-    const otros = Math.round(Number(movimiento.impuesto_otros || 0));
-    const total = Math.round(Number(movimiento.cargo || 0));
-    if (iva + ppm + intereses + otros !== total) {
-      toast(`El desglose de impuestos debe sumar ${fmt(total)}. Actualmente suma ${fmt(iva + ppm + intereses + otros)}.`, "warning"); return;
+  if (categoria === "Abono CxC") {
+    const monto = Number(movimiento.abono || 0);
+    if (!monto) {
+      toast("Este movimiento no tiene abono/ingreso para asociar a una CxC.", "warning");
+      return;
     }
-    Object.assign(cambios, { impuesto_iva:iva, impuesto_ppm:ppm, impuesto_intereses:intereses, impuesto_otros:otros });
+
+    if (!cxcSeleccionadaCartola) {
+      toast("Selecciona la NV o Barrán al que corresponde el abono.", "warning");
+      return;
+    }
+
+    const ok = await registrarAbonoDocumento({
+      nota: cxcSeleccionadaCartola.nota,
+      monto,
+      fecha: movimiento.fecha,
+      medioPago: "transferencia",
+      tipoAbono: tipoAbonoCartola || "abono",
+      observacion: String(movimiento.observacion || "").trim() || `Registrado desde cartola bancaria. ${movimiento.descripcion || ""}`,
+      movimiento
+    });
+
+    if (ok) cerrarClasificacionCartola();
+    return;
   }
 
-  await actualizarMovimientoCartola(movimiento, cambios);
-  toast(`Movimiento clasificado como ${categoria} · ${subcategoria}.`, "success");
+  await actualizarMovimientoCartola(movimiento, {
+    estado: "conciliado",
+    categoria,
+    observacion: String(movimiento.observacion || "").trim()
+  });
+
+  toast(`Movimiento clasificado como ${categoria}.`, "success");
   cerrarClasificacionCartola();
 };
 
@@ -8235,19 +8095,30 @@ const detalleCxcFiltrado = detalleCxcNotas.filter(item => {
   ].join(" ").toLowerCase().includes(q);
 });
 
-const catalogoFinanciero = ["ingreso", "egreso", "traspaso"].reduce((acc, tipo) => {
-  acc[tipo] = { ...(CATALOGO_FINANCIERO_BASE[tipo] || {}) };
-  subcategoriasPersonalizadas.filter(x => x.activa !== false && x.tipo === tipo).forEach(x => {
-    acc[tipo][x.categoria] = [...(acc[tipo][x.categoria] || []), x.nombre];
-  });
-  return acc;
-}, {});
+const categoriasCartola = [
+  { nombre:"Abono CxC", tipo:"ingreso", descripcion:"Pago de cliente asociado a NV o Barrán" },
+  { nombre:"Préstamo socio", tipo:"ingreso", descripcion:"Dinero aportado por Franco/familia para caja" },
+  { nombre:"Venta sin documento", tipo:"ingreso", descripcion:"Ingreso no asociado a CxC" },
+  { nombre:"Factura compra", tipo:"egreso", descripcion:"Compra facturada; se considera flujo, no duplica resumen SII" },
+  { nombre:"Compra sin factura", tipo:"egreso", descripcion:"Compra o gasto sin documento tributario" },
+  { nombre:"Remuneraciones", tipo:"egreso", descripcion:"Sueldos y pagos a trabajadores" },
+  { nombre:"Imposiciones", tipo:"egreso", descripcion:"Previred, AFP, salud, cesantía" },
+  { nombre:"Arriendo", tipo:"egreso", descripcion:"Arriendo local/bodega" },
+  { nombre:"Bencina", tipo:"egreso", descripcion:"Combustible" },
+  { nombre:"TAG", tipo:"egreso", descripcion:"Autopistas" },
+  { nombre:"Servicios básicos", tipo:"egreso", descripcion:"Luz, agua, internet, telefonía" },
+  { nombre:"Deuda antigua", tipo:"egreso", descripcion:"Pagos de deudas históricas" },
+  { nombre:"Retiro socio", tipo:"egreso", descripcion:"Retiros personales o familiares" },
+  { nombre:"Transferencia interna", tipo:"neutro", descripcion:"Movimiento entre cuentas propias" },
+  { nombre:"No sumar", tipo:"neutro", descripcion:"Movimiento duplicado o que no corresponde analizar" },
+  { nombre:"Otro", tipo:"otro", descripcion:"Clasificación manual general" }
+];
 
-const categoriasDisponiblesCartola = Object.keys(catalogoFinanciero[tipoMovimientoCartola] || {});
-const subcategoriasDisponiblesCartola = catalogoFinanciero[tipoMovimientoCartola]?.[categoriaCartolaSeleccionada] || [];
-const categoriasCartolaFiltradas = categoriasDisponiblesCartola.filter(nombre =>
-  !busquedaCategoriaCartola || normalizarClaveFinanciera(nombre).includes(normalizarClaveFinanciera(busquedaCategoriaCartola))
-);
+const categoriasCartolaFiltradas = categoriasCartola.filter(c => {
+  const q = busquedaCategoriaCartola.toLowerCase().trim();
+  if (!q) return true;
+  return `${c.nombre} ${c.descripcion}`.toLowerCase().includes(q);
+});
 
 const opcionesCxcCartola = detalleCxcNotas.filter(item => {
   const q = busquedaCxcCartola.toLowerCase().trim();
@@ -8500,7 +8371,7 @@ const renderTarjetaProduccion = (n) => (
   const entregasPendientesMes = notas.filter(n => String(n.fecha_entrega_estimada || "").startsWith(mesCalendario) && String(n.proceso || "").toLowerCase() !== "entregado");
   const cartolaFiltrada = cartolaMovimientos.filter(m => {
     const coincideMes = !mesCartola || String(m.fecha || "").startsWith(mesCartola);
-    const texto = `${m.descripcion || ""} ${m.categoria || ""} ${m.subcategoria || ""} ${m.detalle || ""} ${m.observacion || ""} ${m.estado || ""}`.toLowerCase();
+    const texto = `${m.descripcion || ""} ${m.categoria || ""} ${m.estado || ""}`.toLowerCase();
     const coincideBusqueda = !busquedaCartola || texto.includes(busquedaCartola.toLowerCase());
     return coincideMes && coincideBusqueda;
   });
@@ -8510,15 +8381,12 @@ const renderTarjetaProduccion = (n) => (
 
   const resumenFinancieroCartola = cartolaFiltrada.reduce((acc, m) => {
     const categoria = String(m.categoria || "Por revisar");
-    const subcategoria = String(m.subcategoria || "Sin subcategoría");
-    const claveResumen = `${categoria}|||${subcategoria}`;
     const cargo = Number(m.cargo || 0);
     const abono = Number(m.abono || 0);
 
-    if (!acc[claveResumen]) {
-      acc[claveResumen] = {
+    if (!acc[categoria]) {
+      acc[categoria] = {
         categoria,
-        subcategoria,
         ingresos:0,
         egresos:0,
         movimientos:0,
@@ -8527,11 +8395,11 @@ const renderTarjetaProduccion = (n) => (
       };
     }
 
-    acc[claveResumen].ingresos += abono;
-    acc[claveResumen].egresos += cargo;
-    acc[claveResumen].movimientos += 1;
-    if (abono > 0) acc[claveResumen].movimientosIngresos += 1;
-    if (cargo > 0) acc[claveResumen].movimientosEgresos += 1;
+    acc[categoria].ingresos += abono;
+    acc[categoria].egresos += cargo;
+    acc[categoria].movimientos += 1;
+    if (abono > 0) acc[categoria].movimientosIngresos += 1;
+    if (cargo > 0) acc[categoria].movimientosEgresos += 1;
 
     return acc;
   }, {});
@@ -10899,12 +10767,11 @@ const renderTarjetaProduccion = (n) => (
                       ) : (
                         <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))", gap:8 }}>
                           {categoriasIngresosCartola.map(c => (
-                            <button key={`ingreso-${c.categoria}-${c.subcategoria}`} onClick={() => setModalDetalleCategoriaCartola({ ...c, tipo:"ingreso" })} style={{ textAlign:"left", background:COLORS.surface, color:COLORS.text, border:`1px solid ${COLORS.border}`, borderRadius:8, padding:10, cursor:"pointer" }}>
-                              <div style={{ fontSize:11, color:COLORS.accent, fontWeight:800, overflowWrap:"anywhere" }}>{c.categoria}</div>
-                              <div style={{ fontSize:10.5, color:COLORS.muted, overflowWrap:"anywhere" }}>{c.subcategoria}</div>
+                            <div key={`ingreso-${c.categoria}`} style={{ background:COLORS.surface, border:`1px solid ${COLORS.border}`, borderRadius:8, padding:10 }}>
+                              <div style={{ fontSize:11, color:COLORS.muted, overflowWrap:"anywhere" }}>{c.categoria}</div>
                               <div style={{ fontSize:14, color:COLORS.success, fontWeight:800 }}>{fmt(c.ingresos)}</div>
                               <div style={{ fontSize:10, color:COLORS.muted }}>{c.movimientosIngresos} mov.</div>
-                            </button>
+                            </div>
                           ))}
                         </div>
                       )}
@@ -10920,12 +10787,11 @@ const renderTarjetaProduccion = (n) => (
                       ) : (
                         <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))", gap:8 }}>
                           {categoriasEgresosCartola.map(c => (
-                            <button key={`egreso-${c.categoria}-${c.subcategoria}`} onClick={() => setModalDetalleCategoriaCartola({ ...c, tipo:"egreso" })} style={{ textAlign:"left", background:COLORS.surface, color:COLORS.text, border:`1px solid ${COLORS.border}`, borderRadius:8, padding:10, cursor:"pointer" }}>
-                              <div style={{ fontSize:11, color:COLORS.accent, fontWeight:800, overflowWrap:"anywhere" }}>{c.categoria}</div>
-                              <div style={{ fontSize:10.5, color:COLORS.muted, overflowWrap:"anywhere" }}>{c.subcategoria}</div>
+                            <div key={`egreso-${c.categoria}`} style={{ background:COLORS.surface, border:`1px solid ${COLORS.border}`, borderRadius:8, padding:10 }}>
+                              <div style={{ fontSize:11, color:COLORS.muted, overflowWrap:"anywhere" }}>{c.categoria}</div>
                               <div style={{ fontSize:14, color:COLORS.danger, fontWeight:800 }}>{fmt(c.egresos)}</div>
                               <div style={{ fontSize:10, color:COLORS.muted }}>{c.movimientosEgresos} mov.</div>
-                            </button>
+                            </div>
                           ))}
                         </div>
                       )}
@@ -10938,8 +10804,6 @@ const renderTarjetaProduccion = (n) => (
                 <input value={busquedaCartola} onChange={e=>setBusquedaCartola(e.target.value)} placeholder="Buscar en cartola..." style={{ minWidth:220, flex:"0 1 320px", background:COLORS.surface, border:`1px solid ${COLORS.border}`, color:COLORS.text, borderRadius:8, padding:"8px 10px" }} />
                 <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}>
                   <span style={{ color:COLORS.muted, fontSize:12 }}>{cartolaFiltrada.length} movimientos</span>
-                  <button onClick={() => setModalNuevaSubcategoria(true)} style={{ background:COLORS.surface, color:COLORS.text, border:`1px solid ${COLORS.border}`, borderRadius:8, padding:"8px 10px", cursor:"pointer", fontSize:12, fontWeight:800 }}>⚙ Subcategorías</button>
-                  <button onClick={() => setModalMovimientoManual(true)} style={{ background:COLORS.accent, color:"#111", border:"none", borderRadius:8, padding:"8px 10px", cursor:"pointer", fontSize:12, fontWeight:800 }}>+ Movimiento manual</button>
                   <button onClick={exportarFlujoCajaExcel} style={{ background:COLORS.success, color:"#fff", border:"none", borderRadius:8, padding:"8px 10px", cursor:"pointer", fontSize:12, fontWeight:800 }}>⬇ Exportar flujo Excel</button>
                 </div>
               </div>
@@ -10978,14 +10842,12 @@ const renderTarjetaProduccion = (n) => (
                             }}>
                               {m.categoria || "Por revisar"}
                             </span>
-                            {m.subcategoria && <div style={{ color:COLORS.muted, fontSize:10, marginTop:3 }}>{m.subcategoria}</div>}
                           </td>
                           <td style={{ padding:"8px", borderBottom:`1px solid ${COLORS.border}`, color:m.estado === "conciliado" ? COLORS.success : COLORS.warning }}>{m.estado === "conciliado" ? "Clasificado" : "Por revisar"}</td>
                           <td style={{ padding:"8px", borderBottom:`1px solid ${COLORS.border}` }}>
                             <div style={{ display:"flex", gap:6, flexWrap:"wrap", alignItems:"center" }}>
-                              <button onClick={() => abrirClasificacionCartola(m)} style={{ background:COLORS.accent, color:"#111", border:"none", borderRadius:7, padding:"6px 9px", cursor:"pointer", fontSize:11, fontWeight:800 }}>{m.estado === "conciliado" ? "Editar" : "Clasificar"}</button>
-                              <button onClick={() => eliminarMovimientoCartola(m)} style={{ background:COLORS.danger, color:"#fff", border:"none", borderRadius:7, padding:"6px 8px", cursor:"pointer", fontSize:11 }}>Eliminar</button>
-                              {Number(m.abono || 0) > 0 && <button onClick={() => { setModalClasificarCartola(m); setTipoMovimientoCartola("ingreso"); setCategoriaCartolaSeleccionada("Cobros pendientes"); setSubcategoriaCartolaSeleccionada("Saldo Nota de Venta"); setBusquedaCategoriaCartola(""); setBusquedaCxcCartola(""); setCxcSeleccionadaCartola(null); setTipoAbonoCartola("abono"); }} style={{ background:COLORS.success, color:"#fff", border:"none", borderRadius:7, padding:"6px 8px", cursor:"pointer", fontSize:11 }}>Abono CxC</button>}
+                              <button onClick={() => abrirClasificacionCartola(m)} style={{ background:COLORS.accent, color:"#111", border:"none", borderRadius:7, padding:"6px 9px", cursor:"pointer", fontSize:11, fontWeight:800 }}>Clasificar</button>
+                              {Number(m.abono || 0) > 0 && <button onClick={() => { setModalClasificarCartola(m); setCategoriaCartolaSeleccionada("Abono CxC"); setBusquedaCategoriaCartola(""); setBusquedaCxcCartola(""); setCxcSeleccionadaCartola(null); setTipoAbonoCartola("abono"); }} style={{ background:COLORS.success, color:"#fff", border:"none", borderRadius:7, padding:"6px 8px", cursor:"pointer", fontSize:11 }}>Abono CxC</button>}
                               <span style={{ color:COLORS.muted, fontSize:11 }}>{m.nota_venta_id ? `Doc asociado #${m.nota_venta_id}` : (m.observacion || "")}</span>
                             </div>
                           </td>
@@ -11656,64 +11518,122 @@ const renderTarjetaProduccion = (n) => (
 )}
 
       {modalClasificarCartola && (
-        <div onClick={cerrarClasificacionCartola} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.68)", display:"flex", alignItems:"flex-start", justifyContent:"center", zIndex:10000, padding:"20px 10px", overflowY:"auto" }}>
-          <div onClick={e=>e.stopPropagation()} style={{ background:COLORS.card, border:`1px solid ${COLORS.border}`, borderRadius:14, padding:18, width:"min(900px,96vw)", color:COLORS.text }}>
-            <div style={{ display:"flex", justifyContent:"space-between", gap:12, marginBottom:14 }}>
-              <div><h2 style={{ margin:"0 0 4px", color:COLORS.accent }}>Clasificar movimiento</h2><div style={{ fontSize:12, color:COLORS.muted }}>{fmtDate(modalClasificarCartola.fecha)} · {modalClasificarCartola.descripcion}</div><b style={{ color:Number(modalClasificarCartola.abono||0)>0?COLORS.success:COLORS.danger, fontSize:18 }}>{fmt(Number(modalClasificarCartola.abono||modalClasificarCartola.cargo||0))}</b></div>
-              <button onClick={cerrarClasificacionCartola} style={{ background:COLORS.danger,color:"#fff",border:"none",borderRadius:8,padding:"8px 10px",cursor:"pointer" }}>Cerrar</button>
-            </div>
-            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))", gap:10 }}>
-              <label style={{ fontSize:12,color:COLORS.muted }}>Tipo
-                <select value={tipoMovimientoCartola} onChange={e=>{setTipoMovimientoCartola(e.target.value);setCategoriaCartolaSeleccionada("");setSubcategoriaCartolaSeleccionada("");}} style={{ width:"100%",marginTop:5,background:COLORS.surface,border:`1px solid ${COLORS.border}`,color:COLORS.text,borderRadius:8,padding:10 }}>
-                  <option value="">Seleccionar...</option><option value="ingreso">Ingreso</option><option value="egreso">Egreso</option><option value="traspaso">Traspaso interno</option>
-                </select>
-              </label>
-              <label style={{ fontSize:12,color:COLORS.muted }}>Categoría
-                <select value={categoriaCartolaSeleccionada} onChange={e=>{setCategoriaCartolaSeleccionada(e.target.value);setSubcategoriaCartolaSeleccionada("");}} style={{ width:"100%",marginTop:5,background:COLORS.surface,border:`1px solid ${COLORS.border}`,color:COLORS.text,borderRadius:8,padding:10 }}>
-                  <option value="">Seleccionar...</option>{categoriasCartolaFiltradas.map(c=><option key={c} value={c}>{c}</option>)}
-                </select>
-              </label>
-              <label style={{ fontSize:12,color:COLORS.muted }}>Subcategoría
-                <select value={subcategoriaCartolaSeleccionada} onChange={e=>setSubcategoriaCartolaSeleccionada(e.target.value)} style={{ width:"100%",marginTop:5,background:COLORS.surface,border:`1px solid ${COLORS.border}`,color:COLORS.text,borderRadius:8,padding:10 }}>
-                  <option value="">Seleccionar...</option>{subcategoriasDisponiblesCartola.map(sc=><option key={sc} value={sc}>{sc}</option>)}
-                </select>
-              </label>
+        <div
+          onClick={cerrarClasificacionCartola}
+          style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.62)", display:"flex", alignItems:"flex-start", justifyContent:"center", zIndex:10000, padding:"20px 10px", overflowY:"auto" }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{ background:COLORS.card, border:`1px solid ${COLORS.border}`, borderRadius:14, padding:18, width:"min(920px, 96vw)", color:COLORS.text, boxSizing:"border-box" }}
+          >
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:12, marginBottom:14 }}>
+              <div>
+                <h2 style={{ margin:"0 0 4px", color:COLORS.accent }}>Clasificar movimiento de cartola</h2>
+                <div style={{ fontSize:12, color:COLORS.muted }}>{fmtDate(modalClasificarCartola.fecha)} · {modalClasificarCartola.descripcion}</div>
+                <div style={{ marginTop:6, fontSize:18, fontWeight:900, color:Number(modalClasificarCartola.abono || 0) > 0 ? COLORS.success : COLORS.danger }}>
+                  {Number(modalClasificarCartola.abono || 0) > 0 ? fmt(modalClasificarCartola.abono) : fmt(modalClasificarCartola.cargo)}
+                </div>
+              </div>
+              <button onClick={cerrarClasificacionCartola} style={{ background:COLORS.danger, color:"#fff", border:"none", borderRadius:8, padding:"8px 10px", cursor:"pointer", fontWeight:800 }}>Cerrar</button>
             </div>
 
-            {categoriaCartolaSeleccionada === "Cobros pendientes" && subcategoriaCartolaSeleccionada === "Saldo Nota de Venta" && (
-              <div style={{ marginTop:12,background:COLORS.surface,border:`1px solid ${COLORS.border}`,borderRadius:10,padding:12 }}>
-                <div style={{ color:COLORS.accent,fontWeight:800,fontSize:12,marginBottom:8 }}>Asociar pago a Nota de Venta o Barrán</div>
-                <div style={{ display:"grid",gridTemplateColumns:"1fr 180px",gap:8 }}><input value={busquedaCxcCartola} onChange={e=>setBusquedaCxcCartola(e.target.value)} placeholder="Buscar cliente o documento..." style={{background:COLORS.card,border:`1px solid ${COLORS.border}`,color:COLORS.text,borderRadius:8,padding:9}}/><select value={tipoAbonoCartola} onChange={e=>setTipoAbonoCartola(e.target.value)} style={{background:COLORS.card,border:`1px solid ${COLORS.border}`,color:COLORS.text,borderRadius:8,padding:9}}><option value="abono">Abono parcial</option><option value="abono_saldo">Pago de saldo</option><option value="abono_inicial">Abono inicial</option><option value="abono_retiro_parcial">Retiro parcial</option></select></div>
-                <div style={{ maxHeight:220,overflowY:"auto",display:"grid",gap:5,marginTop:8 }}>{opcionesCxcCartola.slice(0,60).map(item=><button key={item.id} onClick={()=>setCxcSeleccionadaCartola(item)} style={{textAlign:"left",background:cxcSeleccionadaCartola?.id===item.id?COLORS.accent:COLORS.card,color:cxcSeleccionadaCartola?.id===item.id?"#111":COLORS.text,border:`1px solid ${COLORS.border}`,borderRadius:8,padding:8,cursor:"pointer"}}><b>{item.tipo} #{item.numero} · {item.cliente}</b><span style={{float:"right"}}>{fmt(item.saldo)}</span></button>)}</div>
+            <div style={{ display:"grid", gridTemplateColumns:"minmax(260px, 360px) 1fr", gap:14 }}>
+              <div style={{ background:COLORS.surface, border:`1px solid ${COLORS.border}`, borderRadius:12, padding:12 }}>
+                <div style={{ fontSize:12, color:COLORS.accent, fontWeight:800, marginBottom:8 }}>1. Categoría</div>
+                <input
+                  value={busquedaCategoriaCartola}
+                  onChange={e=>setBusquedaCategoriaCartola(e.target.value)}
+                  placeholder="Buscar categoría..."
+                  style={{ width:"100%", boxSizing:"border-box", background:COLORS.card, border:`1px solid ${COLORS.border}`, color:COLORS.text, borderRadius:8, padding:"9px 10px", marginBottom:8 }}
+                />
+                <div style={{ display:"grid", gap:6, maxHeight:360, overflowY:"auto" }}>
+                  {categoriasCartolaFiltradas.map(c => (
+                    <button
+                      key={c.nombre}
+                      onClick={() => setCategoriaCartolaSeleccionada(c.nombre)}
+                      style={{ textAlign:"left", background:categoriaCartolaSeleccionada === c.nombre ? COLORS.accent : COLORS.card, color:categoriaCartolaSeleccionada === c.nombre ? "#111" : COLORS.text, border:`1px solid ${categoriaCartolaSeleccionada === c.nombre ? COLORS.accent : COLORS.border}`, borderRadius:8, padding:"9px 10px", cursor:"pointer" }}
+                    >
+                      <div style={{ fontWeight:900 }}>{c.nombre}</div>
+                      <div style={{ fontSize:10.5, opacity:.82 }}>{c.descripcion}</div>
+                    </button>
+                  ))}
+                </div>
               </div>
-            )}
 
-            {categoriaCartolaSeleccionada === "Impuestos" && subcategoriaCartolaSeleccionada === "Pago mensual de impuestos" && (
-              <div style={{ marginTop:12,background:COLORS.surface,border:`1px solid ${COLORS.border}`,borderRadius:10,padding:12 }}>
-                <div style={{color:COLORS.accent,fontWeight:800,fontSize:12,marginBottom:8}}>Desglose del pago (debe sumar {fmt(modalClasificarCartola.cargo)})</div>
-                <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:8}}>{[["impuesto_iva","IVA"],["impuesto_ppm","PPM"],["impuesto_intereses","Intereses/multas"],["impuesto_otros","Otros"]].map(([k,l])=><label key={k} style={{fontSize:11,color:COLORS.muted}}>{l}<input type="number" value={modalClasificarCartola[k]||""} onChange={e=>setModalClasificarCartola(p=>({...p,[k]:e.target.value}))} style={{width:"100%",boxSizing:"border-box",marginTop:4,background:COLORS.card,border:`1px solid ${COLORS.border}`,color:COLORS.text,borderRadius:8,padding:8}}/></label>)}</div>
+              <div style={{ background:COLORS.surface, border:`1px solid ${COLORS.border}`, borderRadius:12, padding:12 }}>
+                <div style={{ fontSize:12, color:COLORS.accent, fontWeight:800, marginBottom:8 }}>2. Detalle</div>
+
+                {categoriaCartolaSeleccionada === "Abono CxC" ? (
+                  <div>
+                    <div style={{ display:"grid", gridTemplateColumns:"1fr 170px", gap:10, marginBottom:10 }}>
+                      <input
+                        value={busquedaCxcCartola}
+                        onChange={e=>setBusquedaCxcCartola(e.target.value)}
+                        placeholder="Buscar NV, barrán o cliente..."
+                        style={{ width:"100%", boxSizing:"border-box", background:COLORS.card, border:`1px solid ${COLORS.border}`, color:COLORS.text, borderRadius:8, padding:"9px 10px" }}
+                      />
+                      <select
+                        value={tipoAbonoCartola}
+                        onChange={e=>setTipoAbonoCartola(e.target.value)}
+                        style={{ width:"100%", boxSizing:"border-box", background:COLORS.card, border:`1px solid ${COLORS.border}`, color:COLORS.text, borderRadius:8, padding:"9px 10px" }}
+                      >
+                        <option value="abono_inicial">Abono inicial</option>
+                        <option value="abono">Abono parcial</option>
+                        <option value="abono_retiro_parcial">Abono retiro parcial</option>
+                        <option value="abono_saldo">Abono saldo</option>
+                      </select>
+                    </div>
+
+                    {cxcSeleccionadaCartola && (
+                      <div style={{ background:"rgba(90,158,111,.12)", border:`1px solid ${COLORS.success}`, borderRadius:10, padding:10, marginBottom:10 }}>
+                        <div style={{ color:COLORS.success, fontWeight:900 }}>Seleccionado: {cxcSeleccionadaCartola.tipo} #{cxcSeleccionadaCartola.numero}</div>
+                        <div style={{ fontSize:12, color:COLORS.text }}>{cxcSeleccionadaCartola.cliente}</div>
+                        <div style={{ fontSize:12, color:COLORS.muted }}>Saldo actual: {fmt(cxcSeleccionadaCartola.saldo)}</div>
+                      </div>
+                    )}
+
+                    <div style={{ maxHeight:300, overflowY:"auto", display:"grid", gap:6 }}>
+                      {opcionesCxcCartola.slice(0, 60).map(item => (
+                        <button
+                          key={item.id}
+                          onClick={() => setCxcSeleccionadaCartola(item)}
+                          style={{ textAlign:"left", background:cxcSeleccionadaCartola?.id === item.id ? COLORS.accent : COLORS.card, color:cxcSeleccionadaCartola?.id === item.id ? "#111" : COLORS.text, border:`1px solid ${cxcSeleccionadaCartola?.id === item.id ? COLORS.accent : COLORS.border}`, borderRadius:8, padding:"9px 10px", cursor:"pointer" }}
+                        >
+                          <div style={{ display:"flex", justifyContent:"space-between", gap:10 }}>
+                            <b>{item.tipo} #{item.numero} · {item.cliente}</b>
+                            <b>{fmt(item.saldo)}</b>
+                          </div>
+                          <div style={{ fontSize:10.5, opacity:.82 }}>{item.estado.icon} {item.estado.label} {item.detalleTexto ? `· ${item.detalleTexto}` : ""}</div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ color:COLORS.muted, fontSize:13, lineHeight:1.5 }}>
+                    {categoriaCartolaSeleccionada
+                      ? "Esta categoría quedará registrada en la cartola. Si corresponde a Factura compra, se mostrará como flujo, pero no se duplicará con el resumen tributario manual del programa externo."
+                      : "Selecciona una categoría desde el listado."}
+                  </div>
+                )}
+
+                <label style={{ display:"block", marginTop:12, fontSize:12, color:COLORS.muted }}>
+                  Detalle / explicación del movimiento
+                  <textarea
+                    value={modalClasificarCartola.observacion || ""}
+                    onChange={e => setModalClasificarCartola(prev => ({ ...prev, observacion:e.target.value }))}
+                    placeholder="Ej: pago arriendo agosto, compra lámina Merino, abono NV 1254..."
+                    style={{ width:"100%", minHeight:74, boxSizing:"border-box", marginTop:6, background:COLORS.card, border:`1px solid ${COLORS.border}`, color:COLORS.text, borderRadius:8, padding:"9px 10px", resize:"vertical", fontFamily:"inherit" }}
+                  />
+                </label>
+
+                <div style={{ display:"flex", justifyContent:"flex-end", gap:8, marginTop:14 }}>
+                  <button onClick={cerrarClasificacionCartola} style={{ background:COLORS.subtle, color:COLORS.text, border:`1px solid ${COLORS.border}`, borderRadius:8, padding:"9px 12px", cursor:"pointer", fontWeight:800 }}>Cancelar</button>
+                  <button onClick={guardarClasificacionCartola} style={{ background:COLORS.success, color:"#fff", border:"none", borderRadius:8, padding:"9px 12px", cursor:"pointer", fontWeight:900 }}>Guardar clasificación</button>
+                </div>
               </div>
-            )}
-
-            <label style={{display:"block",marginTop:12,fontSize:12,color:COLORS.muted}}>Detalle obligatorio
-              <textarea value={modalClasificarCartola.detalle ?? modalClasificarCartola.observacion ?? ""} onChange={e=>setModalClasificarCartola(p=>({...p,detalle:e.target.value,observacion:e.target.value}))} placeholder="Cliente, proveedor, NV o explicación concreta..." style={{width:"100%",minHeight:72,boxSizing:"border-box",marginTop:5,background:COLORS.surface,border:`1px solid ${COLORS.border}`,color:COLORS.text,borderRadius:8,padding:9,fontFamily:"inherit"}}/>
-            </label>
-            <div style={{display:"flex",justifyContent:"space-between",gap:8,marginTop:14,flexWrap:"wrap"}}><button onClick={()=>setModalNuevaSubcategoria(true)} style={{background:COLORS.surface,color:COLORS.text,border:`1px solid ${COLORS.border}`,borderRadius:8,padding:"9px 12px",cursor:"pointer"}}>+ Nueva subcategoría</button><div style={{display:"flex",gap:8}}><button onClick={cerrarClasificacionCartola} style={{background:COLORS.subtle,color:COLORS.text,border:`1px solid ${COLORS.border}`,borderRadius:8,padding:"9px 12px",cursor:"pointer"}}>Cancelar</button><button onClick={guardarClasificacionCartola} style={{background:COLORS.success,color:"#fff",border:"none",borderRadius:8,padding:"9px 12px",fontWeight:800,cursor:"pointer"}}>Guardar</button></div></div>
+            </div>
           </div>
         </div>
-      )}
-
-      {modalDetalleCategoriaCartola && (() => {
-        const lista = cartolaFiltrada.filter(m => String(m.categoria||"")===modalDetalleCategoriaCartola.categoria && String(m.subcategoria||"Sin subcategoría")===modalDetalleCategoriaCartola.subcategoria && (modalDetalleCategoriaCartola.tipo==="ingreso" ? Number(m.abono||0)>0 : Number(m.cargo||0)>0));
-        return <div onClick={()=>setModalDetalleCategoriaCartola(null)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.68)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:10001,padding:12}}><div onClick={e=>e.stopPropagation()} style={{width:"min(760px,96vw)",maxHeight:"86vh",overflowY:"auto",background:COLORS.card,border:`1px solid ${COLORS.border}`,borderRadius:14,padding:16,color:COLORS.text}}><div style={{display:"flex",justifyContent:"space-between",gap:10}}><div><h3 style={{margin:0,color:COLORS.accent}}>{modalDetalleCategoriaCartola.categoria}</h3><div style={{color:COLORS.muted,fontSize:12}}>{modalDetalleCategoriaCartola.subcategoria} · {lista.length} movimientos</div></div><button onClick={()=>setModalDetalleCategoriaCartola(null)} style={{background:COLORS.danger,color:"#fff",border:"none",borderRadius:8,padding:8}}>Cerrar</button></div><div style={{display:"grid",gap:7,marginTop:12}}>{lista.map(m=><div key={m.id} style={{background:COLORS.surface,border:`1px solid ${COLORS.border}`,borderRadius:9,padding:10,display:"grid",gridTemplateColumns:"95px 1fr auto",gap:10}}><span style={{color:COLORS.muted}}>{fmtDate(m.fecha)}</span><div><b>{m.detalle||m.observacion||m.descripcion}</b><div style={{fontSize:10.5,color:COLORS.muted}}>{m.descripcion}</div></div><b style={{color:modalDetalleCategoriaCartola.tipo==="ingreso"?COLORS.success:COLORS.danger}}>{fmt(modalDetalleCategoriaCartola.tipo==="ingreso"?m.abono:m.cargo)}</b></div>)}</div></div></div>;
-      })()}
-
-      {modalMovimientoManual && (
-        <div onClick={()=>setModalMovimientoManual(false)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.68)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:10002,padding:12}}><div onClick={e=>e.stopPropagation()} style={{width:"min(650px,96vw)",background:COLORS.card,border:`1px solid ${COLORS.border}`,borderRadius:14,padding:16,color:COLORS.text}}><h3 style={{marginTop:0,color:COLORS.accent}}>Nuevo movimiento manual</h3><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:9}}><input type="date" value={formMovimientoManual.fecha} onChange={e=>setFormMovimientoManual(p=>({...p,fecha:e.target.value}))}/><select value={formMovimientoManual.tipo} onChange={e=>setFormMovimientoManual(p=>({...p,tipo:e.target.value,categoria:"",subcategoria:""}))}><option value="ingreso">Ingreso</option><option value="egreso">Egreso</option><option value="traspaso">Traspaso</option></select><select value={formMovimientoManual.categoria} onChange={e=>setFormMovimientoManual(p=>({...p,categoria:e.target.value,subcategoria:""}))}><option value="">Categoría...</option>{Object.keys(catalogoFinanciero[formMovimientoManual.tipo]||{}).map(x=><option key={x}>{x}</option>)}</select><select value={formMovimientoManual.subcategoria} onChange={e=>setFormMovimientoManual(p=>({...p,subcategoria:e.target.value}))}><option value="">Subcategoría...</option>{(catalogoFinanciero[formMovimientoManual.tipo]?.[formMovimientoManual.categoria]||[]).map(x=><option key={x}>{x}</option>)}</select><input type="number" placeholder="Monto" value={formMovimientoManual.monto} onChange={e=>setFormMovimientoManual(p=>({...p,monto:e.target.value}))}/><select value={formMovimientoManual.medio_pago} onChange={e=>setFormMovimientoManual(p=>({...p,medio_pago:e.target.value}))}><option value="efectivo">Efectivo</option><option value="tarjeta_personal">Tarjeta personal</option><option value="tarjeta_empresa">Tarjeta empresa</option><option value="banco">Banco</option><option value="otro">Otro</option></select></div><textarea placeholder="Detalle obligatorio" value={formMovimientoManual.detalle} onChange={e=>setFormMovimientoManual(p=>({...p,detalle:e.target.value}))} style={{width:"100%",minHeight:70,boxSizing:"border-box",marginTop:9}}/><div style={{display:"flex",justifyContent:"flex-end",gap:8,marginTop:10}}><button onClick={()=>setModalMovimientoManual(false)}>Cancelar</button><button onClick={guardarMovimientoManual} style={{background:COLORS.success,color:"#fff",border:"none",borderRadius:8,padding:"9px 12px"}}>Guardar</button></div></div></div>
-      )}
-
-      {modalNuevaSubcategoria && (
-        <div onClick={()=>setModalNuevaSubcategoria(false)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.68)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:10003,padding:12}}><div onClick={e=>e.stopPropagation()} style={{width:"min(560px,96vw)",background:COLORS.card,border:`1px solid ${COLORS.border}`,borderRadius:14,padding:16,color:COLORS.text}}><h3 style={{marginTop:0,color:COLORS.accent}}>Agregar subcategoría</h3><div style={{display:"grid",gap:9}}><select value={formNuevaSubcategoria.tipo} onChange={e=>{const tipo=e.target.value;setFormNuevaSubcategoria(p=>({...p,tipo,categoria:Object.keys(CATALOGO_FINANCIERO_BASE[tipo]||{})[0]||""}))}}><option value="ingreso">Ingreso</option><option value="egreso">Egreso</option><option value="traspaso">Traspaso</option></select><select value={formNuevaSubcategoria.categoria} onChange={e=>setFormNuevaSubcategoria(p=>({...p,categoria:e.target.value}))}>{Object.keys(CATALOGO_FINANCIERO_BASE[formNuevaSubcategoria.tipo]||{}).map(x=><option key={x}>{x}</option>)}</select><input value={formNuevaSubcategoria.nombre} onChange={e=>setFormNuevaSubcategoria(p=>({...p,nombre:e.target.value}))} placeholder="Nombre de la subcategoría"/><textarea value={formNuevaSubcategoria.descripcion} onChange={e=>setFormNuevaSubcategoria(p=>({...p,descripcion:e.target.value}))} placeholder="Descripción opcional"/></div><div style={{display:"flex",justifyContent:"flex-end",gap:8,marginTop:10}}><button onClick={()=>setModalNuevaSubcategoria(false)}>Cancelar</button><button onClick={guardarNuevaSubcategoria} style={{background:COLORS.success,color:"#fff",border:"none",borderRadius:8,padding:"9px 12px"}}>Agregar</button></div><div style={{fontSize:10.5,color:COLORS.muted,marginTop:8}}>Se guarda en este navegador. Las categorías principales permanecen fijas para evitar reportes fragmentados.</div></div></div>
       )}
 
       <LoginAdminModal
