@@ -4499,7 +4499,6 @@ if (!errorDocumentosTrabajadores) {
     .finally(() => setCargando(false));
 }, []);
   const [tab, setTab] = useState("produccion");
-  const [finanzasSeccion, setFinanzasSeccion] = useState("resumen");
   const [esAdmin, setEsAdmin] = useState(false);
   const [usuarioActual, setUsuarioActual] = useState(null); // {username, nombre, secciones}
   const [modalLogin, setModalLogin] = useState(false);
@@ -8583,13 +8582,16 @@ const renderTarjetaProduccion = (n) => (
     {key:"sales",label:`✅ Notas de Venta (${filteredNotas.length})`},
     {key:"barranes",label:`🧾 Barranes (${filteredBarranes.length})`},
     {key:"venta_laminas",label:`🧾 Venta de Láminas (${ventasLaminasDelMes.length})`},
+    {key:"cuentas_pagar",label:`💸 Cuentas por pagar (${pagosPendientesMes.length})`},
     {key:"dashboard",label:"📊 Resumen"},
     {key:"analisis",label:"📈 Análisis Histórico"},
   ];
 
   const tabsAdmin=[
     {key:"control_calidad",label:`🔍 Control de Calidad (${erroresProduccion.length})`},
-    {key:"finanzas",label:`💰 Finanzas (${cartolaPorRevisar.length})`},
+    {key:"cartola",label:`🏦 Cartola (${cartolaPorRevisar.length})`},
+    {key:"cxc",label:`💰 CxC (${detalleCxcNotas.length})`},
+    {key:"contabilidad",label:`📚 Contabilidad (${asientosContablesFiltrados.length})`},
     {key:"rrhh",label:`👷 RRHH (${trabajadores.length})`},
   ];
 
@@ -10779,11 +10781,11 @@ const renderTarjetaProduccion = (n) => (
           </div>
         )}
 
-        {tab==="finanzas" && finanzasSeccion==="pagar" && (
+        {tab==="cuentas_pagar" && (
           <div>
             <div style={{ display:"flex", justifyContent:"space-between", gap:12, alignItems:"flex-end", flexWrap:"wrap", marginBottom:16 }}>
               <div>
-                <h2 style={{ margin:"0 0 6px", fontFamily:"Georgia,serif", color:COLORS.accent, fontSize:17 }}>💸 Por pagar</h2>
+                <h2 style={{ margin:"0 0 6px", fontFamily:"Georgia,serif", color:COLORS.accent, fontSize:17 }}>💸 Cuentas por pagar</h2>
                 <p style={{ margin:0, fontSize:12, color:COLORS.muted }}>Deudas, cuotas, proveedores, imposiciones y compromisos visibles en el Calendario.</p>
               </div>
               <button onClick={() => setModalCuentaPagar(true)} style={{ background:COLORS.accent, color:"#111", border:"none", borderRadius:8, padding:"10px 12px", fontWeight:700, cursor:"pointer" }}>+ Nueva cuenta</button>
@@ -10875,68 +10877,10 @@ const renderTarjetaProduccion = (n) => (
           </div>
         )}
 
-        {tab==="finanzas" && (
-          <section style={{ maxWidth:1200, margin:"0 auto 14px" }}>
-            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-end", gap:12, flexWrap:"wrap", marginBottom:12 }}>
-              <div>
-                <h2 style={{ color:COLORS.accent, fontFamily:"Georgia,serif", margin:"0 0 5px" }}>💰 Finanzas</h2>
-                <p style={{ color:COLORS.muted, margin:0, fontSize:13 }}>Control simple de caja, movimientos bancarios, cuentas por cobrar y cuentas por pagar.</p>
-              </div>
-              <div style={{ display:"flex", gap:7, flexWrap:"wrap" }}>
-                {[
-                  ["resumen","📊 Resumen"],
-                  ["movimientos",`🏦 Movimientos (${cartolaPorRevisar.length} por revisar)`],
-                  ["cobrar",`💰 Por cobrar (${detalleCxcNotas.length})`],
-                  ["pagar",`💸 Por pagar (${cuentasPagar.filter(c => saldoCuentaPagar(c) > 0).length})`]
-                ].map(([key,label]) => (
-                  <button key={key} onClick={() => setFinanzasSeccion(key)} style={{
-                    background:finanzasSeccion===key ? COLORS.accent : COLORS.surface,
-                    color:finanzasSeccion===key ? "#111" : COLORS.text,
-                    border:`1px solid ${finanzasSeccion===key ? COLORS.accent : COLORS.border}`,
-                    borderRadius:9, padding:"8px 11px", cursor:"pointer", fontWeight:800, fontSize:12
-                  }}>{label}</button>
-                ))}
-              </div>
-            </div>
-          </section>
-        )}
-
-        {tab==="finanzas" && finanzasSeccion==="resumen" && (
+        {tab==="cartola" && (
           <section style={{ maxWidth:1200, margin:"0 auto" }}>
-            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))", gap:12, marginBottom:16 }}>
-              <StatCard label="Ingresos del mes" value={fmt(totalIngresosCartola)} icon="⬆️" color={COLORS.success}/>
-              <StatCard label="Egresos del mes" value={fmt(totalEgresosCartola)} icon="⬇️" color={COLORS.danger}/>
-              <StatCard label="Flujo neto" value={fmt(totalIngresosCartola-totalEgresosCartola)} icon="💵" color={(totalIngresosCartola-totalEgresosCartola)>=0 ? COLORS.success : COLORS.danger}/>
-              <StatCard label="Cuentas por cobrar" value={fmt(totalCxcNotas)} icon="💰" color={COLORS.accent}/>
-              <StatCard label="Cuentas por pagar" value={fmt(cuentasPagar.reduce((sum,c)=>sum+saldoCuentaPagar(c),0))} icon="📌" color={COLORS.warning}/>
-              <StatCard label="Movimientos por revisar" value={cartolaPorRevisar.length} icon="🔎" color={cartolaPorRevisar.length ? COLORS.warning : COLORS.success}/>
-            </div>
-
-            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(320px,1fr))", gap:14 }}>
-              <div style={{ background:COLORS.card, border:`1px solid ${COLORS.border}`, borderRadius:12, padding:14 }}>
-                <div style={{ color:COLORS.success, fontWeight:900, marginBottom:10 }}>⬆️ Ingresos por categoría</div>
-                {categoriasIngresosCartola.length===0 ? <div style={{color:COLORS.muted,fontSize:12}}>Sin ingresos clasificados.</div> : categoriasIngresosCartola.map(c => (
-                  <button key={`res-ing-${c.categoria}-${c.subcategoria}`} onClick={() => setModalDetalleCategoriaCartola({...c,tipo:"ingreso"})} style={{ width:"100%", display:"flex", justifyContent:"space-between", gap:10, background:COLORS.surface, color:COLORS.text, border:`1px solid ${COLORS.border}`, borderRadius:8, padding:"9px 10px", marginBottom:7, cursor:"pointer", textAlign:"left" }}>
-                    <span><b>{c.categoria}</b><br/><small style={{color:COLORS.muted}}>{c.subcategoria}</small></span><b style={{color:COLORS.success}}>{fmt(c.ingresos)}</b>
-                  </button>
-                ))}
-              </div>
-              <div style={{ background:COLORS.card, border:`1px solid ${COLORS.border}`, borderRadius:12, padding:14 }}>
-                <div style={{ color:COLORS.danger, fontWeight:900, marginBottom:10 }}>⬇️ Egresos por categoría</div>
-                {categoriasEgresosCartola.length===0 ? <div style={{color:COLORS.muted,fontSize:12}}>Sin egresos clasificados.</div> : categoriasEgresosCartola.map(c => (
-                  <button key={`res-egr-${c.categoria}-${c.subcategoria}`} onClick={() => setModalDetalleCategoriaCartola({...c,tipo:"egreso"})} style={{ width:"100%", display:"flex", justifyContent:"space-between", gap:10, background:COLORS.surface, color:COLORS.text, border:`1px solid ${COLORS.border}`, borderRadius:8, padding:"9px 10px", marginBottom:7, cursor:"pointer", textAlign:"left" }}>
-                    <span><b>{c.categoria}</b><br/><small style={{color:COLORS.muted}}>{c.subcategoria}</small></span><b style={{color:COLORS.danger}}>{fmt(c.egresos)}</b>
-                  </button>
-                ))}
-              </div>
-            </div>
-          </section>
-        )}
-
-        {tab==="finanzas" && finanzasSeccion==="movimientos" && (
-          <section style={{ maxWidth:1200, margin:"0 auto" }}>
-            <h2 style={{ color:COLORS.accent, fontFamily:"Georgia,serif", marginBottom:6 }}>🏦 Movimientos financieros</h2>
-            <p style={{ color:COLORS.muted, marginTop:0, fontSize:13 }}>Importa la cartola, registra efectivo u otros movimientos y clasifica todo desde un solo lugar.</p>
+            <h2 style={{ color:COLORS.accent, fontFamily:"Georgia,serif", marginBottom:6 }}>🏦 Cartola bancaria</h2>
+            <p style={{ color:COLORS.muted, marginTop:0, fontSize:13 }}>Importa Excel/CSV del banco, revisa cada movimiento y conviértelo en abono, pago o asiento contable.</p>
             <div style={{ background:COLORS.card, border:`1px solid ${COLORS.border}`, borderRadius:12, padding:14, marginBottom:14 }}>
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-end", gap:10, flexWrap:"wrap", marginBottom:12 }}>
                 <div>
@@ -11083,11 +11027,11 @@ const renderTarjetaProduccion = (n) => (
         )}
 
         
-        {tab==="finanzas" && finanzasSeccion==="cobrar" && (
+        {tab==="cxc" && (
           <section style={{ maxWidth:1200, margin:"0 auto" }}>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-end", gap:12, flexWrap:"wrap", marginBottom:14 }}>
               <div>
-                <h2 style={{ color:COLORS.accent, fontFamily:"Georgia,serif", margin:"0 0 6px" }}>💰 Por cobrar</h2>
+                <h2 style={{ color:COLORS.accent, fontFamily:"Georgia,serif", margin:"0 0 6px" }}>💰 Cuentas por cobrar</h2>
                 <p style={{ color:COLORS.muted, margin:0, fontSize:13 }}>
                   Saldos conectados con Notas de Venta, Barranes, abonos y Producción.
                 </p>
@@ -11231,7 +11175,7 @@ const renderTarjetaProduccion = (n) => (
           </section>
         )}
 
-        {false && (
+        {tab==="contabilidad" && (
           <div>
             <div style={{ display:"flex", justifyContent:"space-between", gap:12, alignItems:"flex-end", flexWrap:"wrap", marginBottom:16 }}>
               <div>
