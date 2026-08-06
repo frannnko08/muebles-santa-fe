@@ -6134,9 +6134,7 @@ const normalizarTextoCartola = (valor) => String(valor || "")
   .trim();
 
 const convertirFechaCartola = (valor) => {
-  // Una fila sin fecha válida no debe transformarse automáticamente en "hoy".
-  // Eso hacía que se importaran como movimientos las filas de "Saldos diarios".
-  if (valor === null || valor === undefined || valor === "") return "";
+  if (!valor) return new Date().toISOString().split("T")[0];
   if (typeof valor === "number") {
     const parsed = XLSX.SSF.parse_date_code(valor);
     if (parsed) {
@@ -6151,7 +6149,7 @@ const convertirFechaCartola = (valor) => {
     const year = chilena[3].length === 2 ? `20${chilena[3]}` : chilena[3];
     return `${year}-${String(chilena[2]).padStart(2, "0")}-${String(chilena[1]).padStart(2, "0")}`;
   }
-  return "";
+  return new Date().toISOString().split("T")[0];
 };
 
 const clasificarMovimientoCartola = ({ descripcion, cargo, abono }) => {
@@ -6208,41 +6206,16 @@ const importarCartolaBancaria = async (event) => {
     let colAbono = buscarCol(["abono", "ingreso", "deposito", "haber", "entrada"]);
     const colMonto = buscarCol(["monto", "importe", "valor"]);
     const colSaldo = buscarCol(["saldo"]);
-    const colCargoAbono = headers.findIndex(h => h.includes("cargo") && h.includes("abono"));
-
-    // Si existe una columna combinada "CARGO/ABONO", no debe interpretarse
-    // a la vez como una columna numérica de cargo y otra de abono.
-    if (colCargoAbono >= 0) {
-      if (colCargo === colCargoAbono) colCargo = -1;
-      if (colAbono === colCargoAbono) colAbono = -1;
-    }
 
     for (const row of rows.slice(headerIndex + 1)) {
-      // La cartola provisoria de Banco de Chile trae, después de los movimientos,
-      // una sección "Saldos diarios". Desde ese punto se termina la lectura.
-      const textoFila = row.map(normalizarTextoCartola).join(" ");
-      if (textoFila.includes("saldos diarios")) break;
-
       const fecha = convertirFechaCartola(colFecha >= 0 ? row[colFecha] : row[0]);
       const descripcion = String(colDescripcion >= 0 ? row[colDescripcion] : row[1] || "").trim();
-
-      // Solo se importa una fila si realmente posee fecha y descripción de movimiento.
-      if (!fecha || !descripcion) continue;
+      if (!descripcion) continue;
 
       let cargo = colCargo >= 0 ? Math.abs(limpiarNumeroCartola(row[colCargo])) : 0;
       let abono = colAbono >= 0 ? Math.abs(limpiarNumeroCartola(row[colAbono])) : 0;
 
-      if (colCargoAbono >= 0 && colMonto >= 0) {
-        const indicador = normalizarTextoCartola(row[colCargoAbono]).replace(/[^a-z]/g, "");
-        const monto = Math.abs(limpiarNumeroCartola(row[colMonto]));
-        if (indicador === "c" || indicador.includes("cargo")) cargo = monto;
-        else if (indicador === "a" || indicador.includes("abono")) abono = monto;
-        else {
-          const montoConSigno = limpiarNumeroCartola(row[colMonto]);
-          if (montoConSigno < 0) cargo = Math.abs(montoConSigno);
-          if (montoConSigno > 0) abono = Math.abs(montoConSigno);
-        }
-      } else if (cargo === 0 && abono === 0 && colMonto >= 0) {
+      if (cargo === 0 && abono === 0 && colMonto >= 0) {
         const monto = limpiarNumeroCartola(row[colMonto]);
         if (monto < 0) cargo = Math.abs(monto);
         if (monto > 0) abono = Math.abs(monto);
