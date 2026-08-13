@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { supabase } from '../lib/supabase'
 import { AnalisisDatos } from './components/AnalisisDatos'
 import { obtenerCotizaciones, obtenerNotasVenta, editarNumeroNotaVenta, importarNotaVentaExcel, eliminarNotaVenta, importarCotizacionExcel, obtenerDetallesCotizaciones } from '../lib/cotizaciones'
@@ -3809,67 +3809,6 @@ function GestionRapidaContabilidadModal({ tipo, onClose, onSave }) {
   );
 }
 
-
-function CostoManualCotizacionModal({ data, onConfirmar, onCancelar }) {
-  const [valor, setValor] = useState(data?.costoDetectado || "");
-  useEffect(() => setValor(data?.costoDetectado || ""), [data]);
-  if (!data) return null;
-  const numero = Number(String(valor || "").replace(/\./g, "").replace(",", "."));
-  const valido = Number.isFinite(numero) && numero >= 0;
-  return (
-    <div onClick={onCancelar} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.72)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:100500,padding:16}}>
-      <div onClick={e=>e.stopPropagation()} style={{width:"min(430px,94vw)",background:COLORS.card,border:`1px solid ${COLORS.border}`,borderRadius:14,padding:22,color:COLORS.text,boxShadow:"0 14px 40px rgba(0,0,0,.5)"}}>
-        <h3 style={{margin:"0 0 8px",color:COLORS.accent}}>Costo directo no identificado</h3>
-        <div style={{fontSize:13,color:COLORS.muted,lineHeight:1.45,marginBottom:14}}>
-          Se pudieron leer los demás datos de <b style={{color:COLORS.text}}>{data.fileName}</b>, pero no se encontró una celda válida con la etiqueta exacta <b style={{color:COLORS.text}}>COSTO</b> y un número a su izquierda.
-        </div>
-        <label style={{fontSize:12,color:COLORS.muted}}>Costo neto MDF + Agorex + Laminado</label>
-        <input autoFocus type="number" min="0" step="1" value={valor} onChange={e=>setValor(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&valido) onConfirmar(numero)}} placeholder="Ej: 348223" style={{width:"100%",boxSizing:"border-box",marginTop:6,padding:"11px 12px",borderRadius:8,border:`1px solid ${COLORS.border}`,background:COLORS.surface,color:COLORS.text,fontSize:16}}/>
-        <div style={{display:"flex",justifyContent:"flex-end",gap:10,marginTop:18}}>
-          <button onClick={onCancelar} style={{background:COLORS.subtle,border:`1px solid ${COLORS.border}`,color:COLORS.text,borderRadius:8,padding:"9px 14px",cursor:"pointer"}}>Omitir archivo</button>
-          <button disabled={!valido} onClick={()=>onConfirmar(numero)} style={{background:COLORS.success,border:"none",color:"#fff",borderRadius:8,padding:"9px 14px",fontWeight:800,cursor:valido?"pointer":"not-allowed",opacity:valido?1:.5}}>Continuar importación</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-const normalizarEtiquetaExcel = (valor) => String(valor ?? "")
-  .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-  .trim().toUpperCase();
-
-function extraerIndicadoresRentabilidadExcel(workbook) {
-  const ignorar = new Set(["RESUMEN","NOTA DE VENTA","PRODUCCION","SEGUIMIENTO","COSTOS"]);
-  const candidatosCosto = [];
-  const candidatosNeto = [];
-  for (const nombre of workbook.SheetNames || []) {
-    if (ignorar.has(String(nombre).toUpperCase())) continue;
-    const ws = workbook.Sheets[nombre];
-    if (!ws) continue;
-    const filas = XLSX.utils.sheet_to_json(ws, { header:1, defval:null, raw:true });
-    for (let r=0; r<filas.length; r++) {
-      const fila = filas[r] || [];
-      for (let c=0; c<fila.length; c++) {
-        const etiqueta = normalizarEtiquetaExcel(fila[c]);
-        if (etiqueta === "COSTO") {
-          const izquierda = Number(fila[c-1]);
-          if (Number.isFinite(izquierda) && izquierda >= 0) {
-            const filaSiguiente = filas[r+1] || [];
-            const contexto = normalizarEtiquetaExcel(filaSiguiente[c]);
-            candidatosCosto.push({ valor:izquierda, hoja:nombre, fila:r, columna:c, score: contexto.includes("FACTOR") ? 2 : 1 });
-          }
-        }
-        if (etiqueta === "NETO") {
-          const derecha = Number(fila[c+1]);
-          if (Number.isFinite(derecha) && derecha >= 0) candidatosNeto.push({ valor:derecha, hoja:nombre, fila:r, columna:c });
-        }
-      }
-    }
-  }
-  candidatosCosto.sort((a,b)=>b.score-a.score);
-  return { costoNeto:candidatosCosto[0]?.valor ?? null, ventaNeta:candidatosNeto[0]?.valor ?? null, detalleCosto:candidatosCosto[0] || null, detalleNeto:candidatosNeto[0] || null };
-}
-
 export default function App() {
   const obtenerDetalleProduccionDesdeExcel = (workbook) => {
   const hoja = workbook.Sheets["CUBIERTA"];
@@ -3984,58 +3923,9 @@ export default function App() {
     return valorG11 ? excelDateToISO(valorG11) : "";
   };
 
-  const solicitarCostoManual = (fileName) => new Promise((resolve) => {
-    resolverCostoManualRef.current = resolve;
-    setModalCostoManual({ fileName });
-  });
-
-  const confirmarCostoManual = (valor) => {
-    const resolver = resolverCostoManualRef.current;
-    resolverCostoManualRef.current = null;
-    setModalCostoManual(null);
-    if (resolver) resolver(Number(valor));
-  };
-
-  const cancelarCostoManual = () => {
-    const resolver = resolverCostoManualRef.current;
-    resolverCostoManualRef.current = null;
-    setModalCostoManual(null);
-    if (resolver) resolver(null);
-  };
-
-  const guardarRentabilidadCotizacion = async ({ numero, costoNeto, ventaNeta, origenCosto }) => {
-    const payload = {
-      cotizacion_numero: String(numero),
-      costo_directo_neto: Number(costoNeto || 0),
-      venta_neta: Number(ventaNeta || 0),
-      margen_contribucion: Number(ventaNeta || 0) - Number(costoNeto || 0),
-      origen_costo: origenCosto || "excel",
-      updated_at: new Date().toISOString()
-    };
-    const { data, error } = await supabase.from("cotizaciones")
-      .update({
-        costo_directo_neto: payload.costo_directo_neto,
-        venta_neta: payload.venta_neta,
-        margen_contribucion: payload.margen_contribucion,
-        origen_costo: payload.origen_costo
-      })
-      .eq("numero", String(numero))
-      .select("*")
-      .single();
-    if (error) throw new Error(`Cotización importada, pero no se pudo guardar su rentabilidad: ${error.message}`);
-    setRentabilidadCotizaciones(prev => [...prev.filter(x=>String(x.cotizacion_numero)!==String(numero)), {
-      cotizacion_numero:String(numero),
-      costo_directo_neto:data.costo_directo_neto,
-      venta_neta:data.venta_neta,
-      margen_contribucion:data.margen_contribucion,
-      origen_costo:data.origen_costo
-    }]);
-  };
-
   const procesarCotizacionArchivo = async (file) => {
   const data = await file.arrayBuffer();
   const workbook = XLSX.read(data);
-  const indicadoresRentabilidad = extraerIndicadoresRentabilidadExcel(workbook);
   const sheet = workbook.Sheets["RESUMEN"];
 
   if (!sheet) {
@@ -4114,18 +4004,6 @@ export default function App() {
     throw new Error(`No se pudo leer número o total en ${file.name}`);
   }
 
-  let costoNeto = indicadoresRentabilidad.costoNeto;
-  let origenCosto = "excel";
-  if (!Number.isFinite(Number(costoNeto))) {
-    costoNeto = await solicitarCostoManual(file.name);
-    origenCosto = "manual";
-    if (!Number.isFinite(Number(costoNeto))) throw new Error("Importación cancelada: falta ingresar el COSTO neto.");
-  }
-
-  const ventaNeta = Number.isFinite(Number(indicadoresRentabilidad.ventaNeta))
-    ? Number(indicadoresRentabilidad.ventaNeta)
-    : Number(total || 0) / 1.19;
-
   const ok = await importarCotizacionExcel({
     numero,
     cliente,
@@ -4133,8 +4011,6 @@ export default function App() {
     total,
     detalles
   });
-
-  await guardarRentabilidadCotizacion({ numero, costoNeto:Number(costoNeto), ventaNeta, origenCosto });
 
   return ok;
 };
@@ -4436,15 +4312,6 @@ export default function App() {
     }));
 
     setCotizaciones(cotizacionesFormateadas);
-    setRentabilidadCotizaciones(dataCotizaciones
-      .filter(c => c.margen_contribucion !== null && c.margen_contribucion !== undefined)
-      .map(c => ({
-        cotizacion_numero:String(c.numero),
-        costo_directo_neto:Number(c.costo_directo_neto || 0),
-        venta_neta:Number(c.venta_neta || 0),
-        margen_contribucion:Number(c.margen_contribucion || 0),
-        origen_costo:c.origen_costo || "excel"
-      })));
     const detallesData = await obtenerDetallesCotizaciones();
     setDetallesCotizaciones(detallesData);
 
@@ -4649,10 +4516,6 @@ if (!errorDocumentosTrabajadores) {
   const [busquedaClienteAnalisis, setBusquedaClienteAnalisis] = useState("");
   const [filtroFechasAnalisis, setFiltroFechasAnalisis] = useState("mes_actual");
   const [filtroResumen, setFiltroResumen] = useState("mes_actual");
-  const [rentabilidadCotizaciones, setRentabilidadCotizaciones] = useState([]);
-  const [modalCostoManual, setModalCostoManual] = useState(null);
-  const resolverCostoManualRef = useRef(null);
-  const [metaMargenMensual, setMetaMargenMensual] = useState(() => Number(localStorage.getItem("sf_meta_margen_mensual") || 8100000));
   const [rangoProductosCm, setRangoProductosCm] = useState(10);
   const [filter, setFilter] = useState("");
   const [fechaDesde, setFechaDesde] = useState("");
@@ -5625,22 +5488,6 @@ if (!errorDocumentosTrabajadores) {
 
   const rangoResumen = obtenerRangoResumen();
   const resumenActual = calcularMetricasResumen(rangoResumen);
-  const rentabilidadPorNumero = new Map((rentabilidadCotizaciones || []).map(r => [String(r.cotizacion_numero), r]));
-  const margenFabricacionPeriodo = resumenActual.ventasPeriodo.reduce((sum, venta) => {
-    const ref = venta?.cotizacion ? rentabilidadPorNumero.get(String(venta.cotizacion)) : null;
-    return sum + Number(ref?.margen_contribucion || 0);
-  }, 0);
-  const margenLaminadosPeriodo = (ventasLaminas || [])
-    .filter(v => estaEnRangoResumen(v.fecha, rangoResumen))
-    .reduce((sum, v) => sum + Number(calcularResumenVentaLaminas(v).utilidadNeta || 0), 0);
-  const margenTotalPeriodo = margenFabricacionPeriodo + margenLaminadosPeriodo;
-  const faltaMargenPeriodo = Math.max(Number(metaMargenMensual || 0) - margenTotalPeriodo, 0);
-  const resultadoSobreEquilibrio = margenTotalPeriodo - Number(metaMargenMensual || 0);
-  const cumplimientoMargen = Number(metaMargenMensual) > 0 ? Math.round(margenTotalPeriodo / Number(metaMargenMensual) * 1000) / 10 : 0;
-  const asientosPeriodoResumen = (asientosContables || []).filter(a => estaEnRangoResumen(a.fecha, rangoResumen));
-  const ivaDfPeriodo = asientosPeriodoResumen.reduce((sum,a) => String(a.definicion || a.detalle || "").toUpperCase().includes("IVA DF") ? sum + Number(a.haber || 0) - Number(a.debe || 0) : sum, 0);
-  const ivaCfPeriodo = asientosPeriodoResumen.reduce((sum,a) => String(a.definicion || a.detalle || "").toUpperCase().includes("IVA CF") ? sum + Number(a.debe || 0) - Number(a.haber || 0) : sum, 0);
-  const ivaAProvisionarResumen = Math.max(ivaDfPeriodo - ivaCfPeriodo, 0);
   const estadisticasProductos = calcularEstadisticasProductos(rangoResumen, rangoProductosCm);
   const rangoResumenAnterior = filtroResumen === "todo" ? null : obtenerRangoResumen(filtroResumen, filtroResumen === "año_actual" ? -12 : filtroResumen === "ultimos_6_meses" ? -6 : filtroResumen === "ultimos_3_meses" ? -3 : -1);
   const resumenAnterior = rangoResumenAnterior ? calcularMetricasResumen(rangoResumenAnterior) : null;
@@ -8829,7 +8676,6 @@ const renderTarjetaProduccion = (n) => (
   return (
     <div style={{ minHeight:"100vh", background:COLORS.bg, color:COLORS.text, fontFamily:"'Trebuchet MS',sans-serif", paddingBottom:60 }}>
       <ToastContainer />
-      <CostoManualCotizacionModal data={modalCostoManual} onConfirmar={confirmarCostoManual} onCancelar={cancelarCostoManual} />
       <ConfirmContainer />
 
       {/* PANTALLA DE LOGIN OBLIGATORIO */}
@@ -9076,25 +8922,6 @@ const renderTarjetaProduccion = (n) => (
                   <option value="año_actual">Año actual</option>
                   <option value="todo">Todo</option>
                 </select>
-              </div>
-            </div>
-
-            <div style={{ background:COLORS.card, border:`1px solid ${COLORS.border}`, borderRadius:12, padding:18, marginBottom:20 }}>
-              <div style={{ display:"flex", justifyContent:"space-between", gap:12, alignItems:"center", flexWrap:"wrap", marginBottom:14 }}>
-                <div>
-                  <h2 style={{margin:"0 0 4px",color:COLORS.accent,fontSize:18}}>💹 Rentabilidad y punto de equilibrio</h2>
-                  <div style={{fontSize:12,color:COLORS.muted}}>Margen neto generado por ventas aceptadas con costo registrado + utilidad de reventa de laminados.</div>
-                </div>
-                <label style={{fontSize:11,color:COLORS.muted}}>Meta mensual de margen
-                  <input type="number" min="0" value={metaMargenMensual} onChange={e=>{const v=Number(e.target.value||0);setMetaMargenMensual(v);localStorage.setItem("sf_meta_margen_mensual",String(v));}} style={{marginLeft:8,width:130,background:COLORS.surface,border:`1px solid ${COLORS.border}`,color:COLORS.text,borderRadius:8,padding:"7px 9px"}}/>
-                </label>
-              </div>
-              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(165px,1fr))",gap:10}}>
-                <StatCard label="Margen fabricación" value={fmt(margenFabricacionPeriodo)} sub="Venta neta − costo directo" icon="🏭" color={COLORS.success}/>
-                <StatCard label="Margen laminados" value={fmt(margenLaminadosPeriodo)} sub="Utilidad neta de reventa" icon="🪵" color="#5a8abe"/>
-                <StatCard label="Margen generado" value={fmt(margenTotalPeriodo)} sub={`${cumplimientoMargen}% de la meta`} icon="📈" color={margenTotalPeriodo >= metaMargenMensual ? COLORS.success : COLORS.warning}/>
-                <StatCard label="Falta para equilibrio" value={fmt(faltaMargenPeriodo)} sub={resultadoSobreEquilibrio >= 0 ? `Sobre equilibrio: ${fmt(resultadoSobreEquilibrio)}` : "Meta pendiente"} icon="🎯" color={faltaMargenPeriodo === 0 ? COLORS.success : COLORS.danger}/>
-                <StatCard label="IVA a provisionar" value={fmt(ivaAProvisionarResumen)} sub={`IVA DF ${fmt(ivaDfPeriodo)} − IVA CF ${fmt(ivaCfPeriodo)}`} icon="🏛️" color={COLORS.accent}/>
               </div>
             </div>
 
