@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from '../lib/supabase'
+import { AnalisisDatos } from './components/AnalisisDatos'
 import { obtenerCotizaciones, obtenerNotasVenta, editarNumeroNotaVenta, importarNotaVentaExcel, eliminarNotaVenta, importarCotizacionExcel, obtenerDetallesCotizaciones } from '../lib/cotizaciones'
 import * as XLSX from 'xlsx'
 
@@ -9,6 +10,42 @@ const COLORS = {
   danger: "#c05a5a", text: "#f0ead8", muted: "#8a8270", subtle: "#3a3628",
   warning: "#c8943a",
 };
+
+
+// Catálogo financiero base. Las categorías principales se mantienen estables;
+// las subcategorías adicionales se pueden crear desde la propia APP.
+const CATALOGO_FINANCIERO_BASE = {
+  ingreso: {
+    "Ventas": ["Postformados", "Laminados", "Muebles"],
+    "Cobros pendientes": ["Saldo Nota de Venta", "Reembolso", "Otro cobro pendiente"],
+    "Préstamos recibidos": ["Préstamo"],
+    "Otros ingresos": ["Venta de activo", "Ajuste de caja", "Otro ingreso"]
+  },
+  egreso: {
+    "Materiales": ["Laminados", "MDF", "Aglomerado", "Adhesivos", "Tapacantos", "Herrajes", "Maderas", "Insumos de fabricación", "Embalaje", "Otros materiales"],
+    "Mano de obra y personal": ["Sueldos", "Anticipos de sueldo", "Honorarios", "Horas extras", "Bonos", "Finiquitos", "Cotizaciones previsionales", "Colaciones", "Movilización", "Ropa o elementos de trabajo", "Otros gastos de personal"],
+    "Operación del taller": ["Arriendo", "Electricidad", "Agua", "Gas", "Internet", "Telefonía", "Mantención de maquinaria", "Reparación de maquinaria", "Herramientas", "Aseo", "Seguridad", "Retiro de residuos", "Otros gastos del taller"],
+    "Transporte y vehículos": ["Bencina", "TAG", "Peajes", "Estacionamiento", "Mantención del vehículo", "Reparación del vehículo", "Revisión técnica", "Permiso de circulación", "Seguro vehicular", "Neumáticos", "Fletes externos", "Despachos", "Otros gastos de transporte"],
+    "Administración": ["Contabilidad", "Software y suscripciones", "Comisiones bancarias", "Papelería", "Impresiones", "Notaría", "Asesorías", "Patentes y permisos", "Capacitación", "Gastos legales", "Otros gastos administrativos"],
+    "Ventas y marketing": ["Publicidad digital", "Google Ads", "Redes sociales", "Página web", "Fotografía", "Diseño", "Comisiones de venta", "Muestras", "Promociones", "Atención a clientes", "Otros gastos comerciales"],
+    "Impuestos": ["Pago mensual de impuestos", "Patente municipal", "Tesorería o convenio tributario", "Otros impuestos"],
+    "Importaciones": ["Compra de dólares", "Pago a proveedor extranjero", "Flete internacional", "Aduana", "Agente de aduana", "Derechos aduaneros", "IVA de importación", "Transporte nacional de importación", "Almacenaje", "Costos bancarios de importación", "Otros costos de importación"],
+    "Pago de cuentas por pagar": ["Pago a proveedor", "Reembolso", "Abono de deuda"],
+    "Retiros y movimientos personales": ["Retiro del dueño", "Préstamo a trabajador", "Préstamo familiar", "Anticipo personal", "Gasto personal por regularizar", "Otro retiro"],
+    "Inversiones y activos": ["Maquinaria", "Herramientas mayores", "Vehículo", "Equipos computacionales", "Muebles de oficina", "Mejoras del taller", "Otros activos"],
+    "Otros egresos": ["Supermercado", "Comida", "Gastos hormiga", "Ajuste de caja", "Pago duplicado", "Otros gastos"]
+  },
+  traspaso: {
+    "Transferencias internas": ["Banco a efectivo", "Efectivo a banco", "Entre cuentas", "Otro traspaso"]
+  }
+};
+
+const normalizarClaveFinanciera = (valor) => String(valor || "")
+  .normalize("NFD")
+  .replace(/[\u0300-\u036f]/g, "")
+  .toLowerCase()
+  .replace(/\s+/g, " ")
+  .trim();
 
 /* ============================================================
    SISTEMA DE NOTIFICACIONES (TOASTS) Y CONFIRMACIÓN
@@ -3772,6 +3809,67 @@ function GestionRapidaContabilidadModal({ tipo, onClose, onSave }) {
   );
 }
 
+
+function CostoManualCotizacionModal({ data, onConfirmar, onCancelar }) {
+  const [valor, setValor] = useState(data?.costoDetectado || "");
+  useEffect(() => setValor(data?.costoDetectado || ""), [data]);
+  if (!data) return null;
+  const numero = Number(String(valor || "").replace(/\./g, "").replace(",", "."));
+  const valido = Number.isFinite(numero) && numero >= 0;
+  return (
+    <div onClick={onCancelar} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.72)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:100500,padding:16}}>
+      <div onClick={e=>e.stopPropagation()} style={{width:"min(430px,94vw)",background:COLORS.card,border:`1px solid ${COLORS.border}`,borderRadius:14,padding:22,color:COLORS.text,boxShadow:"0 14px 40px rgba(0,0,0,.5)"}}>
+        <h3 style={{margin:"0 0 8px",color:COLORS.accent}}>Costo directo no identificado</h3>
+        <div style={{fontSize:13,color:COLORS.muted,lineHeight:1.45,marginBottom:14}}>
+          Se pudieron leer los demás datos de <b style={{color:COLORS.text}}>{data.fileName}</b>, pero no se encontró una celda válida con la etiqueta exacta <b style={{color:COLORS.text}}>COSTO</b> y un número a su izquierda.
+        </div>
+        <label style={{fontSize:12,color:COLORS.muted}}>Costo neto MDF + Agorex + Laminado</label>
+        <input autoFocus type="number" min="0" step="1" value={valor} onChange={e=>setValor(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&valido) onConfirmar(numero)}} placeholder="Ej: 348223" style={{width:"100%",boxSizing:"border-box",marginTop:6,padding:"11px 12px",borderRadius:8,border:`1px solid ${COLORS.border}`,background:COLORS.surface,color:COLORS.text,fontSize:16}}/>
+        <div style={{display:"flex",justifyContent:"flex-end",gap:10,marginTop:18}}>
+          <button onClick={onCancelar} style={{background:COLORS.subtle,border:`1px solid ${COLORS.border}`,color:COLORS.text,borderRadius:8,padding:"9px 14px",cursor:"pointer"}}>Omitir archivo</button>
+          <button disabled={!valido} onClick={()=>onConfirmar(numero)} style={{background:COLORS.success,border:"none",color:"#fff",borderRadius:8,padding:"9px 14px",fontWeight:800,cursor:valido?"pointer":"not-allowed",opacity:valido?1:.5}}>Continuar importación</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const normalizarEtiquetaExcel = (valor) => String(valor ?? "")
+  .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+  .trim().toUpperCase();
+
+function extraerIndicadoresRentabilidadExcel(workbook) {
+  const ignorar = new Set(["RESUMEN","NOTA DE VENTA","PRODUCCION","SEGUIMIENTO","COSTOS"]);
+  const candidatosCosto = [];
+  const candidatosNeto = [];
+  for (const nombre of workbook.SheetNames || []) {
+    if (ignorar.has(String(nombre).toUpperCase())) continue;
+    const ws = workbook.Sheets[nombre];
+    if (!ws) continue;
+    const filas = XLSX.utils.sheet_to_json(ws, { header:1, defval:null, raw:true });
+    for (let r=0; r<filas.length; r++) {
+      const fila = filas[r] || [];
+      for (let c=0; c<fila.length; c++) {
+        const etiqueta = normalizarEtiquetaExcel(fila[c]);
+        if (etiqueta === "COSTO") {
+          const izquierda = Number(fila[c-1]);
+          if (Number.isFinite(izquierda) && izquierda >= 0) {
+            const filaSiguiente = filas[r+1] || [];
+            const contexto = normalizarEtiquetaExcel(filaSiguiente[c]);
+            candidatosCosto.push({ valor:izquierda, hoja:nombre, fila:r, columna:c, score: contexto.includes("FACTOR") ? 2 : 1 });
+          }
+        }
+        if (etiqueta === "NETO") {
+          const derecha = Number(fila[c+1]);
+          if (Number.isFinite(derecha) && derecha >= 0) candidatosNeto.push({ valor:derecha, hoja:nombre, fila:r, columna:c });
+        }
+      }
+    }
+  }
+  candidatosCosto.sort((a,b)=>b.score-a.score);
+  return { costoNeto:candidatosCosto[0]?.valor ?? null, ventaNeta:candidatosNeto[0]?.valor ?? null, detalleCosto:candidatosCosto[0] || null, detalleNeto:candidatosNeto[0] || null };
+}
+
 export default function App() {
   const obtenerDetalleProduccionDesdeExcel = (workbook) => {
   const hoja = workbook.Sheets["CUBIERTA"];
@@ -3886,9 +3984,58 @@ export default function App() {
     return valorG11 ? excelDateToISO(valorG11) : "";
   };
 
+  const solicitarCostoManual = (fileName) => new Promise((resolve) => {
+    resolverCostoManualRef.current = resolve;
+    setModalCostoManual({ fileName });
+  });
+
+  const confirmarCostoManual = (valor) => {
+    const resolver = resolverCostoManualRef.current;
+    resolverCostoManualRef.current = null;
+    setModalCostoManual(null);
+    if (resolver) resolver(Number(valor));
+  };
+
+  const cancelarCostoManual = () => {
+    const resolver = resolverCostoManualRef.current;
+    resolverCostoManualRef.current = null;
+    setModalCostoManual(null);
+    if (resolver) resolver(null);
+  };
+
+  const guardarRentabilidadCotizacion = async ({ numero, costoNeto, ventaNeta, origenCosto }) => {
+    const payload = {
+      cotizacion_numero: String(numero),
+      costo_directo_neto: Number(costoNeto || 0),
+      venta_neta: Number(ventaNeta || 0),
+      margen_contribucion: Number(ventaNeta || 0) - Number(costoNeto || 0),
+      origen_costo: origenCosto || "excel",
+      updated_at: new Date().toISOString()
+    };
+    const { data, error } = await supabase.from("cotizaciones")
+      .update({
+        costo_directo_neto: payload.costo_directo_neto,
+        venta_neta: payload.venta_neta,
+        margen_contribucion: payload.margen_contribucion,
+        origen_costo: payload.origen_costo
+      })
+      .eq("numero", String(numero))
+      .select("*")
+      .single();
+    if (error) throw new Error(`Cotización importada, pero no se pudo guardar su rentabilidad: ${error.message}`);
+    setRentabilidadCotizaciones(prev => [...prev.filter(x=>String(x.cotizacion_numero)!==String(numero)), {
+      cotizacion_numero:String(numero),
+      costo_directo_neto:data.costo_directo_neto,
+      venta_neta:data.venta_neta,
+      margen_contribucion:data.margen_contribucion,
+      origen_costo:data.origen_costo
+    }]);
+  };
+
   const procesarCotizacionArchivo = async (file) => {
   const data = await file.arrayBuffer();
   const workbook = XLSX.read(data);
+  const indicadoresRentabilidad = extraerIndicadoresRentabilidadExcel(workbook);
   const sheet = workbook.Sheets["RESUMEN"];
 
   if (!sheet) {
@@ -3967,6 +4114,18 @@ export default function App() {
     throw new Error(`No se pudo leer número o total en ${file.name}`);
   }
 
+  let costoNeto = indicadoresRentabilidad.costoNeto;
+  let origenCosto = "excel";
+  if (!Number.isFinite(Number(costoNeto))) {
+    costoNeto = await solicitarCostoManual(file.name);
+    origenCosto = "manual";
+    if (!Number.isFinite(Number(costoNeto))) throw new Error("Importación cancelada: falta ingresar el COSTO neto.");
+  }
+
+  const ventaNeta = Number.isFinite(Number(indicadoresRentabilidad.ventaNeta))
+    ? Number(indicadoresRentabilidad.ventaNeta)
+    : Number(total || 0) / 1.19;
+
   const ok = await importarCotizacionExcel({
     numero,
     cliente,
@@ -3974,6 +4133,8 @@ export default function App() {
     total,
     detalles
   });
+
+  await guardarRentabilidadCotizacion({ numero, costoNeto:Number(costoNeto), ventaNeta, origenCosto });
 
   return ok;
 };
@@ -4275,6 +4436,15 @@ export default function App() {
     }));
 
     setCotizaciones(cotizacionesFormateadas);
+    setRentabilidadCotizaciones(dataCotizaciones
+      .filter(c => c.margen_contribucion !== null && c.margen_contribucion !== undefined)
+      .map(c => ({
+        cotizacion_numero:String(c.numero),
+        costo_directo_neto:Number(c.costo_directo_neto || 0),
+        venta_neta:Number(c.venta_neta || 0),
+        margen_contribucion:Number(c.margen_contribucion || 0),
+        origen_costo:c.origen_costo || "excel"
+      })));
     const detallesData = await obtenerDetallesCotizaciones();
     setDetallesCotizaciones(detallesData);
 
@@ -4393,14 +4563,32 @@ if (!errorDocumentosImportados) {
   setDocumentosImportados(dataDocumentosImportados || []);
 }
 
-const { data: dataCartolaBancaria, error: errorCartolaBancaria } = await supabase
-  .from("cartola_bancaria")
-  .select("*")
-  .order("fecha", { ascending: false })
-  .order("created_at", { ascending: false });
+// Carga paginada: Supabase puede limitar una consulta a 1.000 filas.
+// Recorremos todas las páginas para que la cartola se muestre completa.
+let dataCartolaBancaria = [];
+let errorCartolaBancaria = null;
+const TAMANO_PAGINA_CARTOLA = 1000;
+for (let desde = 0; ; desde += TAMANO_PAGINA_CARTOLA) {
+  const { data: paginaCartola, error } = await supabase
+    .from("cartola_bancaria")
+    .select("*")
+    .order("fecha", { ascending: false })
+    .order("created_at", { ascending: false })
+    .range(desde, desde + TAMANO_PAGINA_CARTOLA - 1);
+
+  if (error) {
+    errorCartolaBancaria = error;
+    break;
+  }
+
+  dataCartolaBancaria = [...dataCartolaBancaria, ...(paginaCartola || [])];
+  if (!paginaCartola || paginaCartola.length < TAMANO_PAGINA_CARTOLA) break;
+}
 
 if (!errorCartolaBancaria) {
-  setCartolaMovimientos(dataCartolaBancaria || []);
+  setCartolaMovimientos(dataCartolaBancaria);
+} else {
+  console.error("Error cargando cartola bancaria:", errorCartolaBancaria);
 }
 const { data: dataCuentasPagar, error: errorCuentasPagar } = await supabase
   .from("cuentas_pagar")
@@ -4444,6 +4632,7 @@ if (!errorDocumentosTrabajadores) {
     .finally(() => setCargando(false));
 }, []);
   const [tab, setTab] = useState("produccion");
+  const [finanzasSeccion, setFinanzasSeccion] = useState("resumen");
   const [esAdmin, setEsAdmin] = useState(false);
   const [usuarioActual, setUsuarioActual] = useState(null); // {username, nombre, secciones}
   const [modalLogin, setModalLogin] = useState(false);
@@ -4460,12 +4649,21 @@ if (!errorDocumentosTrabajadores) {
   const [busquedaClienteAnalisis, setBusquedaClienteAnalisis] = useState("");
   const [filtroFechasAnalisis, setFiltroFechasAnalisis] = useState("mes_actual");
   const [filtroResumen, setFiltroResumen] = useState("mes_actual");
+  const [rentabilidadCotizaciones, setRentabilidadCotizaciones] = useState([]);
+  const [modalCostoManual, setModalCostoManual] = useState(null);
+  const resolverCostoManualRef = useRef(null);
+  const [metaMargenMensual, setMetaMargenMensual] = useState(() => Number(localStorage.getItem("sf_meta_margen_mensual") || 8100000));
+  const [rangoProductosCm, setRangoProductosCm] = useState(10);
   const [filter, setFilter] = useState("");
   const [fechaDesde, setFechaDesde] = useState("");
   const [fechaHasta, setFechaHasta] = useState("");
   const [mesFiltro, setMesFiltro] = useState(new Date().toISOString().slice(0, 7));
   const [showVencidas, setShowVencidas] = useState(false);
   const [seguimiento, setSeguimiento] = useState({});
+  const [mesGestion, setMesGestion] = useState(new Date().toISOString().slice(0, 7));
+  const [marketingMensual, setMarketingMensual] = useState({});
+  const [planesAccion, setPlanesAccion] = useState({});
+  const [nuevaAccion, setNuevaAccion] = useState({ accion:"", responsable:"", fecha:"" });
   const [cargando, setCargando] = useState(true);
   const [cotizaciones, setCotizaciones] = useState([]);
   const [detallesCotizaciones, setDetallesCotizaciones] = useState([]);
@@ -4522,8 +4720,19 @@ if (!errorDocumentosTrabajadores) {
 };
   const [busquedaCartola, setBusquedaCartola] = useState("");
   const [modalClasificarCartola, setModalClasificarCartola] = useState(null);
+  const [tipoMovimientoCartola, setTipoMovimientoCartola] = useState("");
   const [categoriaCartolaSeleccionada, setCategoriaCartolaSeleccionada] = useState("");
+  const [subcategoriaCartolaSeleccionada, setSubcategoriaCartolaSeleccionada] = useState("");
   const [busquedaCategoriaCartola, setBusquedaCategoriaCartola] = useState("");
+  const [modalDetalleCategoriaCartola, setModalDetalleCategoriaCartola] = useState(null);
+  const [modalMovimientoManual, setModalMovimientoManual] = useState(false);
+  const [modalNuevaSubcategoria, setModalNuevaSubcategoria] = useState(false);
+  const [subcategoriasPersonalizadas, setSubcategoriasPersonalizadas] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("sf-subcategorias-financieras") || "[]"); }
+    catch (e) { return []; }
+  });
+  const [formNuevaSubcategoria, setFormNuevaSubcategoria] = useState({ tipo:"ingreso", categoria:"Ventas", nombre:"", descripcion:"", requiereDetalle:true });
+  const [formMovimientoManual, setFormMovimientoManual] = useState({ fecha:new Date().toISOString().split("T")[0], tipo:"egreso", categoria:"", subcategoria:"", detalle:"", monto:"", medio_pago:"efectivo" });
   const [busquedaCxcCartola, setBusquedaCxcCartola] = useState("");
   const [cxcSeleccionadaCartola, setCxcSeleccionadaCartola] = useState(null);
   const [tipoAbonoCartola, setTipoAbonoCartola] = useState("abono");
@@ -4600,6 +4809,143 @@ if (!errorDocumentosTrabajadores) {
       console.error(e);
     }
   }, [seguimiento]);
+
+
+  // Panel de Gestión: Supabase como fuente principal y localStorage como respaldo.
+  useEffect(() => {
+    let activo = true;
+    const cargarPanelGestion = async () => {
+      let marketingLocal = {};
+      let accionesLocal = {};
+      try {
+        marketingLocal = JSON.parse(localStorage.getItem("sf-marketing-mensual") || "{}");
+        accionesLocal = JSON.parse(localStorage.getItem("sf-planes-accion") || "{}");
+      } catch (e) {
+        console.warn("No se pudo leer el respaldo local del Panel de Gestión.", e);
+      }
+
+      const [{ data: marketingNube, error: errorMarketing }, { data: accionesNube, error: errorAcciones }] = await Promise.all([
+        supabase.from("metricas_comerciales_mensuales").select("*"),
+        supabase.from("planes_accion").select("*").order("fecha", { ascending:true })
+      ]);
+
+      if (!activo) return;
+
+      if (!errorMarketing) {
+        const mapa = {};
+        (marketingNube || []).forEach(f => {
+          mapa[f.mes] = {
+            publicaciones:Number(f.publicaciones || 0),
+            historias_videos:Number(f.historias_videos || 0),
+            proyectos_publicados:Number(f.proyectos_publicados || 0),
+            google_business:Number(f.google_business || 0),
+            campanas:Number(f.campanas || 0),
+            inversion:Number(f.inversion || 0),
+            consultas_identificadas:Number(f.consultas_identificadas || 0),
+            observacion:f.observacion || ""
+          };
+        });
+        setMarketingMensual(mapa);
+        try { localStorage.setItem("sf-marketing-mensual", JSON.stringify(mapa)); } catch (e) {}
+      } else {
+        setMarketingMensual(marketingLocal);
+        console.warn("Marketing mensual cargado desde respaldo local.", errorMarketing);
+      }
+
+      if (!errorAcciones) {
+        const mapa = {};
+        (accionesNube || []).forEach(a => {
+          const mes = a.fecha ? String(a.fecha).slice(0,7) : (a.mes || new Date().toISOString().slice(0,7));
+          if (!mapa[mes]) mapa[mes] = [];
+          mapa[mes].push({ id:a.id, accion:a.accion, responsable:a.responsable || "", fecha:a.fecha || "", estado:a.estado || "pendiente" });
+        });
+        setPlanesAccion(mapa);
+        try { localStorage.setItem("sf-planes-accion", JSON.stringify(mapa)); } catch (e) {}
+      } else {
+        setPlanesAccion(accionesLocal);
+        console.warn("Planes de acción cargados desde respaldo local.", errorAcciones);
+      }
+    };
+    cargarPanelGestion();
+    return () => { activo = false; };
+  }, []);
+
+  const actualizarMarketingMes = useCallback((campo, valor) => {
+    let registroActualizado = null;
+    setMarketingMensual(prev => {
+      registroActualizado = {
+        publicaciones:0, historias_videos:0, proyectos_publicados:0, google_business:0,
+        campanas:0, inversion:0, consultas_identificadas:0, observacion:"",
+        ...(prev[mesGestion] || {}), [campo]:valor
+      };
+      const actualizado = { ...prev, [mesGestion]:registroActualizado };
+      try { localStorage.setItem("sf-marketing-mensual", JSON.stringify(actualizado)); } catch (e) {}
+      return actualizado;
+    });
+    setTimeout(async () => {
+      if (!registroActualizado) return;
+      const { error } = await supabase.from("metricas_comerciales_mensuales").upsert({
+        mes:mesGestion, ...registroActualizado, updated_at:new Date().toISOString()
+      }, { onConflict:"mes" });
+      if (error) {
+        console.error(error);
+        toast("El dato de marketing quedó respaldado localmente, pero no pudo sincronizarse con Supabase.", "warning");
+      }
+    }, 0);
+  }, [mesGestion]);
+
+  const agregarAccionGestion = useCallback(async () => {
+    if (!String(nuevaAccion.accion || "").trim()) {
+      toast("Debes escribir la acción a realizar.", "warning");
+      return;
+    }
+    const mesDestino = nuevaAccion.fecha ? String(nuevaAccion.fecha).slice(0,7) : mesGestion;
+    const accionNueva = {
+      id:`${Date.now()}-${Math.random().toString(36).slice(2,9)}`,
+      mes:mesDestino,
+      accion:String(nuevaAccion.accion).trim(),
+      responsable:String(nuevaAccion.responsable || "").trim(),
+      fecha:nuevaAccion.fecha || null,
+      estado:"pendiente"
+    };
+    setPlanesAccion(prev => {
+      const actualizado = { ...prev, [mesDestino]:[...(prev[mesDestino] || []), { ...accionNueva, fecha:accionNueva.fecha || "" }] };
+      try { localStorage.setItem("sf-planes-accion", JSON.stringify(actualizado)); } catch (e) {}
+      return actualizado;
+    });
+    setNuevaAccion({ accion:"", responsable:"", fecha:"" });
+    const { error } = await supabase.from("planes_accion").insert(accionNueva);
+    if (error) {
+      console.error(error);
+      toast("La acción quedó guardada localmente, pero no pudo sincronizarse con Supabase.", "warning");
+    } else {
+      toast(`Acción agregada al plan de ${nombreMesResumen(mesDestino)}.`, "success");
+    }
+  }, [mesGestion, nuevaAccion]);
+
+  const actualizarAccionGestion = useCallback(async (id, cambios) => {
+    setPlanesAccion(prev => {
+      const actualizado = { ...prev };
+      Object.keys(actualizado).forEach(mes => {
+        actualizado[mes] = (actualizado[mes] || []).map(a => a.id === id ? { ...a, ...cambios } : a);
+      });
+      try { localStorage.setItem("sf-planes-accion", JSON.stringify(actualizado)); } catch (e) {}
+      return actualizado;
+    });
+    const { error } = await supabase.from("planes_accion").update({ ...cambios, updated_at:new Date().toISOString() }).eq("id", id);
+    if (error) toast("El cambio quedó guardado localmente, pero no pudo sincronizarse con Supabase.", "warning");
+  }, []);
+
+  const eliminarAccionGestion = useCallback(async (id) => {
+    setPlanesAccion(prev => {
+      const actualizado = {};
+      Object.entries(prev).forEach(([mes, lista]) => { actualizado[mes] = (lista || []).filter(a => a.id !== id); });
+      try { localStorage.setItem("sf-planes-accion", JSON.stringify(actualizado)); } catch (e) {}
+      return actualizado;
+    });
+    const { error } = await supabase.from("planes_accion").delete().eq("id", id);
+    if (error) toast("La acción se eliminó localmente, pero no pudo borrarse de Supabase.", "warning");
+  }, []);
 
   // ============= AUTENTICACIÓN DE USUARIOS =============
   // Lista de secciones que requieren rol admin (control total)
@@ -5176,8 +5522,126 @@ if (!errorDocumentosTrabajadores) {
     };
   };
 
+  const normalizarMedidaCm = (valor) => {
+    if (valor === null || valor === undefined || valor === "") return 0;
+    const limpio = String(valor).trim().replace(/\s/g, "").replace(",", ".");
+    const n = Number(limpio);
+    if (!Number.isFinite(n) || n <= 0) return 0;
+    // El Excel puede guardar medidas en metros (3,00), centímetros (300) o milímetros (3000).
+    if (n <= 10) return Math.round(n * 100);
+    if (n >= 1000) return Math.round(n / 10);
+    return Math.round(n);
+  };
+
+  const normalizarTextoEstadistica = (valor) => String(valor || "")
+    .trim()
+    .replace(/\s+/g, " ");
+
+  const esDetalleProductoAnalizable = (detalle) => {
+    const largoCm = normalizarMedidaCm(detalle?.largo ?? detalle?.alto);
+    const anchoCm = normalizarMedidaCm(detalle?.ancho);
+    const texto = normalizarTextoEstadistica(detalle?.tipo ?? detalle?.descripcion).toLowerCase();
+    const excluido = /despacho|flete|traslado|instalaci[oó]n|mano de obra|servicio/.test(texto);
+    return largoCm > 0 && anchoCm > 0 && !excluido;
+  };
+
+  const clasificarTipoProducto = (detalle) => {
+    const texto = normalizarTextoEstadistica(detalle?.tipo ?? detalle?.descripcion).toLowerCase();
+    if (/180|frente 180|radio 180/.test(texto)) return "Cubierta frente 180°";
+    if (/90|frente 90|radio 90/.test(texto)) return "Cubierta frente 90°";
+    if (/espa[nñ]ol/.test(texto)) return "Frente español";
+    if (/tibur[oó]n/.test(texto)) return "Punta tiburón";
+    if (/mesa.*4|4 lados/.test(texto)) return "Mesa 4 lados";
+    if (/mesa.*3|3 lados/.test(texto)) return "Mesa 3 lados";
+    if (/mesa.*2|2 lados/.test(texto)) return "Mesa 2 lados";
+    if (/enchape/.test(texto)) return "Enchape recto";
+    if (/puerta/.test(texto)) return "Puerta postformada";
+    if (/cubierta|postform/.test(texto)) return "Cubierta sin clasificar";
+    return normalizarTextoEstadistica(detalle?.tipo ?? detalle?.descripcion) || "Otro producto";
+  };
+
+  const calcularEstadisticasProductos = (rango, intervaloCm = 10) => {
+    const idsCotizacionesPeriodo = new Set(
+      cotizaciones
+        .filter(c => estaEnRangoResumen(c.fecha, rango))
+        .map(c => Number(String(c.id || "").replace("supabase-", "")))
+        .filter(Number.isFinite)
+    );
+
+    const detallesPeriodo = detallesCotizaciones
+      .filter(d => idsCotizacionesPeriodo.has(Number(d.cotizacion_id)))
+      .filter(esDetalleProductoAnalizable)
+      .map(d => {
+        const cantidadLeida = Number(d.unidad ?? d.cantidad ?? 1);
+        return {
+          ...d,
+          cantidadEstadistica: Number.isFinite(cantidadLeida) && cantidadLeida > 0 ? cantidadLeida : 1,
+          largoCm: normalizarMedidaCm(d.largo ?? d.alto),
+          anchoCm: normalizarMedidaCm(d.ancho),
+          tipoEstadistica: clasificarTipoProducto(d),
+          colorEstadistica: normalizarTextoEstadistica(d.color) || "Sin color",
+        };
+      });
+
+    const agrupar = (obtenerClave, obtenerEtiqueta = k => k) => {
+      const mapa = new Map();
+      detallesPeriodo.forEach(d => {
+        const clave = obtenerClave(d);
+        const cantidad = d.cantidadEstadistica;
+        const actual = mapa.get(clave) || { clave, etiqueta:obtenerEtiqueta(clave, d), cantidad:0, cotizaciones:new Set() };
+        actual.cantidad += cantidad;
+        actual.cotizaciones.add(Number(d.cotizacion_id));
+        mapa.set(clave, actual);
+      });
+      return [...mapa.values()]
+        .map(x => ({ ...x, cotizaciones:x.cotizaciones.size }))
+        .sort((a,b) => b.cantidad - a.cantidad || b.cotizaciones - a.cotizaciones);
+    };
+
+    const intervalo = Math.max(5, Number(intervaloCm) || 10);
+    const rangoMedida = (cm) => Math.floor(cm / intervalo) * intervalo;
+    const etiquetaRango = inicio => `${inicio}-${inicio + intervalo - 1} cm`;
+
+    const largos = agrupar(d => rangoMedida(d.largoCm), inicio => etiquetaRango(inicio));
+    const anchos = agrupar(d => rangoMedida(d.anchoCm), inicio => etiquetaRango(inicio));
+    const tipos = agrupar(d => d.tipoEstadistica);
+    const colores = agrupar(d => d.colorEstadistica);
+    const medidasExactas = agrupar(
+      d => `${d.largoCm}x${d.anchoCm}`,
+      (_, d) => `${d.largoCm} × ${d.anchoCm} cm`
+    );
+
+    return {
+      detallesPeriodo,
+      unidades:detallesPeriodo.reduce((s,d) => s + d.cantidadEstadistica, 0),
+      cotizacionesConDetalle:new Set(detallesPeriodo.map(d => Number(d.cotizacion_id))).size,
+      largos,
+      anchos,
+      tipos,
+      colores,
+      medidasExactas,
+    };
+  };
+
   const rangoResumen = obtenerRangoResumen();
   const resumenActual = calcularMetricasResumen(rangoResumen);
+  const rentabilidadPorNumero = new Map((rentabilidadCotizaciones || []).map(r => [String(r.cotizacion_numero), r]));
+  const margenFabricacionPeriodo = resumenActual.ventasPeriodo.reduce((sum, venta) => {
+    const ref = venta?.cotizacion ? rentabilidadPorNumero.get(String(venta.cotizacion)) : null;
+    return sum + Number(ref?.margen_contribucion || 0);
+  }, 0);
+  const margenLaminadosPeriodo = (ventasLaminas || [])
+    .filter(v => estaEnRangoResumen(v.fecha, rangoResumen))
+    .reduce((sum, v) => sum + Number(calcularResumenVentaLaminas(v).utilidadNeta || 0), 0);
+  const margenTotalPeriodo = margenFabricacionPeriodo + margenLaminadosPeriodo;
+  const faltaMargenPeriodo = Math.max(Number(metaMargenMensual || 0) - margenTotalPeriodo, 0);
+  const resultadoSobreEquilibrio = margenTotalPeriodo - Number(metaMargenMensual || 0);
+  const cumplimientoMargen = Number(metaMargenMensual) > 0 ? Math.round(margenTotalPeriodo / Number(metaMargenMensual) * 1000) / 10 : 0;
+  const asientosPeriodoResumen = (asientosContables || []).filter(a => estaEnRangoResumen(a.fecha, rangoResumen));
+  const ivaDfPeriodo = asientosPeriodoResumen.reduce((sum,a) => String(a.definicion || a.detalle || "").toUpperCase().includes("IVA DF") ? sum + Number(a.haber || 0) - Number(a.debe || 0) : sum, 0);
+  const ivaCfPeriodo = asientosPeriodoResumen.reduce((sum,a) => String(a.definicion || a.detalle || "").toUpperCase().includes("IVA CF") ? sum + Number(a.debe || 0) - Number(a.haber || 0) : sum, 0);
+  const ivaAProvisionarResumen = Math.max(ivaDfPeriodo - ivaCfPeriodo, 0);
+  const estadisticasProductos = calcularEstadisticasProductos(rangoResumen, rangoProductosCm);
   const rangoResumenAnterior = filtroResumen === "todo" ? null : obtenerRangoResumen(filtroResumen, filtroResumen === "año_actual" ? -12 : filtroResumen === "ultimos_6_meses" ? -6 : filtroResumen === "ultimos_3_meses" ? -3 : -1);
   const resumenAnterior = rangoResumenAnterior ? calcularMetricasResumen(rangoResumenAnterior) : null;
   const variacionPorcentual = (actual, anterior) => {
@@ -5198,6 +5662,65 @@ if (!errorDocumentosTrabajadores) {
     });
   })();
   const maxGraficoResumen = Math.max(...mesesResumenGrafico.map(m => Math.max(m.montoCotizado, m.montoVendido)), 1);
+
+  // Indicadores ejecutivos del Panel de Gestión.
+  const cotizacionesSeguimientoBase = resumenActual.cotizacionesConEstado.filter(q => q.status !== "vendida");
+  const cotizacionesConSeguimiento = resumenActual.cotizacionesPeriodo.filter(q => (seguimiento[String(q.numero)] || seguimiento[q.numero] || []).some(n => String(n?.texto || "").trim()));
+  const cotizacionesSinSeguimiento = resumenActual.cotizacionesPeriodo.filter(q => !(seguimiento[String(q.numero)] || seguimiento[q.numero] || []).some(n => String(n?.texto || "").trim()));
+  const coberturaSeguimiento = resumenActual.cotizacionesPeriodo.length
+    ? Number((cotizacionesConSeguimiento.length / resumenActual.cotizacionesPeriodo.length * 100).toFixed(1))
+    : 0;
+  const accionesSeguimiento = resumenActual.cotizacionesPeriodo.reduce((sum, q) => sum + (seguimiento[String(q.numero)] || seguimiento[q.numero] || []).filter(n => String(n?.texto || "").trim()).length, 0);
+  const activasSinSeguimiento = cotizacionesSeguimientoBase
+    .filter(q => !(seguimiento[String(q.numero)] || seguimiento[q.numero] || []).some(n => String(n?.texto || "").trim()))
+    .sort((a,b) => Number(b.total || 0) - Number(a.total || 0));
+  const montoSinSeguimiento = activasSinSeguimiento.reduce((sum,q) => sum + Number(q.total || 0), 0);
+
+  const abonosEnRangoResumen = abonosNV.filter(a => estaEnRangoResumen(a.fecha, rangoResumen));
+  const cobradoPeriodo = abonosEnRangoResumen.reduce((sum,a) => sum + Number(a.monto || 0), 0) + resumenActual.barranesPeriodo.reduce((sum,b) => sum + Number(b.total || 0), 0);
+  const saldoNv = (nota) => Math.max(Number(nota.total || 0) - abonosNV.filter(a => String(a.nota_venta_id) === String(nota.id)).reduce((sum,a) => sum + Number(a.monto || 0), 0), 0);
+  const cxcTotalGestion = notasVenta.reduce((sum,n) => sum + saldoNv(n), 0);
+  const cxcEntregadaGestion = notasVenta.filter(n => String(n.proceso || "").toLowerCase() === "entregado").reduce((sum,n) => sum + saldoNv(n), 0);
+  const cxcTerminadaGestion = notasVenta.filter(n => n.media_cana && String(n.proceso || "").toLowerCase() !== "entregado").reduce((sum,n) => sum + saldoNv(n), 0);
+  const cxcPriorizadaGestion = notasVenta
+    .map(n => {
+      const saldo = saldoNv(n);
+      const proceso = String(n.proceso || "").toLowerCase();
+      const prioridad = proceso === "entregado" ? 1 : (n.media_cana ? 2 : 3);
+      return { ...n, saldo, prioridad, etiqueta:prioridad===1?"Entregada":prioridad===2?"Terminada":"En proceso" };
+    })
+    .filter(n => n.saldo > 0)
+    .sort((a,b) => a.prioridad - b.prioridad || b.saldo - a.saldo);
+
+  const saldoCuentaGestion = (cuenta) => Math.max(Number(cuenta.monto || cuenta.total || 0) - abonosCuentasPagar.filter(a => String(a.cuenta_pagar_id) === String(cuenta.id)).reduce((sum,a) => sum + Number(a.monto || 0), 0), 0);
+  const hoyGestion = new Date(); hoyGestion.setHours(0,0,0,0);
+  const pendienteHastaDias = (dias) => {
+    const limite = new Date(hoyGestion); limite.setDate(limite.getDate()+dias);
+    return cuentasPagar.filter(c => {
+      const fecha = obtenerFechaValida(c.fecha_vencimiento);
+      return fecha && fecha <= limite && saldoCuentaGestion(c) > 0;
+    }).reduce((sum,c) => sum + saldoCuentaGestion(c), 0);
+  };
+  const pagos7Gestion = pendienteHastaDias(7);
+  const pagos15Gestion = pendienteHastaDias(15);
+  const pagos30Gestion = pendienteHastaDias(30);
+  const flujo7Gestion = cxcEntregadaGestion - pagos7Gestion;
+
+  const marketingMesActual = {
+    publicaciones:0, historias_videos:0, proyectos_publicados:0, google_business:0,
+    campanas:0, inversion:0, consultas_identificadas:0, observacion:"",
+    ...(marketingMensual[mesGestion] || {})
+  };
+  const accionesMesActual = planesAccion[mesGestion] || [];
+  const diagnosticosGestion = [];
+  if (resumenAnterior && variacionVentasResumen <= -20) diagnosticosGestion.push({ tipo:"danger", texto:`Las ventas del período bajaron ${Math.abs(variacionVentasResumen)}% respecto del período anterior.` });
+  if (resumenActual.cotizacionesPeriodo.length > 0 && coberturaSeguimiento < 60) diagnosticosGestion.push({ tipo:"warning", texto:`Solo ${coberturaSeguimiento}% de las cotizaciones del período tiene seguimiento registrado.` });
+  if (montoSinSeguimiento > 0) diagnosticosGestion.push({ tipo:"warning", texto:`Hay ${fmt(montoSinSeguimiento)} en cotizaciones activas o vencidas sin seguimiento registrado.` });
+  if (cxcEntregadaGestion > 0) diagnosticosGestion.push({ tipo:"warning", texto:`Existen ${fmt(cxcEntregadaGestion)} por cobrar de pedidos marcados como entregados.` });
+  if (flujo7Gestion < 0) diagnosticosGestion.push({ tipo:"danger", texto:`Los cobros de pedidos entregados no cubren los pagos próximos de 7 días: brecha de ${fmt(Math.abs(flujo7Gestion))}.` });
+  const actividadMarketing = Number(marketingMesActual.publicaciones||0)+Number(marketingMesActual.historias_videos||0)+Number(marketingMesActual.proyectos_publicados||0)+Number(marketingMesActual.google_business||0)+Number(marketingMesActual.campanas||0);
+  if (actividadMarketing === 0) diagnosticosGestion.push({ tipo:"info", texto:`No se ha registrado actividad de marketing para ${nombreMesResumen(mesGestion)}.` });
+  if (diagnosticosGestion.length === 0) diagnosticosGestion.push({ tipo:"success", texto:"No se detectan alertas críticas con la información actualmente registrada." });
 
   const cumpleFecha = (fecha) => {
   if (!fecha) return true;
@@ -5765,7 +6288,9 @@ const normalizarTextoCartola = (valor) => String(valor || "")
   .trim();
 
 const convertirFechaCartola = (valor) => {
-  if (!valor) return new Date().toISOString().split("T")[0];
+  // Una fila sin fecha válida no debe transformarse automáticamente en "hoy".
+  // Eso hacía que se importaran como movimientos las filas de "Saldos diarios".
+  if (valor === null || valor === undefined || valor === "") return "";
   if (typeof valor === "number") {
     const parsed = XLSX.SSF.parse_date_code(valor);
     if (parsed) {
@@ -5780,24 +6305,31 @@ const convertirFechaCartola = (valor) => {
     const year = chilena[3].length === 2 ? `20${chilena[3]}` : chilena[3];
     return `${year}-${String(chilena[2]).padStart(2, "0")}-${String(chilena[1]).padStart(2, "0")}`;
   }
-  return new Date().toISOString().split("T")[0];
+  return "";
 };
 
 const clasificarMovimientoCartola = ({ descripcion, cargo, abono }) => {
   const desc = normalizarTextoCartola(descripcion);
-  if (abono > 0) {
-    if (desc.includes("deposito") || desc.includes("transferencia") || desc.includes("abono")) return "Ingreso por revisar";
-    return "Ingreso por revisar";
-  }
-  if (desc.includes("previred") || desc.includes("afp") || desc.includes("fonasa") || desc.includes("isapre")) return "Imposiciones";
-  if (desc.includes("sueldo") || desc.includes("remuneracion") || desc.includes("anticipo")) return "Remuneraciones";
-  if (desc.includes("arriendo")) return "Arriendo";
-  if (desc.includes("bencina") || desc.includes("combustible") || desc.includes("copec") || desc.includes("shell") || desc.includes("petrobras")) return "Combustible";
-  if (desc.includes("luz") || desc.includes("agua") || desc.includes("internet") || desc.includes("entel") || desc.includes("wom") || desc.includes("claro") || desc.includes("movistar")) return "Servicios";
-  if (desc.includes("cheque")) return "Cheque por revisar";
-  if (cargo > 0) return "Egreso por revisar";
-  return "Por revisar";
+  if (abono > 0) return { tipo_movimiento:"ingreso", categoria:"Por revisar", subcategoria:"" };
+  if (desc.includes("previred") || desc.includes("afp") || desc.includes("fonasa") || desc.includes("isapre")) return { tipo_movimiento:"egreso", categoria:"Mano de obra y personal", subcategoria:"Cotizaciones previsionales" };
+  if (desc.includes("sueldo") || desc.includes("remuneracion") || desc.includes("anticipo")) return { tipo_movimiento:"egreso", categoria:"Mano de obra y personal", subcategoria:desc.includes("anticipo") ? "Anticipos de sueldo" : "Sueldos" };
+  if (desc.includes("arriendo")) return { tipo_movimiento:"egreso", categoria:"Operación del taller", subcategoria:"Arriendo" };
+  if (desc.includes("bencina") || desc.includes("combustible") || desc.includes("copec") || desc.includes("shell") || desc.includes("petrobras")) return { tipo_movimiento:"egreso", categoria:"Transporte y vehículos", subcategoria:"Bencina" };
+  if (desc.includes("tag")) return { tipo_movimiento:"egreso", categoria:"Transporte y vehículos", subcategoria:"TAG" };
+  if (desc.includes("luz")) return { tipo_movimiento:"egreso", categoria:"Operación del taller", subcategoria:"Electricidad" };
+  if (desc.includes("agua")) return { tipo_movimiento:"egreso", categoria:"Operación del taller", subcategoria:"Agua" };
+  if (desc.includes("internet") || desc.includes("entel") || desc.includes("wom") || desc.includes("claro") || desc.includes("movistar")) return { tipo_movimiento:"egreso", categoria:"Operación del taller", subcategoria:"Internet" };
+  if (cargo > 0) return { tipo_movimiento:"egreso", categoria:"Por revisar", subcategoria:"" };
+  return { tipo_movimiento:"", categoria:"Por revisar", subcategoria:"" };
 };
+
+const claveMovimientoCartola = (m) => [
+  m.fecha || "",
+  normalizarTextoCartola(m.descripcion || ""),
+  Math.round(Number(m.cargo || 0)),
+  Math.round(Number(m.abono || 0)),
+  m.saldo === null || m.saldo === undefined ? "" : Math.round(Number(m.saldo || 0))
+].join("|");
 
 const importarCartolaBancaria = async (event) => {
   const files = Array.from(event.target.files || []);
@@ -5830,16 +6362,41 @@ const importarCartolaBancaria = async (event) => {
     let colAbono = buscarCol(["abono", "ingreso", "deposito", "haber", "entrada"]);
     const colMonto = buscarCol(["monto", "importe", "valor"]);
     const colSaldo = buscarCol(["saldo"]);
+    const colCargoAbono = headers.findIndex(h => h.includes("cargo") && h.includes("abono"));
+
+    // Si existe una columna combinada "CARGO/ABONO", no debe interpretarse
+    // a la vez como una columna numérica de cargo y otra de abono.
+    if (colCargoAbono >= 0) {
+      if (colCargo === colCargoAbono) colCargo = -1;
+      if (colAbono === colCargoAbono) colAbono = -1;
+    }
 
     for (const row of rows.slice(headerIndex + 1)) {
+      // La cartola provisoria de Banco de Chile trae, después de los movimientos,
+      // una sección "Saldos diarios". Desde ese punto se termina la lectura.
+      const textoFila = row.map(normalizarTextoCartola).join(" ");
+      if (textoFila.includes("saldos diarios")) break;
+
       const fecha = convertirFechaCartola(colFecha >= 0 ? row[colFecha] : row[0]);
       const descripcion = String(colDescripcion >= 0 ? row[colDescripcion] : row[1] || "").trim();
-      if (!descripcion) continue;
+
+      // Solo se importa una fila si realmente posee fecha y descripción de movimiento.
+      if (!fecha || !descripcion) continue;
 
       let cargo = colCargo >= 0 ? Math.abs(limpiarNumeroCartola(row[colCargo])) : 0;
       let abono = colAbono >= 0 ? Math.abs(limpiarNumeroCartola(row[colAbono])) : 0;
 
-      if (cargo === 0 && abono === 0 && colMonto >= 0) {
+      if (colCargoAbono >= 0 && colMonto >= 0) {
+        const indicador = normalizarTextoCartola(row[colCargoAbono]).replace(/[^a-z]/g, "");
+        const monto = Math.abs(limpiarNumeroCartola(row[colMonto]));
+        if (indicador === "c" || indicador.includes("cargo")) cargo = monto;
+        else if (indicador === "a" || indicador.includes("abono")) abono = monto;
+        else {
+          const montoConSigno = limpiarNumeroCartola(row[colMonto]);
+          if (montoConSigno < 0) cargo = Math.abs(montoConSigno);
+          if (montoConSigno > 0) abono = Math.abs(montoConSigno);
+        }
+      } else if (cargo === 0 && abono === 0 && colMonto >= 0) {
         const monto = limpiarNumeroCartola(row[colMonto]);
         if (monto < 0) cargo = Math.abs(monto);
         if (monto > 0) abono = Math.abs(monto);
@@ -5848,7 +6405,7 @@ const importarCartolaBancaria = async (event) => {
       if (cargo === 0 && abono === 0) continue;
 
       const saldo = colSaldo >= 0 ? limpiarNumeroCartola(row[colSaldo]) : null;
-      const categoria = clasificarMovimientoCartola({ descripcion, cargo, abono });
+      const clasificacion = clasificarMovimientoCartola({ descripcion, cargo, abono });
 
       movimientosDetectados.push({
         fecha,
@@ -5856,8 +6413,12 @@ const importarCartolaBancaria = async (event) => {
         cargo,
         abono,
         saldo,
-        categoria,
-        estado:"por_revisar",
+        tipo_movimiento:clasificacion.tipo_movimiento,
+        categoria:clasificacion.categoria,
+        subcategoria:clasificacion.subcategoria,
+        detalle:"",
+        medio_pago:"banco",
+        estado:clasificacion.categoria === "Por revisar" ? "por_revisar" : "conciliado",
         archivo_origen:file.name
       });
     }
@@ -5868,9 +6429,29 @@ const importarCartolaBancaria = async (event) => {
     return;
   }
 
+  // Importación incremental: compara cantidades por huella y guarda solo
+  // las apariciones que aún no existen. El Excel se procesa en el navegador
+  // y no se almacena como archivo en Supabase.
+  const existentesPorClave = cartolaMovimientos.reduce((acc, m) => {
+    const clave = claveMovimientoCartola(m);
+    acc[clave] = (acc[clave] || 0) + 1;
+    return acc;
+  }, {});
+  const vistosEnArchivo = {};
+  const movimientosNuevos = movimientosDetectados.filter(m => {
+    const clave = claveMovimientoCartola(m);
+    vistosEnArchivo[clave] = (vistosEnArchivo[clave] || 0) + 1;
+    return vistosEnArchivo[clave] > (existentesPorClave[clave] || 0);
+  });
+
+  if (movimientosNuevos.length === 0) {
+    toast("La cartola no contiene movimientos nuevos. No se agregó ningún duplicado.", "info");
+    return;
+  }
+
   const { data, error } = await supabase
     .from("cartola_bancaria")
-    .insert(movimientosDetectados)
+    .insert(movimientosNuevos)
     .select("*");
 
   if (error) {
@@ -5881,7 +6462,7 @@ const importarCartolaBancaria = async (event) => {
 
   setCartolaMovimientos(prev => [...(data || []), ...prev]);
   setMesCartola(movimientosDetectados[0]?.fecha?.slice(0, 7) || mesCartola);
-  toast(`Cartola importada: ${movimientosDetectados.length} movimientos detectados.`);
+  toast(`Cartola actualizada: ${movimientosNuevos.length} nuevos · ${movimientosDetectados.length - movimientosNuevos.length} ya existentes omitidos.`);
 };
 
 const actualizarMovimientoCartola = async (movimiento, cambios) => {
@@ -5900,6 +6481,64 @@ const actualizarMovimientoCartola = async (movimiento, cambios) => {
 
   setCartolaMovimientos(prev => prev.map(m => m.id === movimiento.id ? data : m));
   return data;
+};
+
+const eliminarMovimientoCartola = async (movimiento) => {
+  const ok = await confirmDialog(`¿Eliminar este movimiento?\n\n${fmtDate(movimiento.fecha)} · ${movimiento.descripcion}\n${fmt(Number(movimiento.abono || movimiento.cargo || 0))}\n\nSi estaba asociado a una NV o cuenta pendiente, revisa también ese vínculo.`);
+  if (!ok) return;
+  const { error } = await supabase.from("cartola_bancaria").delete().eq("id", movimiento.id);
+  if (error) { console.error(error); toast("No se pudo eliminar el movimiento.", "error"); return; }
+  setCartolaMovimientos(prev => prev.filter(m => m.id !== movimiento.id));
+  toast("Movimiento eliminado correctamente.", "success");
+};
+
+const guardarMovimientoManual = async () => {
+  const f = formMovimientoManual;
+  const monto = Math.round(Number(f.monto || 0));
+  if (!f.fecha || !f.tipo || !f.categoria || !f.subcategoria || !monto || !String(f.detalle || "").trim()) {
+    toast("Completa fecha, tipo, categoría, subcategoría, detalle y monto.", "warning"); return;
+  }
+  const payload = {
+    fecha:f.fecha,
+    descripcion:String(f.detalle).trim(),
+    cargo:f.tipo === "egreso" ? monto : 0,
+    abono:f.tipo === "ingreso" ? monto : 0,
+    saldo:null,
+    tipo_movimiento:f.tipo,
+    categoria:f.categoria,
+    subcategoria:f.subcategoria,
+    detalle:String(f.detalle).trim(),
+    observacion:String(f.detalle).trim(),
+    medio_pago:f.medio_pago || "efectivo",
+    estado:"conciliado",
+    archivo_origen:"Movimiento manual"
+  };
+  const { data, error } = await supabase.from("cartola_bancaria").insert(payload).select("*").single();
+  if (error) { console.error(error); toast("No se pudo guardar el movimiento manual. Ejecuta el SQL de actualización.", "error"); return; }
+  setCartolaMovimientos(prev => [data, ...prev]);
+  setModalMovimientoManual(false);
+  setFormMovimientoManual({ fecha:new Date().toISOString().split("T")[0], tipo:"egreso", categoria:"", subcategoria:"", detalle:"", monto:"", medio_pago:"efectivo" });
+  toast("Movimiento manual guardado.", "success");
+};
+
+const guardarNuevaSubcategoria = () => {
+  const f = formNuevaSubcategoria;
+  const nombre = String(f.nombre || "").replace(/\s+/g, " ").trim();
+  if (!f.tipo || !f.categoria || !nombre) { toast("Completa tipo, categoría y nombre.", "warning"); return; }
+  const existentes = [
+    ...(CATALOGO_FINANCIERO_BASE[f.tipo]?.[f.categoria] || []),
+    ...subcategoriasPersonalizadas.filter(x => x.tipo === f.tipo && x.categoria === f.categoria).map(x => x.nombre)
+  ];
+  if (existentes.some(x => normalizarClaveFinanciera(x) === normalizarClaveFinanciera(nombre))) {
+    toast(`Ya existe la subcategoría “${nombre}” en ${f.categoria}.`, "warning"); return;
+  }
+  const nueva = { id:`local-${Date.now()}`, tipo:f.tipo, categoria:f.categoria, nombre, descripcion:String(f.descripcion || "").trim(), requiereDetalle:f.requiereDetalle !== false, activa:true };
+  const nuevas = [...subcategoriasPersonalizadas, nueva];
+  setSubcategoriasPersonalizadas(nuevas);
+  localStorage.setItem("sf-subcategorias-financieras", JSON.stringify(nuevas));
+  setModalNuevaSubcategoria(false);
+  setFormNuevaSubcategoria({ tipo:"ingreso", categoria:"Ventas", nombre:"", descripcion:"", requiereDetalle:true });
+  toast("Subcategoría agregada correctamente.", "success");
 };
 
 const registrarAbonoDocumento = async ({
@@ -6024,7 +6663,9 @@ const registrarAbonoDocumento = async ({
   if (movimiento) {
     await actualizarMovimientoCartola(movimiento, {
       estado: "conciliado",
-      categoria: "Abono CxC",
+      tipo_movimiento: "ingreso",
+      categoria: "Cobros pendientes",
+      subcategoria: "Saldo Nota de Venta",
       nota_venta_id: idReal
     });
   }
@@ -6035,7 +6676,9 @@ const registrarAbonoDocumento = async ({
 
 const registrarCartolaComoAbonoNV = async (movimiento) => {
   setModalClasificarCartola(movimiento);
-  setCategoriaCartolaSeleccionada("Abono CxC");
+  setTipoMovimientoCartola("ingreso");
+  setCategoriaCartolaSeleccionada("Cobros pendientes");
+  setSubcategoriaCartolaSeleccionada("Saldo Nota de Venta");
   setBusquedaCategoriaCartola("");
   setBusquedaCxcCartola("");
   setCxcSeleccionadaCartola(null);
@@ -6044,7 +6687,10 @@ const registrarCartolaComoAbonoNV = async (movimiento) => {
 
 const abrirClasificacionCartola = (movimiento) => {
   setModalClasificarCartola(movimiento);
-  setCategoriaCartolaSeleccionada("");
+  const tipoDetectado = Number(movimiento?.abono || 0) > 0 ? "ingreso" : "egreso";
+  setTipoMovimientoCartola(movimiento?.tipo_movimiento || tipoDetectado);
+  setCategoriaCartolaSeleccionada(movimiento?.categoria && movimiento.categoria !== "Por revisar" ? movimiento.categoria : "");
+  setSubcategoriaCartolaSeleccionada(movimiento?.subcategoria || "");
   setBusquedaCategoriaCartola("");
   setBusquedaCxcCartola("");
   setCxcSeleccionadaCartola(null);
@@ -6053,7 +6699,9 @@ const abrirClasificacionCartola = (movimiento) => {
 
 const cerrarClasificacionCartola = () => {
   setModalClasificarCartola(null);
+  setTipoMovimientoCartola("");
   setCategoriaCartolaSeleccionada("");
+  setSubcategoriaCartolaSeleccionada("");
   setBusquedaCategoriaCartola("");
   setBusquedaCxcCartola("");
   setCxcSeleccionadaCartola(null);
@@ -6063,45 +6711,41 @@ const cerrarClasificacionCartola = () => {
 const guardarClasificacionCartola = async () => {
   const movimiento = modalClasificarCartola;
   if (!movimiento) return;
-
+  const tipo = String(tipoMovimientoCartola || "").trim();
   const categoria = String(categoriaCartolaSeleccionada || "").trim();
-  if (!categoria) {
-    toast("Selecciona una categoría.", "warning");
-    return;
-  }
+  const subcategoria = String(subcategoriaCartolaSeleccionada || "").trim();
+  const detalle = String(movimiento.detalle ?? movimiento.observacion ?? "").trim();
+  if (!tipo || !categoria || !subcategoria) { toast("Selecciona tipo, categoría y subcategoría.", "warning"); return; }
+  if (!detalle) { toast("Agrega un detalle para poder reconocer el movimiento después.", "warning"); return; }
 
-  if (categoria === "Abono CxC") {
+  if (categoria === "Cobros pendientes" && subcategoria === "Saldo Nota de Venta") {
     const monto = Number(movimiento.abono || 0);
-    if (!monto) {
-      toast("Este movimiento no tiene abono/ingreso para asociar a una CxC.", "warning");
-      return;
+    if (!monto) { toast("Este movimiento no tiene un ingreso para asociar a una CxC.", "warning"); return; }
+    if (!cxcSeleccionadaCartola) { toast("Selecciona la NV o Barrán al que corresponde el pago.", "warning"); return; }
+    const ok = await registrarAbonoDocumento({ nota:cxcSeleccionadaCartola.nota, monto, fecha:movimiento.fecha, medioPago:"transferencia", tipoAbono:tipoAbonoCartola || "abono", observacion:detalle, movimiento });
+    if (ok) {
+      await actualizarMovimientoCartola(movimiento, { tipo_movimiento:tipo, categoria, subcategoria, detalle, observacion:detalle, medio_pago:"banco", estado:"conciliado" });
+      cerrarClasificacionCartola();
     }
-
-    if (!cxcSeleccionadaCartola) {
-      toast("Selecciona la NV o Barrán al que corresponde el abono.", "warning");
-      return;
-    }
-
-    const ok = await registrarAbonoDocumento({
-      nota: cxcSeleccionadaCartola.nota,
-      monto,
-      fecha: movimiento.fecha,
-      medioPago: "transferencia",
-      tipoAbono: tipoAbonoCartola || "abono",
-      observacion: `Registrado desde cartola bancaria. ${movimiento.descripcion || ""}`,
-      movimiento
-    });
-
-    if (ok) cerrarClasificacionCartola();
     return;
   }
 
-  await actualizarMovimientoCartola(movimiento, {
-    estado: "conciliado",
-    categoria
-  });
+  const cambios = { tipo_movimiento:tipo, categoria, subcategoria, detalle, observacion:detalle, medio_pago:movimiento.medio_pago || "banco", estado:"conciliado" };
 
-  toast(`Movimiento clasificado como ${categoria}.`, "success");
+  if (categoria === "Impuestos" && subcategoria === "Pago mensual de impuestos") {
+    const iva = Math.round(Number(movimiento.impuesto_iva || 0));
+    const ppm = Math.round(Number(movimiento.impuesto_ppm || 0));
+    const intereses = Math.round(Number(movimiento.impuesto_intereses || 0));
+    const otros = Math.round(Number(movimiento.impuesto_otros || 0));
+    const total = Math.round(Number(movimiento.cargo || 0));
+    if (iva + ppm + intereses + otros !== total) {
+      toast(`El desglose de impuestos debe sumar ${fmt(total)}. Actualmente suma ${fmt(iva + ppm + intereses + otros)}.`, "warning"); return;
+    }
+    Object.assign(cambios, { impuesto_iva:iva, impuesto_ppm:ppm, impuesto_intereses:intereses, impuesto_otros:otros });
+  }
+
+  await actualizarMovimientoCartola(movimiento, cambios);
+  toast(`Movimiento clasificado como ${categoria} · ${subcategoria}.`, "success");
   cerrarClasificacionCartola();
 };
 
@@ -7772,30 +8416,19 @@ const detalleCxcFiltrado = detalleCxcNotas.filter(item => {
   ].join(" ").toLowerCase().includes(q);
 });
 
-const categoriasCartola = [
-  { nombre:"Abono CxC", tipo:"ingreso", descripcion:"Pago de cliente asociado a NV o Barrán" },
-  { nombre:"Préstamo socio", tipo:"ingreso", descripcion:"Dinero aportado por Franco/familia para caja" },
-  { nombre:"Venta sin documento", tipo:"ingreso", descripcion:"Ingreso no asociado a CxC" },
-  { nombre:"Factura compra", tipo:"egreso", descripcion:"Compra facturada; se considera flujo, no duplica resumen SII" },
-  { nombre:"Compra sin factura", tipo:"egreso", descripcion:"Compra o gasto sin documento tributario" },
-  { nombre:"Remuneraciones", tipo:"egreso", descripcion:"Sueldos y pagos a trabajadores" },
-  { nombre:"Imposiciones", tipo:"egreso", descripcion:"Previred, AFP, salud, cesantía" },
-  { nombre:"Arriendo", tipo:"egreso", descripcion:"Arriendo local/bodega" },
-  { nombre:"Bencina", tipo:"egreso", descripcion:"Combustible" },
-  { nombre:"TAG", tipo:"egreso", descripcion:"Autopistas" },
-  { nombre:"Servicios básicos", tipo:"egreso", descripcion:"Luz, agua, internet, telefonía" },
-  { nombre:"Deuda antigua", tipo:"egreso", descripcion:"Pagos de deudas históricas" },
-  { nombre:"Retiro socio", tipo:"egreso", descripcion:"Retiros personales o familiares" },
-  { nombre:"Transferencia interna", tipo:"neutro", descripcion:"Movimiento entre cuentas propias" },
-  { nombre:"No sumar", tipo:"neutro", descripcion:"Movimiento duplicado o que no corresponde analizar" },
-  { nombre:"Otro", tipo:"otro", descripcion:"Clasificación manual general" }
-];
+const catalogoFinanciero = ["ingreso", "egreso", "traspaso"].reduce((acc, tipo) => {
+  acc[tipo] = { ...(CATALOGO_FINANCIERO_BASE[tipo] || {}) };
+  subcategoriasPersonalizadas.filter(x => x.activa !== false && x.tipo === tipo).forEach(x => {
+    acc[tipo][x.categoria] = [...(acc[tipo][x.categoria] || []), x.nombre];
+  });
+  return acc;
+}, {});
 
-const categoriasCartolaFiltradas = categoriasCartola.filter(c => {
-  const q = busquedaCategoriaCartola.toLowerCase().trim();
-  if (!q) return true;
-  return `${c.nombre} ${c.descripcion}`.toLowerCase().includes(q);
-});
+const categoriasDisponiblesCartola = Object.keys(catalogoFinanciero[tipoMovimientoCartola] || {});
+const subcategoriasDisponiblesCartola = catalogoFinanciero[tipoMovimientoCartola]?.[categoriaCartolaSeleccionada] || [];
+const categoriasCartolaFiltradas = categoriasDisponiblesCartola.filter(nombre =>
+  !busquedaCategoriaCartola || normalizarClaveFinanciera(nombre).includes(normalizarClaveFinanciera(busquedaCategoriaCartola))
+);
 
 const opcionesCxcCartola = detalleCxcNotas.filter(item => {
   const q = busquedaCxcCartola.toLowerCase().trim();
@@ -8048,7 +8681,7 @@ const renderTarjetaProduccion = (n) => (
   const entregasPendientesMes = notas.filter(n => String(n.fecha_entrega_estimada || "").startsWith(mesCalendario) && String(n.proceso || "").toLowerCase() !== "entregado");
   const cartolaFiltrada = cartolaMovimientos.filter(m => {
     const coincideMes = !mesCartola || String(m.fecha || "").startsWith(mesCartola);
-    const texto = `${m.descripcion || ""} ${m.categoria || ""} ${m.estado || ""}`.toLowerCase();
+    const texto = `${m.descripcion || ""} ${m.categoria || ""} ${m.subcategoria || ""} ${m.detalle || ""} ${m.observacion || ""} ${m.estado || ""}`.toLowerCase();
     const coincideBusqueda = !busquedaCartola || texto.includes(busquedaCartola.toLowerCase());
     return coincideMes && coincideBusqueda;
   });
@@ -8058,19 +8691,42 @@ const renderTarjetaProduccion = (n) => (
 
   const resumenFinancieroCartola = cartolaFiltrada.reduce((acc, m) => {
     const categoria = String(m.categoria || "Por revisar");
+    const subcategoria = String(m.subcategoria || "Sin subcategoría");
+    const claveResumen = `${categoria}|||${subcategoria}`;
     const cargo = Number(m.cargo || 0);
     const abono = Number(m.abono || 0);
 
-    if (!acc[categoria]) acc[categoria] = { categoria, ingresos:0, egresos:0, movimientos:0 };
-    acc[categoria].ingresos += abono;
-    acc[categoria].egresos += cargo;
-    acc[categoria].movimientos += 1;
+    if (!acc[claveResumen]) {
+      acc[claveResumen] = {
+        categoria,
+        subcategoria,
+        ingresos:0,
+        egresos:0,
+        movimientos:0,
+        movimientosIngresos:0,
+        movimientosEgresos:0
+      };
+    }
+
+    acc[claveResumen].ingresos += abono;
+    acc[claveResumen].egresos += cargo;
+    acc[claveResumen].movimientos += 1;
+    if (abono > 0) acc[claveResumen].movimientosIngresos += 1;
+    if (cargo > 0) acc[claveResumen].movimientosEgresos += 1;
 
     return acc;
   }, {});
 
   const resumenCartolaCategorias = Object.values(resumenFinancieroCartola)
     .sort((a, b) => (b.ingresos + b.egresos) - (a.ingresos + a.egresos));
+
+  const categoriasIngresosCartola = resumenCartolaCategorias
+    .filter(c => c.ingresos > 0)
+    .sort((a, b) => b.ingresos - a.ingresos);
+
+  const categoriasEgresosCartola = resumenCartolaCategorias
+    .filter(c => c.egresos > 0)
+    .sort((a, b) => b.egresos - a.egresos);
 
   const tabsPublicos=[
     {key:"produccion",label:`🏭 Producción`},
@@ -8080,15 +8736,13 @@ const renderTarjetaProduccion = (n) => (
     {key:"sales",label:`✅ Notas de Venta (${filteredNotas.length})`},
     {key:"barranes",label:`🧾 Barranes (${filteredBarranes.length})`},
     {key:"venta_laminas",label:`🧾 Venta de Láminas (${ventasLaminasDelMes.length})`},
-    {key:"cuentas_pagar",label:`💸 Cuentas por pagar (${pagosPendientesMes.length})`},
     {key:"dashboard",label:"📊 Resumen"},
+    {key:"analisis",label:"📈 Análisis Histórico"},
   ];
 
   const tabsAdmin=[
     {key:"control_calidad",label:`🔍 Control de Calidad (${erroresProduccion.length})`},
-    {key:"cartola",label:`🏦 Cartola (${cartolaPorRevisar.length})`},
-    {key:"cxc",label:`💰 CxC (${detalleCxcNotas.length})`},
-    {key:"contabilidad",label:`📚 Contabilidad (${asientosContablesFiltrados.length})`},
+    {key:"finanzas",label:`💰 Finanzas (${cartolaPorRevisar.length})`},
     {key:"rrhh",label:`👷 RRHH (${trabajadores.length})`},
   ];
 
@@ -8096,6 +8750,78 @@ const renderTarjetaProduccion = (n) => (
   const seccionesUsuario = usuarioActual?.secciones || [];
   const tieneAccesoTotal = seccionesUsuario.includes("all");
   const todosLosTabs = [...tabsPublicos, ...tabsAdmin];
+  const exportarFlujoCajaExcel = () => {
+    if (cartolaFiltrada.length === 0) {
+      toast("No hay movimientos de cartola para exportar con los filtros actuales.", "warning");
+      return;
+    }
+
+    const movimientosOrdenados = [...cartolaFiltrada].sort((a, b) =>
+      String(a.fecha || "").localeCompare(String(b.fecha || "")) || Number(a.id || 0) - Number(b.id || 0)
+    );
+
+    let saldoAcumulado = 0;
+    const detalle = movimientosOrdenados.map((m) => {
+      const ingreso = Number(m.abono || 0);
+      const egreso = Number(m.cargo || 0);
+      const flujoNeto = ingreso - egreso;
+      saldoAcumulado += flujoNeto;
+      return {
+        Fecha: m.fecha || "",
+        Descripcion_banco: m.descripcion || "",
+        Categoria: m.categoria || "Por revisar",
+        Detalle_ingresado: m.observacion || "",
+        Estado: m.estado === "conciliado" ? "Clasificado" : "Por revisar",
+        Ingreso: ingreso,
+        Egreso: egreso,
+        Flujo_neto: flujoNeto,
+        Saldo_acumulado_periodo: saldoAcumulado,
+        Saldo_banco: m.saldo === null || m.saldo === undefined ? "" : Number(m.saldo || 0),
+        Archivo_origen: m.archivo_origen || ""
+      };
+    });
+
+    const porCategoria = Object.values(movimientosOrdenados.reduce((acc, m) => {
+      const categoria = m.categoria || "Por revisar";
+      if (!acc[categoria]) acc[categoria] = { Categoria: categoria, Ingresos: 0, Egresos: 0, Flujo_neto: 0, Movimientos: 0 };
+      acc[categoria].Ingresos += Number(m.abono || 0);
+      acc[categoria].Egresos += Number(m.cargo || 0);
+      acc[categoria].Flujo_neto = acc[categoria].Ingresos - acc[categoria].Egresos;
+      acc[categoria].Movimientos += 1;
+      return acc;
+    }, {})).sort((a, b) => Math.abs(b.Flujo_neto) - Math.abs(a.Flujo_neto));
+
+    const porMes = Object.values(movimientosOrdenados.reduce((acc, m) => {
+      const mes = String(m.fecha || "").slice(0, 7) || "Sin fecha";
+      if (!acc[mes]) acc[mes] = { Mes: mes, Ingresos: 0, Egresos: 0, Flujo_neto: 0, Movimientos: 0 };
+      acc[mes].Ingresos += Number(m.abono || 0);
+      acc[mes].Egresos += Number(m.cargo || 0);
+      acc[mes].Flujo_neto = acc[mes].Ingresos - acc[mes].Egresos;
+      acc[mes].Movimientos += 1;
+      return acc;
+    }, {})).sort((a, b) => a.Mes.localeCompare(b.Mes));
+
+    const wb = XLSX.utils.book_new();
+    const wsDetalle = XLSX.utils.json_to_sheet(detalle);
+    const wsCategorias = XLSX.utils.json_to_sheet(porCategoria);
+    const wsMeses = XLSX.utils.json_to_sheet(porMes);
+
+    wsDetalle["!cols"] = [
+      { wch: 12 }, { wch: 42 }, { wch: 24 }, { wch: 42 }, { wch: 15 },
+      { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 22 }, { wch: 16 }, { wch: 24 }
+    ];
+    wsCategorias["!cols"] = [{ wch: 28 }, { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 14 }];
+    wsMeses["!cols"] = [{ wch: 12 }, { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 14 }];
+
+    XLSX.utils.book_append_sheet(wb, wsDetalle, "Flujo de caja");
+    XLSX.utils.book_append_sheet(wb, wsCategorias, "Resumen categorias");
+    XLSX.utils.book_append_sheet(wb, wsMeses, "Resumen mensual");
+
+    const periodo = mesCartola || "todos-los-periodos";
+    XLSX.writeFile(wb, `Flujo_de_caja_${periodo}.xlsx`);
+    toast(`Flujo de caja exportado: ${detalle.length} movimientos.`, "success");
+  };
+
   const tabs = tieneAccesoTotal
     ? todosLosTabs
     : todosLosTabs.filter(t => seccionesUsuario.includes(t.key));
@@ -8103,6 +8829,7 @@ const renderTarjetaProduccion = (n) => (
   return (
     <div style={{ minHeight:"100vh", background:COLORS.bg, color:COLORS.text, fontFamily:"'Trebuchet MS',sans-serif", paddingBottom:60 }}>
       <ToastContainer />
+      <CostoManualCotizacionModal data={modalCostoManual} onConfirmar={confirmarCostoManual} onCancelar={cancelarCostoManual} />
       <ConfirmContainer />
 
       {/* PANTALLA DE LOGIN OBLIGATORIO */}
@@ -8328,6 +9055,7 @@ const renderTarjetaProduccion = (n) => (
             </div>
           </div>
         )}
+        {tab==="analisis" && <AnalisisDatos colors={COLORS} />}
         {tab==="dashboard" && (
           <div>
             <div style={{ background:COLORS.card, border:`1px solid ${COLORS.border}`, borderRadius:12, padding:16, marginBottom:18 }}>
@@ -8348,6 +9076,182 @@ const renderTarjetaProduccion = (n) => (
                   <option value="año_actual">Año actual</option>
                   <option value="todo">Todo</option>
                 </select>
+              </div>
+            </div>
+
+            <div style={{ background:COLORS.card, border:`1px solid ${COLORS.border}`, borderRadius:12, padding:18, marginBottom:20 }}>
+              <div style={{ display:"flex", justifyContent:"space-between", gap:12, alignItems:"center", flexWrap:"wrap", marginBottom:14 }}>
+                <div>
+                  <h2 style={{margin:"0 0 4px",color:COLORS.accent,fontSize:18}}>💹 Rentabilidad y punto de equilibrio</h2>
+                  <div style={{fontSize:12,color:COLORS.muted}}>Margen neto generado por ventas aceptadas con costo registrado + utilidad de reventa de laminados.</div>
+                </div>
+                <label style={{fontSize:11,color:COLORS.muted}}>Meta mensual de margen
+                  <input type="number" min="0" value={metaMargenMensual} onChange={e=>{const v=Number(e.target.value||0);setMetaMargenMensual(v);localStorage.setItem("sf_meta_margen_mensual",String(v));}} style={{marginLeft:8,width:130,background:COLORS.surface,border:`1px solid ${COLORS.border}`,color:COLORS.text,borderRadius:8,padding:"7px 9px"}}/>
+                </label>
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(165px,1fr))",gap:10}}>
+                <StatCard label="Margen fabricación" value={fmt(margenFabricacionPeriodo)} sub="Venta neta − costo directo" icon="🏭" color={COLORS.success}/>
+                <StatCard label="Margen laminados" value={fmt(margenLaminadosPeriodo)} sub="Utilidad neta de reventa" icon="🪵" color="#5a8abe"/>
+                <StatCard label="Margen generado" value={fmt(margenTotalPeriodo)} sub={`${cumplimientoMargen}% de la meta`} icon="📈" color={margenTotalPeriodo >= metaMargenMensual ? COLORS.success : COLORS.warning}/>
+                <StatCard label="Falta para equilibrio" value={fmt(faltaMargenPeriodo)} sub={resultadoSobreEquilibrio >= 0 ? `Sobre equilibrio: ${fmt(resultadoSobreEquilibrio)}` : "Meta pendiente"} icon="🎯" color={faltaMargenPeriodo === 0 ? COLORS.success : COLORS.danger}/>
+                <StatCard label="IVA a provisionar" value={fmt(ivaAProvisionarResumen)} sub={`IVA DF ${fmt(ivaDfPeriodo)} − IVA CF ${fmt(ivaCfPeriodo)}`} icon="🏛️" color={COLORS.accent}/>
+              </div>
+            </div>
+
+            <div style={{ background:COLORS.card, border:`1px solid ${COLORS.border}`, borderRadius:12, padding:18, marginBottom:20 }}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:12, flexWrap:"wrap", marginBottom:14 }}>
+                <div>
+                  <h2 style={{ margin:"0 0 4px", color:COLORS.accent, fontSize:18 }}>📐 Productos y medidas cotizadas</h2>
+                  <div style={{ fontSize:12, color:COLORS.muted }}>
+                    Analiza los detalles importados de las cotizaciones del período. Las cantidades consideran el campo unidad de cada producto.
+                  </div>
+                </div>
+                <label style={{ color:COLORS.muted, fontSize:12 }}>
+                  Agrupar largos y anchos cada
+                  <select
+                    value={rangoProductosCm}
+                    onChange={e => setRangoProductosCm(Number(e.target.value))}
+                    style={{ marginLeft:8, background:COLORS.surface, border:`1px solid ${COLORS.border}`, color:COLORS.text, borderRadius:8, padding:"7px 9px" }}
+                  >
+                    <option value={5}>5 cm</option>
+                    <option value={10}>10 cm</option>
+                    <option value={20}>20 cm</option>
+                  </select>
+                </label>
+              </div>
+
+              {estadisticasProductos.detallesPeriodo.length === 0 ? (
+                <div style={{ background:COLORS.surface, border:`1px dashed ${COLORS.border}`, borderRadius:10, padding:18, color:COLORS.muted, fontSize:13, textAlign:"center" }}>
+                  No hay productos con medidas importadas en las cotizaciones de {rangoResumen.label.toLowerCase()}.
+                </div>
+              ) : (
+                <>
+                  <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(165px,1fr))", gap:10, marginBottom:16 }}>
+                    <StatCard label="Unidades cotizadas" value={estadisticasProductos.unidades.toLocaleString("es-CL")} sub={`${estadisticasProductos.cotizacionesConDetalle} cotizaciones con detalle`} icon="📦" color={COLORS.accent}/>
+                    <StatCard label="Rango de largo líder" value={estadisticasProductos.largos[0]?.etiqueta || "—"} sub={`${estadisticasProductos.largos[0]?.cantidad || 0} unidades`} icon="↔️" color="#5a8abe"/>
+                    <StatCard label="Rango de ancho líder" value={estadisticasProductos.anchos[0]?.etiqueta || "—"} sub={`${estadisticasProductos.anchos[0]?.cantidad || 0} unidades`} icon="↕️" color={COLORS.success}/>
+                    <StatCard label="Tipo más cotizado" value={estadisticasProductos.tipos[0]?.etiqueta || "—"} sub={`${estadisticasProductos.tipos[0]?.cantidad || 0} unidades`} icon="🧱" color={COLORS.warning}/>
+                    <StatCard label="Color más cotizado" value={estadisticasProductos.colores[0]?.etiqueta || "—"} sub={`${estadisticasProductos.colores[0]?.cantidad || 0} unidades`} icon="🎨" color="#9a7aaa"/>
+                  </div>
+
+                  <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(245px,1fr))", gap:12 }}>
+                    {[
+                      ["Largos solicitados", estadisticasProductos.largos, "#5a8abe"],
+                      ["Anchos solicitados", estadisticasProductos.anchos, COLORS.success],
+                      ["Tipos de producto", estadisticasProductos.tipos, COLORS.warning],
+                      ["Colores solicitados", estadisticasProductos.colores, "#9a7aaa"],
+                      ["Medidas exactas más repetidas", estadisticasProductos.medidasExactas, COLORS.accent],
+                    ].map(([titulo, datos, color]) => {
+                      const max = Math.max(...datos.slice(0,8).map(x => x.cantidad), 1);
+                      return (
+                        <div key={titulo} style={{ background:COLORS.surface, border:`1px solid ${COLORS.border}`, borderRadius:10, padding:14 }}>
+                          <div style={{ fontSize:12, color:COLORS.text, fontWeight:800, marginBottom:10 }}>{titulo}</div>
+                          <div style={{ display:"grid", gap:8 }}>
+                            {datos.slice(0,8).map(item => (
+                              <div key={String(item.clave)}>
+                                <div style={{ display:"flex", justifyContent:"space-between", gap:8, fontSize:11.5, marginBottom:3 }}>
+                                  <span style={{ color:COLORS.text, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{item.etiqueta}</span>
+                                  <b style={{ color }}>{item.cantidad}</b>
+                                </div>
+                                <div style={{ height:6, background:COLORS.subtle, borderRadius:5, overflow:"hidden" }}>
+                                  <div style={{ width:`${Math.max(3, Math.round(item.cantidad / max * 100))}%`, height:"100%", background:color }}/>
+                                </div>
+                                <div style={{ marginTop:2, fontSize:9.5, color:COLORS.muted }}>{item.cotizaciones} cotizaciones</div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:12, flexWrap:"wrap", marginBottom:14 }}>
+              <div>
+                <h2 style={{ margin:0, color:COLORS.text, fontSize:19 }}>🧭 Panel de Gestión</h2>
+                <div style={{ color:COLORS.muted, fontSize:12 }}>Indicadores automáticos y registros manuales para la reunión mensual.</div>
+              </div>
+              <label style={{ color:COLORS.muted, fontSize:12 }}>Mes de registros manuales
+                <input type="month" value={mesGestion} onChange={e=>setMesGestion(e.target.value)} style={{ marginLeft:8, background:COLORS.surface, border:`1px solid ${COLORS.border}`, color:COLORS.text, borderRadius:8, padding:"8px 10px" }}/>
+              </label>
+            </div>
+
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(175px,1fr))", gap:12, marginBottom:18 }}>
+              <StatCard label="Cobrado período" value={fmt(cobradoPeriodo)} sub="Abonos NV + barranes" icon="💳" color={COLORS.success}/>
+              <StatCard label="CxC total" value={fmt(cxcTotalGestion)} sub="Saldo pendiente de notas de venta" icon="📥" color={COLORS.accent}/>
+              <StatCard label="CxC entregada" value={fmt(cxcEntregadaGestion)} sub="Prioridad de cobranza" icon="🚚" color={cxcEntregadaGestion>0?COLORS.warning:COLORS.success}/>
+              <StatCard label="CxC terminada" value={fmt(cxcTerminadaGestion)} sub="Terminada, aún no entregada" icon="✅" color="#5a8abe"/>
+              <StatCard label="Pagos próximos 7 días" value={fmt(pagos7Gestion)} sub={`15 días ${fmt(pagos15Gestion)} · 30 días ${fmt(pagos30Gestion)}`} icon="📅" color={COLORS.danger}/>
+              <StatCard label="Cobertura seguimiento" value={`${coberturaSeguimiento}%`} sub={`${cotizacionesConSeguimiento.length} con registro · ${cotizacionesSinSeguimiento.length} sin registro`} icon="📞" color={coberturaSeguimiento>=60?COLORS.success:COLORS.warning}/>
+            </div>
+
+            <div style={{ background:COLORS.card, border:`1px solid ${COLORS.border}`, borderRadius:12, padding:18, marginBottom:20 }}>
+              <div style={{ display:"flex", justifyContent:"space-between", gap:10, alignItems:"center", marginBottom:12 }}>
+                <div><b style={{ color:COLORS.accent }}>📥 Cuentas por cobrar priorizadas</b><div style={{ fontSize:11, color:COLORS.muted }}>Primero pedidos entregados, luego terminados y finalmente en proceso.</div></div>
+                <span style={{ color:COLORS.muted, fontSize:11 }}>{cxcPriorizadaGestion.length} saldos pendientes</span>
+              </div>
+              <div style={{ overflowX:"auto" }}>
+                <div style={{ minWidth:650 }}>
+                  {cxcPriorizadaGestion.slice(0,10).map(n => {
+                    const col=n.prioridad===1?COLORS.warning:n.prioridad===2?"#5a8abe":COLORS.muted;
+                    return <div key={n.id || n.numero} style={{ display:"grid", gridTemplateColumns:"90px 1fr 120px 120px", gap:10, alignItems:"center", padding:"9px 0", borderBottom:`1px solid ${COLORS.border}`, fontSize:12 }}>
+                      <b style={{ color:COLORS.accent }}>NV #{n.numero}</b><span>{n.cliente}</span><span style={{ color:col, fontWeight:800 }}>{n.etiqueta}</span><b style={{ textAlign:"right" }}>{fmt(n.saldo)}</b>
+                    </div>;
+                  })}
+                  {cxcPriorizadaGestion.length===0 && <div style={{ color:COLORS.muted, fontSize:12 }}>No hay cuentas por cobrar pendientes.</div>}
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(320px,1fr))", gap:16, marginBottom:20 }}>
+              <div style={{ background:COLORS.card, border:`1px solid ${COLORS.border}`, borderRadius:12, padding:18 }}>
+                <div style={{ display:"flex", justifyContent:"space-between", gap:10, alignItems:"center", marginBottom:12 }}>
+                  <div><b style={{ color:COLORS.accent }}>📞 Seguimiento comercial</b><div style={{ fontSize:11, color:COLORS.muted }}>Automático desde observaciones de seguimiento</div></div>
+                  <span style={{ fontSize:11, color:COLORS.muted }}>{accionesSeguimiento} acciones registradas</span>
+                </div>
+                <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:8, marginBottom:12 }}>
+                  <div style={{ padding:10, background:COLORS.surface, borderRadius:8, textAlign:"center" }}><div style={{ color:COLORS.success, fontSize:20, fontWeight:800 }}>{cotizacionesConSeguimiento.length}</div><div style={{ color:COLORS.muted, fontSize:10 }}>Con seguimiento</div></div>
+                  <div style={{ padding:10, background:COLORS.surface, borderRadius:8, textAlign:"center" }}><div style={{ color:COLORS.warning, fontSize:20, fontWeight:800 }}>{cotizacionesSinSeguimiento.length}</div><div style={{ color:COLORS.muted, fontSize:10 }}>Sin seguimiento</div></div>
+                  <div style={{ padding:10, background:COLORS.surface, borderRadius:8, textAlign:"center" }}><div style={{ color:COLORS.accent, fontSize:20, fontWeight:800 }}>{fmt(montoSinSeguimiento)}</div><div style={{ color:COLORS.muted, fontSize:10 }}>Monto activo sin seguimiento</div></div>
+                </div>
+                <div style={{ maxHeight:220, overflowY:"auto" }}>
+                  {activasSinSeguimiento.slice(0,8).map(q=><div key={q.id || q.numero} style={{ display:"grid", gridTemplateColumns:"1fr auto auto", gap:8, alignItems:"center", padding:"8px 0", borderBottom:`1px solid ${COLORS.border}`, fontSize:12 }}><span><b style={{ color:COLORS.accent }}>#{q.numero}</b> {q.cliente}</span><b>{fmt(q.total)}</b><button onClick={()=>setModalCot(q)} style={{ background:COLORS.subtle, border:`1px solid ${COLORS.border}`, color:COLORS.text, borderRadius:6, padding:"4px 8px", cursor:"pointer" }}>Registrar</button></div>)}
+                  {activasSinSeguimiento.length===0 && <div style={{ color:COLORS.muted, fontSize:12 }}>No hay cotizaciones pendientes sin seguimiento.</div>}
+                </div>
+              </div>
+
+              <div style={{ background:COLORS.card, border:`1px solid ${COLORS.border}`, borderRadius:12, padding:18 }}>
+                <div style={{ marginBottom:12 }}><b style={{ color:COLORS.accent }}>⚠ Alertas del gerente</b><div style={{ fontSize:11, color:COLORS.muted }}>Diagnóstico automático con los datos registrados</div></div>
+                <div style={{ display:"grid", gap:9 }}>
+                  {diagnosticosGestion.map((d,i)=>{ const col=d.tipo==="danger"?COLORS.danger:d.tipo==="warning"?COLORS.warning:d.tipo==="success"?COLORS.success:"#5a8abe"; return <div key={i} style={{ borderLeft:`4px solid ${col}`, background:COLORS.surface, borderRadius:8, padding:"10px 12px", color:COLORS.text, fontSize:12, lineHeight:1.45 }}>{d.texto}</div>; })}
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(360px,1fr))", gap:16, marginBottom:20 }}>
+              <div style={{ background:COLORS.card, border:`1px solid ${COLORS.border}`, borderRadius:12, padding:18 }}>
+                <div style={{ marginBottom:12 }}><b style={{ color:COLORS.accent }}>📣 Actividad de marketing</b><div style={{ fontSize:11, color:COLORS.muted }}>Registro manual · {nombreMesResumen(mesGestion)}</div></div>
+                <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(145px,1fr))", gap:9 }}>
+                  {[["publicaciones","Publicaciones"],["historias_videos","Historias / videos"],["proyectos_publicados","Proyectos publicados"],["google_business","Google Business"],["campanas","Campañas"],["inversion","Inversión ($)"],["consultas_identificadas","Consultas identificadas"]].map(([campo,label])=><label key={campo} style={{ fontSize:11, color:COLORS.muted }}>{label}<input type="number" min="0" value={marketingMesActual[campo]} onChange={e=>actualizarMarketingMes(campo, Number(e.target.value||0))} style={{ width:"100%", boxSizing:"border-box", marginTop:5, padding:"8px 9px", borderRadius:7, border:`1px solid ${COLORS.border}`, background:COLORS.surface, color:COLORS.text }}/></label>)}
+                </div>
+                <label style={{ display:"block", marginTop:10, fontSize:11, color:COLORS.muted }}>Observación del mes<textarea value={marketingMesActual.observacion} onChange={e=>actualizarMarketingMes("observacion",e.target.value)} placeholder="Ej: se publicó una cocina terminada y se probó una promoción..." style={{ width:"100%", minHeight:68, boxSizing:"border-box", marginTop:5, padding:9, borderRadius:7, border:`1px solid ${COLORS.border}`, background:COLORS.surface, color:COLORS.text, resize:"vertical", fontFamily:"inherit" }}/></label>
+                {Number(marketingMesActual.inversion)>0 && Number(marketingMesActual.consultas_identificadas)>0 && <div style={{ marginTop:10, color:COLORS.muted, fontSize:12 }}>Costo aproximado por consulta identificada: <b style={{ color:COLORS.accent }}>{fmt(Math.round(Number(marketingMesActual.inversion)/Number(marketingMesActual.consultas_identificadas)))}</b></div>}
+              </div>
+
+              <div style={{ background:COLORS.card, border:`1px solid ${COLORS.border}`, borderRadius:12, padding:18 }}>
+                <div style={{ marginBottom:12 }}><b style={{ color:COLORS.accent }}>📝 Plan de acción mensual</b><div style={{ fontSize:11, color:COLORS.muted }}>Las acciones se muestran en el mes correspondiente a su fecha · {nombreMesResumen(mesGestion)}</div></div>
+                <div style={{ display:"grid", gridTemplateColumns:"2fr 1fr 130px auto", gap:7, marginBottom:12 }}>
+                  <input value={nuevaAccion.accion} onChange={e=>setNuevaAccion(p=>({...p,accion:e.target.value}))} placeholder="Acción a realizar" style={{ minWidth:0, padding:8, borderRadius:7, border:`1px solid ${COLORS.border}`, background:COLORS.surface, color:COLORS.text }}/>
+                  <input value={nuevaAccion.responsable} onChange={e=>setNuevaAccion(p=>({...p,responsable:e.target.value}))} placeholder="Responsable" style={{ minWidth:0, padding:8, borderRadius:7, border:`1px solid ${COLORS.border}`, background:COLORS.surface, color:COLORS.text }}/>
+                  <input type="date" value={nuevaAccion.fecha} onChange={e=>setNuevaAccion(p=>({...p,fecha:e.target.value}))} style={{ minWidth:0, padding:8, borderRadius:7, border:`1px solid ${COLORS.border}`, background:COLORS.surface, color:COLORS.text }}/>
+                  <button onClick={agregarAccionGestion} style={{ background:COLORS.success, border:"none", color:"#fff", borderRadius:7, padding:"8px 11px", fontWeight:800, cursor:"pointer" }}>+</button>
+                </div>
+                <div style={{ maxHeight:250, overflowY:"auto" }}>
+                  {accionesMesActual.map(a=><div key={a.id} style={{ display:"grid", gridTemplateColumns:"24px 1fr 110px 95px 28px", gap:7, alignItems:"center", padding:"8px 0", borderBottom:`1px solid ${COLORS.border}`, fontSize:12, opacity:a.estado==="completada"?.55:1 }}><input type="checkbox" checked={a.estado==="completada"} onChange={e=>actualizarAccionGestion(a.id,{estado:e.target.checked?"completada":"pendiente"})}/><span style={{ textDecoration:a.estado==="completada"?"line-through":"none" }}>{a.accion}</span><span style={{ color:COLORS.muted }}>{a.responsable||"Sin asignar"}</span><span style={{ color:COLORS.muted }}>{a.fecha?fmtDate(a.fecha):"Sin fecha"}</span><button onClick={()=>eliminarAccionGestion(a.id)} style={{ background:"none", border:"none", color:COLORS.danger, cursor:"pointer" }}>✕</button></div>)}
+                  {accionesMesActual.length===0 && <div style={{ color:COLORS.muted, fontSize:12 }}>Todavía no hay acciones registradas para este mes.</div>}
+                </div>
               </div>
             </div>
 
@@ -10048,11 +10952,11 @@ const renderTarjetaProduccion = (n) => (
           </div>
         )}
 
-        {tab==="cuentas_pagar" && (
+        {tab==="finanzas" && finanzasSeccion==="pagar" && (
           <div>
             <div style={{ display:"flex", justifyContent:"space-between", gap:12, alignItems:"flex-end", flexWrap:"wrap", marginBottom:16 }}>
               <div>
-                <h2 style={{ margin:"0 0 6px", fontFamily:"Georgia,serif", color:COLORS.accent, fontSize:17 }}>💸 Cuentas por pagar</h2>
+                <h2 style={{ margin:"0 0 6px", fontFamily:"Georgia,serif", color:COLORS.accent, fontSize:17 }}>💸 Por pagar</h2>
                 <p style={{ margin:0, fontSize:12, color:COLORS.muted }}>Deudas, cuotas, proveedores, imposiciones y compromisos visibles en el Calendario.</p>
               </div>
               <button onClick={() => setModalCuentaPagar(true)} style={{ background:COLORS.accent, color:"#111", border:"none", borderRadius:8, padding:"10px 12px", fontWeight:700, cursor:"pointer" }}>+ Nueva cuenta</button>
@@ -10144,10 +11048,68 @@ const renderTarjetaProduccion = (n) => (
           </div>
         )}
 
-        {tab==="cartola" && (
+        {tab==="finanzas" && (
+          <section style={{ maxWidth:1200, margin:"0 auto 14px" }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-end", gap:12, flexWrap:"wrap", marginBottom:12 }}>
+              <div>
+                <h2 style={{ color:COLORS.accent, fontFamily:"Georgia,serif", margin:"0 0 5px" }}>💰 Finanzas</h2>
+                <p style={{ color:COLORS.muted, margin:0, fontSize:13 }}>Control simple de caja, movimientos bancarios, cuentas por cobrar y cuentas por pagar.</p>
+              </div>
+              <div style={{ display:"flex", gap:7, flexWrap:"wrap" }}>
+                {[
+                  ["resumen","📊 Resumen"],
+                  ["movimientos",`🏦 Movimientos (${cartolaPorRevisar.length} por revisar)`],
+                  ["cobrar",`💰 Por cobrar (${detalleCxcNotas.length})`],
+                  ["pagar",`💸 Por pagar (${cuentasPagar.filter(c => saldoCuentaPagar(c) > 0).length})`]
+                ].map(([key,label]) => (
+                  <button key={key} onClick={() => setFinanzasSeccion(key)} style={{
+                    background:finanzasSeccion===key ? COLORS.accent : COLORS.surface,
+                    color:finanzasSeccion===key ? "#111" : COLORS.text,
+                    border:`1px solid ${finanzasSeccion===key ? COLORS.accent : COLORS.border}`,
+                    borderRadius:9, padding:"8px 11px", cursor:"pointer", fontWeight:800, fontSize:12
+                  }}>{label}</button>
+                ))}
+              </div>
+            </div>
+          </section>
+        )}
+
+        {tab==="finanzas" && finanzasSeccion==="resumen" && (
           <section style={{ maxWidth:1200, margin:"0 auto" }}>
-            <h2 style={{ color:COLORS.accent, fontFamily:"Georgia,serif", marginBottom:6 }}>🏦 Cartola bancaria</h2>
-            <p style={{ color:COLORS.muted, marginTop:0, fontSize:13 }}>Importa Excel/CSV del banco, revisa cada movimiento y conviértelo en abono, pago o asiento contable.</p>
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))", gap:12, marginBottom:16 }}>
+              <StatCard label="Ingresos del mes" value={fmt(totalIngresosCartola)} icon="⬆️" color={COLORS.success}/>
+              <StatCard label="Egresos del mes" value={fmt(totalEgresosCartola)} icon="⬇️" color={COLORS.danger}/>
+              <StatCard label="Flujo neto" value={fmt(totalIngresosCartola-totalEgresosCartola)} icon="💵" color={(totalIngresosCartola-totalEgresosCartola)>=0 ? COLORS.success : COLORS.danger}/>
+              <StatCard label="Cuentas por cobrar" value={fmt(totalCxcNotas)} icon="💰" color={COLORS.accent}/>
+              <StatCard label="Cuentas por pagar" value={fmt(cuentasPagar.reduce((sum,c)=>sum+saldoCuentaPagar(c),0))} icon="📌" color={COLORS.warning}/>
+              <StatCard label="Movimientos por revisar" value={cartolaPorRevisar.length} icon="🔎" color={cartolaPorRevisar.length ? COLORS.warning : COLORS.success}/>
+            </div>
+
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(320px,1fr))", gap:14 }}>
+              <div style={{ background:COLORS.card, border:`1px solid ${COLORS.border}`, borderRadius:12, padding:14 }}>
+                <div style={{ color:COLORS.success, fontWeight:900, marginBottom:10 }}>⬆️ Ingresos por categoría</div>
+                {categoriasIngresosCartola.length===0 ? <div style={{color:COLORS.muted,fontSize:12}}>Sin ingresos clasificados.</div> : categoriasIngresosCartola.map(c => (
+                  <button key={`res-ing-${c.categoria}-${c.subcategoria}`} onClick={() => setModalDetalleCategoriaCartola({...c,tipo:"ingreso"})} style={{ width:"100%", display:"flex", justifyContent:"space-between", gap:10, background:COLORS.surface, color:COLORS.text, border:`1px solid ${COLORS.border}`, borderRadius:8, padding:"9px 10px", marginBottom:7, cursor:"pointer", textAlign:"left" }}>
+                    <span><b>{c.categoria}</b><br/><small style={{color:COLORS.muted}}>{c.subcategoria}</small></span><b style={{color:COLORS.success}}>{fmt(c.ingresos)}</b>
+                  </button>
+                ))}
+              </div>
+              <div style={{ background:COLORS.card, border:`1px solid ${COLORS.border}`, borderRadius:12, padding:14 }}>
+                <div style={{ color:COLORS.danger, fontWeight:900, marginBottom:10 }}>⬇️ Egresos por categoría</div>
+                {categoriasEgresosCartola.length===0 ? <div style={{color:COLORS.muted,fontSize:12}}>Sin egresos clasificados.</div> : categoriasEgresosCartola.map(c => (
+                  <button key={`res-egr-${c.categoria}-${c.subcategoria}`} onClick={() => setModalDetalleCategoriaCartola({...c,tipo:"egreso"})} style={{ width:"100%", display:"flex", justifyContent:"space-between", gap:10, background:COLORS.surface, color:COLORS.text, border:`1px solid ${COLORS.border}`, borderRadius:8, padding:"9px 10px", marginBottom:7, cursor:"pointer", textAlign:"left" }}>
+                    <span><b>{c.categoria}</b><br/><small style={{color:COLORS.muted}}>{c.subcategoria}</small></span><b style={{color:COLORS.danger}}>{fmt(c.egresos)}</b>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </section>
+        )}
+
+        {tab==="finanzas" && finanzasSeccion==="movimientos" && (
+          <section style={{ maxWidth:1200, margin:"0 auto" }}>
+            <h2 style={{ color:COLORS.accent, fontFamily:"Georgia,serif", marginBottom:6 }}>🏦 Movimientos financieros</h2>
+            <p style={{ color:COLORS.muted, marginTop:0, fontSize:13 }}>Importa la cartola, registra efectivo u otros movimientos y clasifica todo desde un solo lugar.</p>
             <div style={{ background:COLORS.card, border:`1px solid ${COLORS.border}`, borderRadius:12, padding:14, marginBottom:14 }}>
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-end", gap:10, flexWrap:"wrap", marginBottom:12 }}>
                 <div>
@@ -10178,27 +11140,64 @@ const renderTarjetaProduccion = (n) => (
               </div>
 
               <div style={{ marginBottom:12, background:COLORS.surface, border:`1px solid ${COLORS.border}`, borderRadius:10, padding:12 }}>
-                <div style={{ fontSize:12, color:COLORS.accent, fontWeight:800, marginBottom:8 }}>Resumen por categoría del mes</div>
+                <div style={{ fontSize:12, color:COLORS.accent, fontWeight:800, marginBottom:10 }}>Resumen por categoría del mes</div>
                 {resumenCartolaCategorias.length === 0 ? (
                   <div style={{ color:COLORS.muted, fontSize:12 }}>Sin movimientos clasificados.</div>
                 ) : (
-                  <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))", gap:8 }}>
-                    {resumenCartolaCategorias.slice(0, 8).map(c => (
-                      <div key={c.categoria} style={{ background:COLORS.card, border:`1px solid ${COLORS.border}`, borderRadius:8, padding:10 }}>
-                        <div style={{ fontSize:11, color:COLORS.muted }}>{c.categoria}</div>
-                        <div style={{ fontSize:14, color:c.ingresos > c.egresos ? COLORS.success : COLORS.danger, fontWeight:800 }}>
-                          {fmt(c.ingresos > 0 ? c.ingresos : c.egresos)}
-                        </div>
-                        <div style={{ fontSize:10, color:COLORS.muted }}>{c.movimientos} mov.</div>
+                  <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(320px,1fr))", gap:12 }}>
+                    <div style={{ background:COLORS.card, border:`1px solid ${COLORS.border}`, borderRadius:10, padding:10, minWidth:0 }}>
+                      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:8, marginBottom:8 }}>
+                        <div style={{ color:COLORS.success, fontSize:12, fontWeight:900 }}>⬆️ Categorías de ingresos</div>
+                        <div style={{ color:COLORS.muted, fontSize:10 }}>{categoriasIngresosCartola.length} categorías</div>
                       </div>
-                    ))}
+                      {categoriasIngresosCartola.length === 0 ? (
+                        <div style={{ color:COLORS.muted, fontSize:11, padding:"8px 2px" }}>Sin ingresos en el mes seleccionado.</div>
+                      ) : (
+                        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))", gap:8 }}>
+                          {categoriasIngresosCartola.map(c => (
+                            <button key={`ingreso-${c.categoria}-${c.subcategoria}`} onClick={() => setModalDetalleCategoriaCartola({ ...c, tipo:"ingreso" })} style={{ textAlign:"left", background:COLORS.surface, color:COLORS.text, border:`1px solid ${COLORS.border}`, borderRadius:8, padding:10, cursor:"pointer" }}>
+                              <div style={{ fontSize:11, color:COLORS.accent, fontWeight:800, overflowWrap:"anywhere" }}>{c.categoria}</div>
+                              <div style={{ fontSize:10.5, color:COLORS.muted, overflowWrap:"anywhere" }}>{c.subcategoria}</div>
+                              <div style={{ fontSize:14, color:COLORS.success, fontWeight:800 }}>{fmt(c.ingresos)}</div>
+                              <div style={{ fontSize:10, color:COLORS.muted }}>{c.movimientosIngresos} mov.</div>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <div style={{ background:COLORS.card, border:`1px solid ${COLORS.border}`, borderRadius:10, padding:10, minWidth:0 }}>
+                      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:8, marginBottom:8 }}>
+                        <div style={{ color:COLORS.danger, fontSize:12, fontWeight:900 }}>⬇️ Categorías de egresos</div>
+                        <div style={{ color:COLORS.muted, fontSize:10 }}>{categoriasEgresosCartola.length} categorías</div>
+                      </div>
+                      {categoriasEgresosCartola.length === 0 ? (
+                        <div style={{ color:COLORS.muted, fontSize:11, padding:"8px 2px" }}>Sin egresos en el mes seleccionado.</div>
+                      ) : (
+                        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))", gap:8 }}>
+                          {categoriasEgresosCartola.map(c => (
+                            <button key={`egreso-${c.categoria}-${c.subcategoria}`} onClick={() => setModalDetalleCategoriaCartola({ ...c, tipo:"egreso" })} style={{ textAlign:"left", background:COLORS.surface, color:COLORS.text, border:`1px solid ${COLORS.border}`, borderRadius:8, padding:10, cursor:"pointer" }}>
+                              <div style={{ fontSize:11, color:COLORS.accent, fontWeight:800, overflowWrap:"anywhere" }}>{c.categoria}</div>
+                              <div style={{ fontSize:10.5, color:COLORS.muted, overflowWrap:"anywhere" }}>{c.subcategoria}</div>
+                              <div style={{ fontSize:14, color:COLORS.danger, fontWeight:800 }}>{fmt(c.egresos)}</div>
+                              <div style={{ fontSize:10, color:COLORS.muted }}>{c.movimientosEgresos} mov.</div>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>
 
               <div style={{ display:"flex", justifyContent:"space-between", gap:10, flexWrap:"wrap", alignItems:"center", marginBottom:10 }}>
                 <input value={busquedaCartola} onChange={e=>setBusquedaCartola(e.target.value)} placeholder="Buscar en cartola..." style={{ minWidth:220, flex:"0 1 320px", background:COLORS.surface, border:`1px solid ${COLORS.border}`, color:COLORS.text, borderRadius:8, padding:"8px 10px" }} />
-                <span style={{ color:COLORS.muted, fontSize:12 }}>{cartolaFiltrada.length} movimientos</span>
+                <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}>
+                  <span style={{ color:COLORS.muted, fontSize:12 }}>{cartolaFiltrada.length} movimientos</span>
+                  <button onClick={() => setModalNuevaSubcategoria(true)} style={{ background:COLORS.surface, color:COLORS.text, border:`1px solid ${COLORS.border}`, borderRadius:8, padding:"8px 10px", cursor:"pointer", fontSize:12, fontWeight:800 }}>⚙ Subcategorías</button>
+                  <button onClick={() => setModalMovimientoManual(true)} style={{ background:COLORS.accent, color:"#111", border:"none", borderRadius:8, padding:"8px 10px", cursor:"pointer", fontSize:12, fontWeight:800 }}>+ Movimiento manual</button>
+                  <button onClick={exportarFlujoCajaExcel} style={{ background:COLORS.success, color:"#fff", border:"none", borderRadius:8, padding:"8px 10px", cursor:"pointer", fontSize:12, fontWeight:800 }}>⬇ Exportar flujo Excel</button>
+                </div>
               </div>
 
               {cartolaFiltrada.length === 0 ? (
@@ -10218,7 +11217,7 @@ const renderTarjetaProduccion = (n) => (
                       </tr>
                     </thead>
                     <tbody>
-                      {cartolaFiltrada.slice(0, 80).map(m => (
+                      {cartolaFiltrada.map(m => (
                         <tr key={m.id}>
                           <td style={{ padding:"8px", borderBottom:`1px solid ${COLORS.border}` }}>{fmtDate(m.fecha)}</td>
                           <td style={{ padding:"8px", borderBottom:`1px solid ${COLORS.border}`, color:COLORS.text, fontWeight:700 }}>{m.descripcion}</td>
@@ -10235,12 +11234,14 @@ const renderTarjetaProduccion = (n) => (
                             }}>
                               {m.categoria || "Por revisar"}
                             </span>
+                            {m.subcategoria && <div style={{ color:COLORS.muted, fontSize:10, marginTop:3 }}>{m.subcategoria}</div>}
                           </td>
                           <td style={{ padding:"8px", borderBottom:`1px solid ${COLORS.border}`, color:m.estado === "conciliado" ? COLORS.success : COLORS.warning }}>{m.estado === "conciliado" ? "Clasificado" : "Por revisar"}</td>
                           <td style={{ padding:"8px", borderBottom:`1px solid ${COLORS.border}` }}>
                             <div style={{ display:"flex", gap:6, flexWrap:"wrap", alignItems:"center" }}>
-                              <button onClick={() => abrirClasificacionCartola(m)} style={{ background:COLORS.accent, color:"#111", border:"none", borderRadius:7, padding:"6px 9px", cursor:"pointer", fontSize:11, fontWeight:800 }}>Clasificar</button>
-                              {Number(m.abono || 0) > 0 && <button onClick={() => { setModalClasificarCartola(m); setCategoriaCartolaSeleccionada("Abono CxC"); setBusquedaCategoriaCartola(""); setBusquedaCxcCartola(""); setCxcSeleccionadaCartola(null); setTipoAbonoCartola("abono"); }} style={{ background:COLORS.success, color:"#fff", border:"none", borderRadius:7, padding:"6px 8px", cursor:"pointer", fontSize:11 }}>Abono CxC</button>}
+                              <button onClick={() => abrirClasificacionCartola(m)} style={{ background:COLORS.accent, color:"#111", border:"none", borderRadius:7, padding:"6px 9px", cursor:"pointer", fontSize:11, fontWeight:800 }}>{m.estado === "conciliado" ? "Editar" : "Clasificar"}</button>
+                              <button onClick={() => eliminarMovimientoCartola(m)} style={{ background:COLORS.danger, color:"#fff", border:"none", borderRadius:7, padding:"6px 8px", cursor:"pointer", fontSize:11 }}>Eliminar</button>
+                              {Number(m.abono || 0) > 0 && <button onClick={() => { setModalClasificarCartola(m); setTipoMovimientoCartola("ingreso"); setCategoriaCartolaSeleccionada("Cobros pendientes"); setSubcategoriaCartolaSeleccionada("Saldo Nota de Venta"); setBusquedaCategoriaCartola(""); setBusquedaCxcCartola(""); setCxcSeleccionadaCartola(null); setTipoAbonoCartola("abono"); }} style={{ background:COLORS.success, color:"#fff", border:"none", borderRadius:7, padding:"6px 8px", cursor:"pointer", fontSize:11 }}>Abono CxC</button>}
                               <span style={{ color:COLORS.muted, fontSize:11 }}>{m.nota_venta_id ? `Doc asociado #${m.nota_venta_id}` : (m.observacion || "")}</span>
                             </div>
                           </td>
@@ -10255,11 +11256,11 @@ const renderTarjetaProduccion = (n) => (
         )}
 
         
-        {tab==="cxc" && (
+        {tab==="finanzas" && finanzasSeccion==="cobrar" && (
           <section style={{ maxWidth:1200, margin:"0 auto" }}>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-end", gap:12, flexWrap:"wrap", marginBottom:14 }}>
               <div>
-                <h2 style={{ color:COLORS.accent, fontFamily:"Georgia,serif", margin:"0 0 6px" }}>💰 Cuentas por cobrar</h2>
+                <h2 style={{ color:COLORS.accent, fontFamily:"Georgia,serif", margin:"0 0 6px" }}>💰 Por cobrar</h2>
                 <p style={{ color:COLORS.muted, margin:0, fontSize:13 }}>
                   Saldos conectados con Notas de Venta, Barranes, abonos y Producción.
                 </p>
@@ -10403,7 +11404,7 @@ const renderTarjetaProduccion = (n) => (
           </section>
         )}
 
-        {tab==="contabilidad" && (
+        {false && (
           <div>
             <div style={{ display:"flex", justifyContent:"space-between", gap:12, alignItems:"flex-end", flexWrap:"wrap", marginBottom:16 }}>
               <div>
@@ -10466,7 +11467,10 @@ const renderTarjetaProduccion = (n) => (
 
               <div style={{ display:"flex", justifyContent:"space-between", gap:10, flexWrap:"wrap", alignItems:"center", marginBottom:10 }}>
                 <input value={busquedaCartola} onChange={e=>setBusquedaCartola(e.target.value)} placeholder="Buscar en cartola..." style={{ minWidth:220, flex:"0 1 320px", background:COLORS.surface, border:`1px solid ${COLORS.border}`, color:COLORS.text, borderRadius:8, padding:"8px 10px" }} />
-                <span style={{ color:COLORS.muted, fontSize:12 }}>{cartolaFiltrada.length} movimientos</span>
+                <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}>
+                  <span style={{ color:COLORS.muted, fontSize:12 }}>{cartolaFiltrada.length} movimientos</span>
+                  <button onClick={exportarFlujoCajaExcel} style={{ background:COLORS.success, color:"#fff", border:"none", borderRadius:8, padding:"8px 10px", cursor:"pointer", fontSize:12, fontWeight:800 }}>⬇ Exportar flujo Excel</button>
+                </div>
               </div>
 
               {cartolaFiltrada.length === 0 ? (
@@ -10486,7 +11490,7 @@ const renderTarjetaProduccion = (n) => (
                       </tr>
                     </thead>
                     <tbody>
-                      {cartolaFiltrada.slice(0, 80).map(m => (
+                      {cartolaFiltrada.map(m => (
                         <tr key={m.id}>
                           <td style={{ padding:"8px", borderBottom:`1px solid ${COLORS.border}` }}>{fmtDate(m.fecha)}</td>
                           <td style={{ padding:"8px", borderBottom:`1px solid ${COLORS.border}`, color:COLORS.text, fontWeight:700 }}>{m.descripcion}</td>
@@ -10908,112 +11912,64 @@ const renderTarjetaProduccion = (n) => (
 )}
 
       {modalClasificarCartola && (
-        <div
-          onClick={cerrarClasificacionCartola}
-          style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.62)", display:"flex", alignItems:"flex-start", justifyContent:"center", zIndex:10000, padding:"20px 10px", overflowY:"auto" }}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            style={{ background:COLORS.card, border:`1px solid ${COLORS.border}`, borderRadius:14, padding:18, width:"min(920px, 96vw)", color:COLORS.text, boxSizing:"border-box" }}
-          >
-            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:12, marginBottom:14 }}>
-              <div>
-                <h2 style={{ margin:"0 0 4px", color:COLORS.accent }}>Clasificar movimiento de cartola</h2>
-                <div style={{ fontSize:12, color:COLORS.muted }}>{fmtDate(modalClasificarCartola.fecha)} · {modalClasificarCartola.descripcion}</div>
-                <div style={{ marginTop:6, fontSize:18, fontWeight:900, color:Number(modalClasificarCartola.abono || 0) > 0 ? COLORS.success : COLORS.danger }}>
-                  {Number(modalClasificarCartola.abono || 0) > 0 ? fmt(modalClasificarCartola.abono) : fmt(modalClasificarCartola.cargo)}
-                </div>
-              </div>
-              <button onClick={cerrarClasificacionCartola} style={{ background:COLORS.danger, color:"#fff", border:"none", borderRadius:8, padding:"8px 10px", cursor:"pointer", fontWeight:800 }}>Cerrar</button>
+        <div onClick={cerrarClasificacionCartola} style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.68)", display:"flex", alignItems:"flex-start", justifyContent:"center", zIndex:10000, padding:"20px 10px", overflowY:"auto" }}>
+          <div onClick={e=>e.stopPropagation()} style={{ background:COLORS.card, border:`1px solid ${COLORS.border}`, borderRadius:14, padding:18, width:"min(900px,96vw)", color:COLORS.text }}>
+            <div style={{ display:"flex", justifyContent:"space-between", gap:12, marginBottom:14 }}>
+              <div><h2 style={{ margin:"0 0 4px", color:COLORS.accent }}>Clasificar movimiento</h2><div style={{ fontSize:12, color:COLORS.muted }}>{fmtDate(modalClasificarCartola.fecha)} · {modalClasificarCartola.descripcion}</div><b style={{ color:Number(modalClasificarCartola.abono||0)>0?COLORS.success:COLORS.danger, fontSize:18 }}>{fmt(Number(modalClasificarCartola.abono||modalClasificarCartola.cargo||0))}</b></div>
+              <button onClick={cerrarClasificacionCartola} style={{ background:COLORS.danger,color:"#fff",border:"none",borderRadius:8,padding:"8px 10px",cursor:"pointer" }}>Cerrar</button>
+            </div>
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))", gap:10 }}>
+              <label style={{ fontSize:12,color:COLORS.muted }}>Tipo
+                <select value={tipoMovimientoCartola} onChange={e=>{setTipoMovimientoCartola(e.target.value);setCategoriaCartolaSeleccionada("");setSubcategoriaCartolaSeleccionada("");}} style={{ width:"100%",marginTop:5,background:COLORS.surface,border:`1px solid ${COLORS.border}`,color:COLORS.text,borderRadius:8,padding:10 }}>
+                  <option value="">Seleccionar...</option><option value="ingreso">Ingreso</option><option value="egreso">Egreso</option><option value="traspaso">Traspaso interno</option>
+                </select>
+              </label>
+              <label style={{ fontSize:12,color:COLORS.muted }}>Categoría
+                <select value={categoriaCartolaSeleccionada} onChange={e=>{setCategoriaCartolaSeleccionada(e.target.value);setSubcategoriaCartolaSeleccionada("");}} style={{ width:"100%",marginTop:5,background:COLORS.surface,border:`1px solid ${COLORS.border}`,color:COLORS.text,borderRadius:8,padding:10 }}>
+                  <option value="">Seleccionar...</option>{categoriasCartolaFiltradas.map(c=><option key={c} value={c}>{c}</option>)}
+                </select>
+              </label>
+              <label style={{ fontSize:12,color:COLORS.muted }}>Subcategoría
+                <select value={subcategoriaCartolaSeleccionada} onChange={e=>setSubcategoriaCartolaSeleccionada(e.target.value)} style={{ width:"100%",marginTop:5,background:COLORS.surface,border:`1px solid ${COLORS.border}`,color:COLORS.text,borderRadius:8,padding:10 }}>
+                  <option value="">Seleccionar...</option>{subcategoriasDisponiblesCartola.map(sc=><option key={sc} value={sc}>{sc}</option>)}
+                </select>
+              </label>
             </div>
 
-            <div style={{ display:"grid", gridTemplateColumns:"minmax(260px, 360px) 1fr", gap:14 }}>
-              <div style={{ background:COLORS.surface, border:`1px solid ${COLORS.border}`, borderRadius:12, padding:12 }}>
-                <div style={{ fontSize:12, color:COLORS.accent, fontWeight:800, marginBottom:8 }}>1. Categoría</div>
-                <input
-                  value={busquedaCategoriaCartola}
-                  onChange={e=>setBusquedaCategoriaCartola(e.target.value)}
-                  placeholder="Buscar categoría..."
-                  style={{ width:"100%", boxSizing:"border-box", background:COLORS.card, border:`1px solid ${COLORS.border}`, color:COLORS.text, borderRadius:8, padding:"9px 10px", marginBottom:8 }}
-                />
-                <div style={{ display:"grid", gap:6, maxHeight:360, overflowY:"auto" }}>
-                  {categoriasCartolaFiltradas.map(c => (
-                    <button
-                      key={c.nombre}
-                      onClick={() => setCategoriaCartolaSeleccionada(c.nombre)}
-                      style={{ textAlign:"left", background:categoriaCartolaSeleccionada === c.nombre ? COLORS.accent : COLORS.card, color:categoriaCartolaSeleccionada === c.nombre ? "#111" : COLORS.text, border:`1px solid ${categoriaCartolaSeleccionada === c.nombre ? COLORS.accent : COLORS.border}`, borderRadius:8, padding:"9px 10px", cursor:"pointer" }}
-                    >
-                      <div style={{ fontWeight:900 }}>{c.nombre}</div>
-                      <div style={{ fontSize:10.5, opacity:.82 }}>{c.descripcion}</div>
-                    </button>
-                  ))}
-                </div>
+            {categoriaCartolaSeleccionada === "Cobros pendientes" && subcategoriaCartolaSeleccionada === "Saldo Nota de Venta" && (
+              <div style={{ marginTop:12,background:COLORS.surface,border:`1px solid ${COLORS.border}`,borderRadius:10,padding:12 }}>
+                <div style={{ color:COLORS.accent,fontWeight:800,fontSize:12,marginBottom:8 }}>Asociar pago a Nota de Venta o Barrán</div>
+                <div style={{ display:"grid",gridTemplateColumns:"1fr 180px",gap:8 }}><input value={busquedaCxcCartola} onChange={e=>setBusquedaCxcCartola(e.target.value)} placeholder="Buscar cliente o documento..." style={{background:COLORS.card,border:`1px solid ${COLORS.border}`,color:COLORS.text,borderRadius:8,padding:9}}/><select value={tipoAbonoCartola} onChange={e=>setTipoAbonoCartola(e.target.value)} style={{background:COLORS.card,border:`1px solid ${COLORS.border}`,color:COLORS.text,borderRadius:8,padding:9}}><option value="abono">Abono parcial</option><option value="abono_saldo">Pago de saldo</option><option value="abono_inicial">Abono inicial</option><option value="abono_retiro_parcial">Retiro parcial</option></select></div>
+                <div style={{ maxHeight:220,overflowY:"auto",display:"grid",gap:5,marginTop:8 }}>{opcionesCxcCartola.slice(0,60).map(item=><button key={item.id} onClick={()=>setCxcSeleccionadaCartola(item)} style={{textAlign:"left",background:cxcSeleccionadaCartola?.id===item.id?COLORS.accent:COLORS.card,color:cxcSeleccionadaCartola?.id===item.id?"#111":COLORS.text,border:`1px solid ${COLORS.border}`,borderRadius:8,padding:8,cursor:"pointer"}}><b>{item.tipo} #{item.numero} · {item.cliente}</b><span style={{float:"right"}}>{fmt(item.saldo)}</span></button>)}</div>
               </div>
+            )}
 
-              <div style={{ background:COLORS.surface, border:`1px solid ${COLORS.border}`, borderRadius:12, padding:12 }}>
-                <div style={{ fontSize:12, color:COLORS.accent, fontWeight:800, marginBottom:8 }}>2. Detalle</div>
-
-                {categoriaCartolaSeleccionada === "Abono CxC" ? (
-                  <div>
-                    <div style={{ display:"grid", gridTemplateColumns:"1fr 170px", gap:10, marginBottom:10 }}>
-                      <input
-                        value={busquedaCxcCartola}
-                        onChange={e=>setBusquedaCxcCartola(e.target.value)}
-                        placeholder="Buscar NV, barrán o cliente..."
-                        style={{ width:"100%", boxSizing:"border-box", background:COLORS.card, border:`1px solid ${COLORS.border}`, color:COLORS.text, borderRadius:8, padding:"9px 10px" }}
-                      />
-                      <select
-                        value={tipoAbonoCartola}
-                        onChange={e=>setTipoAbonoCartola(e.target.value)}
-                        style={{ width:"100%", boxSizing:"border-box", background:COLORS.card, border:`1px solid ${COLORS.border}`, color:COLORS.text, borderRadius:8, padding:"9px 10px" }}
-                      >
-                        <option value="abono_inicial">Abono inicial</option>
-                        <option value="abono">Abono parcial</option>
-                        <option value="abono_retiro_parcial">Abono retiro parcial</option>
-                        <option value="abono_saldo">Abono saldo</option>
-                      </select>
-                    </div>
-
-                    {cxcSeleccionadaCartola && (
-                      <div style={{ background:"rgba(90,158,111,.12)", border:`1px solid ${COLORS.success}`, borderRadius:10, padding:10, marginBottom:10 }}>
-                        <div style={{ color:COLORS.success, fontWeight:900 }}>Seleccionado: {cxcSeleccionadaCartola.tipo} #{cxcSeleccionadaCartola.numero}</div>
-                        <div style={{ fontSize:12, color:COLORS.text }}>{cxcSeleccionadaCartola.cliente}</div>
-                        <div style={{ fontSize:12, color:COLORS.muted }}>Saldo actual: {fmt(cxcSeleccionadaCartola.saldo)}</div>
-                      </div>
-                    )}
-
-                    <div style={{ maxHeight:300, overflowY:"auto", display:"grid", gap:6 }}>
-                      {opcionesCxcCartola.slice(0, 60).map(item => (
-                        <button
-                          key={item.id}
-                          onClick={() => setCxcSeleccionadaCartola(item)}
-                          style={{ textAlign:"left", background:cxcSeleccionadaCartola?.id === item.id ? COLORS.accent : COLORS.card, color:cxcSeleccionadaCartola?.id === item.id ? "#111" : COLORS.text, border:`1px solid ${cxcSeleccionadaCartola?.id === item.id ? COLORS.accent : COLORS.border}`, borderRadius:8, padding:"9px 10px", cursor:"pointer" }}
-                        >
-                          <div style={{ display:"flex", justifyContent:"space-between", gap:10 }}>
-                            <b>{item.tipo} #{item.numero} · {item.cliente}</b>
-                            <b>{fmt(item.saldo)}</b>
-                          </div>
-                          <div style={{ fontSize:10.5, opacity:.82 }}>{item.estado.icon} {item.estado.label} {item.detalleTexto ? `· ${item.detalleTexto}` : ""}</div>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                ) : (
-                  <div style={{ color:COLORS.muted, fontSize:13, lineHeight:1.5 }}>
-                    {categoriaCartolaSeleccionada
-                      ? "Esta categoría quedará registrada en la cartola. Si corresponde a Factura compra, se mostrará como flujo, pero no se duplicará con el resumen tributario manual del programa externo."
-                      : "Selecciona una categoría desde el listado."}
-                  </div>
-                )}
-
-                <div style={{ display:"flex", justifyContent:"flex-end", gap:8, marginTop:14 }}>
-                  <button onClick={cerrarClasificacionCartola} style={{ background:COLORS.subtle, color:COLORS.text, border:`1px solid ${COLORS.border}`, borderRadius:8, padding:"9px 12px", cursor:"pointer", fontWeight:800 }}>Cancelar</button>
-                  <button onClick={guardarClasificacionCartola} style={{ background:COLORS.success, color:"#fff", border:"none", borderRadius:8, padding:"9px 12px", cursor:"pointer", fontWeight:900 }}>Guardar clasificación</button>
-                </div>
+            {categoriaCartolaSeleccionada === "Impuestos" && subcategoriaCartolaSeleccionada === "Pago mensual de impuestos" && (
+              <div style={{ marginTop:12,background:COLORS.surface,border:`1px solid ${COLORS.border}`,borderRadius:10,padding:12 }}>
+                <div style={{color:COLORS.accent,fontWeight:800,fontSize:12,marginBottom:8}}>Desglose del pago (debe sumar {fmt(modalClasificarCartola.cargo)})</div>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:8}}>{[["impuesto_iva","IVA"],["impuesto_ppm","PPM"],["impuesto_intereses","Intereses/multas"],["impuesto_otros","Otros"]].map(([k,l])=><label key={k} style={{fontSize:11,color:COLORS.muted}}>{l}<input type="number" value={modalClasificarCartola[k]||""} onChange={e=>setModalClasificarCartola(p=>({...p,[k]:e.target.value}))} style={{width:"100%",boxSizing:"border-box",marginTop:4,background:COLORS.card,border:`1px solid ${COLORS.border}`,color:COLORS.text,borderRadius:8,padding:8}}/></label>)}</div>
               </div>
-            </div>
+            )}
+
+            <label style={{display:"block",marginTop:12,fontSize:12,color:COLORS.muted}}>Detalle obligatorio
+              <textarea value={modalClasificarCartola.detalle ?? modalClasificarCartola.observacion ?? ""} onChange={e=>setModalClasificarCartola(p=>({...p,detalle:e.target.value,observacion:e.target.value}))} placeholder="Cliente, proveedor, NV o explicación concreta..." style={{width:"100%",minHeight:72,boxSizing:"border-box",marginTop:5,background:COLORS.surface,border:`1px solid ${COLORS.border}`,color:COLORS.text,borderRadius:8,padding:9,fontFamily:"inherit"}}/>
+            </label>
+            <div style={{display:"flex",justifyContent:"space-between",gap:8,marginTop:14,flexWrap:"wrap"}}><button onClick={()=>setModalNuevaSubcategoria(true)} style={{background:COLORS.surface,color:COLORS.text,border:`1px solid ${COLORS.border}`,borderRadius:8,padding:"9px 12px",cursor:"pointer"}}>+ Nueva subcategoría</button><div style={{display:"flex",gap:8}}><button onClick={cerrarClasificacionCartola} style={{background:COLORS.subtle,color:COLORS.text,border:`1px solid ${COLORS.border}`,borderRadius:8,padding:"9px 12px",cursor:"pointer"}}>Cancelar</button><button onClick={guardarClasificacionCartola} style={{background:COLORS.success,color:"#fff",border:"none",borderRadius:8,padding:"9px 12px",fontWeight:800,cursor:"pointer"}}>Guardar</button></div></div>
           </div>
         </div>
+      )}
+
+      {modalDetalleCategoriaCartola && (() => {
+        const lista = cartolaFiltrada.filter(m => String(m.categoria||"")===modalDetalleCategoriaCartola.categoria && String(m.subcategoria||"Sin subcategoría")===modalDetalleCategoriaCartola.subcategoria && (modalDetalleCategoriaCartola.tipo==="ingreso" ? Number(m.abono||0)>0 : Number(m.cargo||0)>0));
+        return <div onClick={()=>setModalDetalleCategoriaCartola(null)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.68)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:10001,padding:12}}><div onClick={e=>e.stopPropagation()} style={{width:"min(760px,96vw)",maxHeight:"86vh",overflowY:"auto",background:COLORS.card,border:`1px solid ${COLORS.border}`,borderRadius:14,padding:16,color:COLORS.text}}><div style={{display:"flex",justifyContent:"space-between",gap:10}}><div><h3 style={{margin:0,color:COLORS.accent}}>{modalDetalleCategoriaCartola.categoria}</h3><div style={{color:COLORS.muted,fontSize:12}}>{modalDetalleCategoriaCartola.subcategoria} · {lista.length} movimientos</div></div><button onClick={()=>setModalDetalleCategoriaCartola(null)} style={{background:COLORS.danger,color:"#fff",border:"none",borderRadius:8,padding:8}}>Cerrar</button></div><div style={{display:"grid",gap:7,marginTop:12}}>{lista.map(m=><div key={m.id} style={{background:COLORS.surface,border:`1px solid ${COLORS.border}`,borderRadius:9,padding:10,display:"grid",gridTemplateColumns:"95px 1fr auto",gap:10}}><span style={{color:COLORS.muted}}>{fmtDate(m.fecha)}</span><div><b>{m.detalle||m.observacion||m.descripcion}</b><div style={{fontSize:10.5,color:COLORS.muted}}>{m.descripcion}</div></div><b style={{color:modalDetalleCategoriaCartola.tipo==="ingreso"?COLORS.success:COLORS.danger}}>{fmt(modalDetalleCategoriaCartola.tipo==="ingreso"?m.abono:m.cargo)}</b></div>)}</div></div></div>;
+      })()}
+
+      {modalMovimientoManual && (
+        <div onClick={()=>setModalMovimientoManual(false)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.68)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:10002,padding:12}}><div onClick={e=>e.stopPropagation()} style={{width:"min(650px,96vw)",background:COLORS.card,border:`1px solid ${COLORS.border}`,borderRadius:14,padding:16,color:COLORS.text}}><h3 style={{marginTop:0,color:COLORS.accent}}>Nuevo movimiento manual</h3><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:9}}><input type="date" value={formMovimientoManual.fecha} onChange={e=>setFormMovimientoManual(p=>({...p,fecha:e.target.value}))}/><select value={formMovimientoManual.tipo} onChange={e=>setFormMovimientoManual(p=>({...p,tipo:e.target.value,categoria:"",subcategoria:""}))}><option value="ingreso">Ingreso</option><option value="egreso">Egreso</option><option value="traspaso">Traspaso</option></select><select value={formMovimientoManual.categoria} onChange={e=>setFormMovimientoManual(p=>({...p,categoria:e.target.value,subcategoria:""}))}><option value="">Categoría...</option>{Object.keys(catalogoFinanciero[formMovimientoManual.tipo]||{}).map(x=><option key={x}>{x}</option>)}</select><select value={formMovimientoManual.subcategoria} onChange={e=>setFormMovimientoManual(p=>({...p,subcategoria:e.target.value}))}><option value="">Subcategoría...</option>{(catalogoFinanciero[formMovimientoManual.tipo]?.[formMovimientoManual.categoria]||[]).map(x=><option key={x}>{x}</option>)}</select><input type="number" placeholder="Monto" value={formMovimientoManual.monto} onChange={e=>setFormMovimientoManual(p=>({...p,monto:e.target.value}))}/><select value={formMovimientoManual.medio_pago} onChange={e=>setFormMovimientoManual(p=>({...p,medio_pago:e.target.value}))}><option value="efectivo">Efectivo</option><option value="tarjeta_personal">Tarjeta personal</option><option value="tarjeta_empresa">Tarjeta empresa</option><option value="banco">Banco</option><option value="otro">Otro</option></select></div><textarea placeholder="Detalle obligatorio" value={formMovimientoManual.detalle} onChange={e=>setFormMovimientoManual(p=>({...p,detalle:e.target.value}))} style={{width:"100%",minHeight:70,boxSizing:"border-box",marginTop:9}}/><div style={{display:"flex",justifyContent:"flex-end",gap:8,marginTop:10}}><button onClick={()=>setModalMovimientoManual(false)}>Cancelar</button><button onClick={guardarMovimientoManual} style={{background:COLORS.success,color:"#fff",border:"none",borderRadius:8,padding:"9px 12px"}}>Guardar</button></div></div></div>
+      )}
+
+      {modalNuevaSubcategoria && (
+        <div onClick={()=>setModalNuevaSubcategoria(false)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.68)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:10003,padding:12}}><div onClick={e=>e.stopPropagation()} style={{width:"min(560px,96vw)",background:COLORS.card,border:`1px solid ${COLORS.border}`,borderRadius:14,padding:16,color:COLORS.text}}><h3 style={{marginTop:0,color:COLORS.accent}}>Agregar subcategoría</h3><div style={{display:"grid",gap:9}}><select value={formNuevaSubcategoria.tipo} onChange={e=>{const tipo=e.target.value;setFormNuevaSubcategoria(p=>({...p,tipo,categoria:Object.keys(CATALOGO_FINANCIERO_BASE[tipo]||{})[0]||""}))}}><option value="ingreso">Ingreso</option><option value="egreso">Egreso</option><option value="traspaso">Traspaso</option></select><select value={formNuevaSubcategoria.categoria} onChange={e=>setFormNuevaSubcategoria(p=>({...p,categoria:e.target.value}))}>{Object.keys(CATALOGO_FINANCIERO_BASE[formNuevaSubcategoria.tipo]||{}).map(x=><option key={x}>{x}</option>)}</select><input value={formNuevaSubcategoria.nombre} onChange={e=>setFormNuevaSubcategoria(p=>({...p,nombre:e.target.value}))} placeholder="Nombre de la subcategoría"/><textarea value={formNuevaSubcategoria.descripcion} onChange={e=>setFormNuevaSubcategoria(p=>({...p,descripcion:e.target.value}))} placeholder="Descripción opcional"/></div><div style={{display:"flex",justifyContent:"flex-end",gap:8,marginTop:10}}><button onClick={()=>setModalNuevaSubcategoria(false)}>Cancelar</button><button onClick={guardarNuevaSubcategoria} style={{background:COLORS.success,color:"#fff",border:"none",borderRadius:8,padding:"9px 12px"}}>Agregar</button></div><div style={{fontSize:10.5,color:COLORS.muted,marginTop:8}}>Se guarda en este navegador. Las categorías principales permanecen fijas para evitar reportes fragmentados.</div></div></div>
       )}
 
       <LoginAdminModal

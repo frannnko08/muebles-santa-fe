@@ -4126,6 +4126,29 @@ export default function App() {
     ? Number(indicadoresRentabilidad.ventaNeta)
     : Number(total || 0) / 1.19;
 
+  // Si la cotización ya existe, NO intentamos insertarla nuevamente.
+  // Solo actualizamos los nuevos campos de rentabilidad para permitir
+  // reconstruir el histórico con los Excel antiguos.
+  const cotizacionExistente = cotizaciones.find(
+    (c) => String(c.numero).trim() === String(numero).trim()
+  );
+
+  if (cotizacionExistente) {
+    await guardarRentabilidadCotizacion({
+      numero,
+      costoNeto: Number(costoNeto),
+      ventaNeta,
+      origenCosto
+    });
+
+    toast(
+      `Cotización #${numero} ya existía. Rentabilidad actualizada: costo ${fmt(Number(costoNeto))} · neto ${fmt(ventaNeta)} · margen ${fmt(ventaNeta - Number(costoNeto))}.`,
+      "success"
+    );
+
+    return "actualizada";
+  }
+
   const ok = await importarCotizacionExcel({
     numero,
     cliente,
@@ -4134,9 +4157,16 @@ export default function App() {
     detalles
   });
 
-  await guardarRentabilidadCotizacion({ numero, costoNeto:Number(costoNeto), ventaNeta, origenCosto });
+  if (ok) {
+    await guardarRentabilidadCotizacion({
+      numero,
+      costoNeto: Number(costoNeto),
+      ventaNeta,
+      origenCosto
+    });
+  }
 
-  return ok;
+  return ok ? "importada" : false;
 };
 
   const importarCotizacion = async (event) => {
@@ -4145,13 +4175,15 @@ export default function App() {
   if (files.length === 0) return;
 
   let importadas = 0;
+  let actualizadas = 0;
   let saltadas = 0;
   const errores = [];
 
   for (const file of files) {
     try {
-      const ok = await procesarCotizacionArchivo(file);
-      if (ok) importadas += 1;
+      const resultado = await procesarCotizacionArchivo(file);
+      if (resultado === "importada") importadas += 1;
+      else if (resultado === "actualizada") actualizadas += 1;
       else saltadas += 1;
     } catch (error) {
       console.error(error);
@@ -4162,7 +4194,7 @@ export default function App() {
   event.target.value = "";
 
   toast(
-    `Importación de cotizaciones terminada.\n\nImportadas: ${importadas}\nDuplicadas o saltadas: ${saltadas}\nCon error: ${errores.length}` +
+    `Importación de cotizaciones terminada.\n\nNuevas: ${importadas}\nRentabilidad actualizada: ${actualizadas}\nSaltadas: ${saltadas}\nCon error: ${errores.length}` +
     (errores.length ? `\n\nErrores:\n${errores.slice(0, 5).join("\n")}` : "")
   );
 
