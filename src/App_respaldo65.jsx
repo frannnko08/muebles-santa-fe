@@ -290,9 +290,9 @@ function StatusBadge({ status }) {
   return <span style={{ background:c.bg, color:c.color, border:`1px solid ${c.border}`, borderRadius:20, padding:"2px 10px", fontSize:11, fontWeight:600, whiteSpace:"nowrap" }}>{c.label}</span>;
 }
 
-function StatCard({ label, value, sub, color, icon, onClick }) {
+function StatCard({ label, value, sub, color, icon }) {
   return (
-    <div onClick={onClick} title={onClick ? "Haz clic para ver el detalle" : undefined} style={{ background:COLORS.card, border:`1px solid ${COLORS.border}`, borderRadius:12, padding:"18px 16px", display:"flex", flexDirection:"column", gap:5, position:"relative", overflow:"hidden", cursor:onClick ? "pointer" : "default", transition:"transform .15s ease, border-color .15s ease" }}>
+    <div style={{ background:COLORS.card, border:`1px solid ${COLORS.border}`, borderRadius:12, padding:"18px 16px", display:"flex", flexDirection:"column", gap:5, position:"relative", overflow:"hidden" }}>
       <div style={{ position:"absolute", top:0, left:0, right:0, height:3, background:color||COLORS.accent }} />
       <span style={{ fontSize:22 }}>{icon}</span>
       <span style={{ fontSize:10, color:COLORS.muted, textTransform:"uppercase", letterSpacing:1 }}>{label}</span>
@@ -4523,17 +4523,6 @@ export default function App() {
         margen_contribucion:Number(c.margen_contribucion || 0),
         origen_costo:c.origen_costo || "excel"
       })));
-
-    const { data: dataAjustesMargen, error: errorAjustesMargen } = await supabase
-      .from("ajustes_margen")
-      .select("*")
-      .order("fecha", { ascending:false });
-    if (!errorAjustesMargen) {
-      setAjustesMargen(dataAjustesMargen || []);
-    } else {
-      console.warn("No se cargaron ajustes de margen. Ejecuta el SQL de ajustes_margen si aún no lo has hecho.", errorAjustesMargen);
-    }
-
     const detallesData = await obtenerDetallesCotizaciones();
     setDetallesCotizaciones(detallesData);
 
@@ -4739,10 +4728,6 @@ if (!errorDocumentosTrabajadores) {
   const [filtroFechasAnalisis, setFiltroFechasAnalisis] = useState("mes_actual");
   const [filtroResumen, setFiltroResumen] = useState("mes_actual");
   const [rentabilidadCotizaciones, setRentabilidadCotizaciones] = useState([]);
-  const [ajustesMargen, setAjustesMargen] = useState([]);
-  const [modalDetalleMargen, setModalDetalleMargen] = useState(null);
-  const [modalAjusteMargen, setModalAjusteMargen] = useState(null);
-  const [formAjusteMargen, setFormAjusteMargen] = useState({ tipo:"manual", fecha:new Date().toISOString().split("T")[0], nota_venta_numero:"", cotizacion_numero:"", descripcion:"", venta_neta:"", costo_directo_neto:"" });
   const [modalCostoManual, setModalCostoManual] = useState(null);
   const resolverCostoManualRef = useRef(null);
   const [metaMargenMensual, setMetaMargenMensual] = useState(() => Number(localStorage.getItem("sf_meta_margen_mensual") || 8100000));
@@ -5723,89 +5708,24 @@ if (!errorDocumentosTrabajadores) {
   );
 
   // RENTABILIDAD DE FABRICACIÓN:
-  // La NV confirma que una cotización fue aceptada. Los importes salen de
-  // la propia cotización (venta_neta - costo_directo_neto). Los ajustes
-  // manuales permiten corregir/excluir casos sin alterar las fuentes originales.
-  const ajustesActivos = (ajustesMargen || []).filter(a => a.activo !== false);
-  const claveCot = v => normalizarNumeroCotizacion(v);
-  const claveNv = v => String(v || "").replace(/[^0-9A-Za-z-]/g, "").trim();
+  // La Nota de Venta SOLO confirma que la cotización fue aceptada y determina
+  // en qué período se reconoce la venta. Los importes siempre salen del Excel
+  // de la propia cotización: venta_neta - costo_directo_neto.
+  // Usamos un Set para no duplicar margen si una cotización llegara a quedar
+  // relacionada más de una vez por error.
+  const cotizacionesAceptadasPeriodo = new Set(
+    (resumenActual.notasPeriodo || [])
+      .map(n => normalizarNumeroCotizacion(n.cotizacion))
+      .filter(Boolean)
+  );
 
-  const exclusionesMargen = ajustesActivos.filter(a => a.tipo === "excluir");
-  const overridesMargen = ajustesActivos.filter(a => a.tipo === "override");
-
-  const estaExcluida = (cot, nvs=[]) => exclusionesMargen.some(a => {
-    const coincideCot = claveCot(a.cotizacion_numero) === claveCot(cot);
-    if (!coincideCot) return false;
-    if (!a.nota_venta_numero) return true;
-    return nvs.map(claveNv).includes(claveNv(a.nota_venta_numero));
-  });
-
-  const overridePara = (cot, nvs=[]) => overridesMargen
-    .filter(a => claveCot(a.cotizacion_numero) === claveCot(cot) && (!a.nota_venta_numero || nvs.map(claveNv).includes(claveNv(a.nota_venta_numero))))
-    .sort((a,b) => new Date(b.created_at || b.fecha || 0) - new Date(a.created_at || a.fecha || 0))[0] || null;
-
-  const automaticasPorCotizacion = new Map();
-  (resumenActual.notasPeriodo || []).forEach(n => {
-    const cot = claveCot(n.cotizacion);
-    if (!cot) return;
-    const ref = rentabilidadPorNumero.get(cot);
-    if (!ref) return;
-    if (!automaticasPorCotizacion.has(cot)) {
-      automaticasPorCotizacion.set(cot, {
-        origen:"automatica",
-        cotizacion_numero:cot,
-        notas_venta:[],
-        fecha:n.fecha,
-        cliente:n.cliente || "",
-        venta_neta:Number(ref.venta_neta || 0),
-        costo_directo_neto:Number(ref.costo_directo_neto || 0),
-        origen_costo:ref.origen_costo || "excel"
-      });
-    }
-    const e = automaticasPorCotizacion.get(cot);
-    if (!e.notas_venta.includes(String(n.numero))) e.notas_venta.push(String(n.numero));
-    if (!e.fecha || String(n.fecha || "") < String(e.fecha || "")) e.fecha = n.fecha;
-  });
-
-  const detalleMargenAutomatico = [...automaticasPorCotizacion.values()]
-    .filter(e => !estaExcluida(e.cotizacion_numero, e.notas_venta))
-    .map(e => {
-      const ov = overridePara(e.cotizacion_numero, e.notas_venta);
-      const venta = ov?.venta_neta !== null && ov?.venta_neta !== undefined ? Number(ov.venta_neta) : e.venta_neta;
-      const costo = ov?.costo_directo_neto !== null && ov?.costo_directo_neto !== undefined ? Number(ov.costo_directo_neto) : e.costo_directo_neto;
-      return { ...e, override_id:ov?.id || null, venta_neta:venta, costo_directo_neto:costo, margen:venta-costo, descripcion:ov?.descripcion || "" };
-    });
-
-  const cotizacionesAutomaticas = new Set(detalleMargenAutomatico.map(e => claveCot(e.cotizacion_numero)));
-  const detalleMargenAgregado = ajustesActivos
-    .filter(a => ["manual","incluir"].includes(a.tipo) && estaEnRangoResumen(a.fecha, rangoResumen))
-    .filter(a => a.tipo !== "incluir" || !cotizacionesAutomaticas.has(claveCot(a.cotizacion_numero)))
-    .map(a => {
-      const cot = claveCot(a.cotizacion_numero);
-      const ref = cot ? rentabilidadPorNumero.get(cot) : null;
-      const venta = Number(a.venta_neta ?? ref?.venta_neta ?? 0);
-      const costo = Number(a.costo_directo_neto ?? ref?.costo_directo_neto ?? 0);
-      return {
-        origen:a.tipo === "manual" ? "manual" : "forzada",
-        ajuste_id:a.id,
-        cotizacion_numero:cot || "",
-        notas_venta:a.nota_venta_numero ? [String(a.nota_venta_numero)] : [],
-        fecha:a.fecha,
-        cliente:a.descripcion || (cotizaciones || []).find(c => claveCot(c.numero) === cot)?.cliente || "Venta manual",
-        venta_neta:venta,
-        costo_directo_neto:costo,
-        margen:venta-costo,
-        descripcion:a.descripcion || ""
-      };
-    });
-
-  const detalleMargenFabricacion = [...detalleMargenAutomatico, ...detalleMargenAgregado];
-  const margenFabricacionPeriodo = detalleMargenFabricacion.reduce((sum,e) => sum + Number(e.margen || 0), 0);
-
-  const detalleExcluidosPeriodo = exclusionesMargen
-    .filter(a => estaEnRangoResumen(a.fecha, rangoResumen) || automaticasPorCotizacion.has(claveCot(a.cotizacion_numero)))
-    .map(a => ({...a, cotizacion_numero:claveCot(a.cotizacion_numero)}));
-
+  const margenFabricacionPeriodo = [...cotizacionesAceptadasPeriodo].reduce((sum, numeroCotizacion) => {
+    const ref = rentabilidadPorNumero.get(numeroCotizacion);
+    if (!ref) return sum;
+    const ventaNetaCotizacion = Number(ref.venta_neta || 0);
+    const costoNetoCotizacion = Number(ref.costo_directo_neto || 0);
+    return sum + Math.max(ventaNetaCotizacion - costoNetoCotizacion, 0);
+  }, 0);
   const margenLaminadosPeriodo = (ventasLaminas || [])
     .filter(v => estaEnRangoResumen(v.fecha, rangoResumen))
     .reduce((sum, v) => sum + Number(calcularResumenVentaLaminas(v).utilidadNeta || 0), 0);
@@ -8998,83 +8918,6 @@ const renderTarjetaProduccion = (n) => (
     toast(`Flujo de caja exportado: ${detalle.length} movimientos.`, "success");
   };
 
-  const abrirNuevoAjusteMargen = (tipo="manual", base=null) => {
-    const hoy = new Date().toISOString().split("T")[0];
-    setFormAjusteMargen({
-      tipo,
-      fecha:base?.fecha || hoy,
-      nota_venta_numero:base?.notas_venta?.[0] || base?.nota_venta_numero || "",
-      cotizacion_numero:base?.cotizacion_numero || "",
-      descripcion:base?.descripcion || "",
-      venta_neta:base?.venta_neta ?? "",
-      costo_directo_neto:base?.costo_directo_neto ?? ""
-    });
-    setModalAjusteMargen({ tipo, base });
-  };
-
-  const guardarAjusteMargen = async () => {
-    const f = formAjusteMargen;
-    const tipo = modalAjusteMargen?.tipo || f.tipo || "manual";
-    const cot = normalizarNumeroCotizacion(f.cotizacion_numero);
-    const ref = cot ? rentabilidadPorNumero.get(cot) : null;
-    let venta = f.venta_neta === "" ? (ref ? Number(ref.venta_neta || 0) : null) : Number(f.venta_neta);
-    let costo = f.costo_directo_neto === "" ? (ref ? Number(ref.costo_directo_neto || 0) : null) : Number(f.costo_directo_neto);
-
-    if (["manual","incluir","override"].includes(tipo) && (!Number.isFinite(venta) || !Number.isFinite(costo))) {
-      toast("Ingresa Venta neta y Costo directo, o indica una cotización que ya tenga rentabilidad registrada.", "error");
-      return;
-    }
-    if (tipo === "incluir" && !cot) { toast("Para forzar una cotización aceptada debes indicar su número.", "error"); return; }
-    if (tipo === "override" && !cot) { toast("No se puede editar el margen sin número de cotización.", "error"); return; }
-
-    const payload = {
-      tipo, fecha:f.fecha || new Date().toISOString().split("T")[0],
-      cotizacion_numero:cot || null, nota_venta_numero:String(f.nota_venta_numero || "").trim() || null,
-      descripcion:String(f.descripcion || "").trim(),
-      venta_neta:["manual","incluir","override"].includes(tipo) ? venta : null,
-      costo_directo_neto:["manual","incluir","override"].includes(tipo) ? costo : null,
-      activo:true
-    };
-
-    if (tipo === "override") {
-      await supabase.from("ajustes_margen").delete().eq("tipo","override").eq("cotizacion_numero", cot);
-    }
-    const { data, error } = await supabase.from("ajustes_margen").insert(payload).select("*").single();
-    if (error) { console.error(error); toast(`No se pudo guardar el ajuste de margen: ${error.message}`, "error"); return; }
-    setAjustesMargen(prev => tipo === "override"
-      ? [...prev.filter(a => !(a.tipo === "override" && normalizarNumeroCotizacion(a.cotizacion_numero) === cot)), data]
-      : [data, ...prev]);
-    setModalAjusteMargen(null);
-    toast("Ajuste de margen guardado correctamente.", "success");
-  };
-
-  const excluirDelMargen = async (entrada) => {
-    const ok = await confirmDialog(`¿Excluir del margen la cotización ${entrada.cotizacion_numero || "sin número"}?\n\nNo se borrará la cotización ni la Nota de Venta; solo dejará de sumar al margen.`);
-    if (!ok) return;
-    const payload = { tipo:"excluir", fecha:entrada.fecha || new Date().toISOString().split("T")[0], cotizacion_numero:entrada.cotizacion_numero || null, nota_venta_numero:entrada.notas_venta?.[0] || null, descripcion:"Excluida manualmente del margen", activo:true };
-    const { data,error } = await supabase.from("ajustes_margen").insert(payload).select("*").single();
-    if (error) { console.error(error); toast(`No se pudo excluir: ${error.message}`, "error"); return; }
-    setAjustesMargen(prev => [data,...prev]);
-    toast("Cotización excluida del margen. Los datos originales permanecen intactos.", "success");
-  };
-
-  const restaurarAjusteMargen = async (ajuste) => {
-    const { error } = await supabase.from("ajustes_margen").delete().eq("id", ajuste.id);
-    if (error) { console.error(error); toast(`No se pudo restaurar: ${error.message}`, "error"); return; }
-    setAjustesMargen(prev => prev.filter(a => a.id !== ajuste.id));
-    toast("Ajuste eliminado; se restauró el cálculo automático.", "success");
-  };
-
-  const eliminarVentaManualMargen = async (entrada) => {
-    if (!entrada.ajuste_id) return;
-    const ok = await confirmDialog("¿Eliminar este registro manual del margen?");
-    if (!ok) return;
-    const { error } = await supabase.from("ajustes_margen").delete().eq("id", entrada.ajuste_id);
-    if (error) { console.error(error); toast(`No se pudo eliminar: ${error.message}`, "error"); return; }
-    setAjustesMargen(prev => prev.filter(a => a.id !== entrada.ajuste_id));
-    toast("Registro manual eliminado.", "success");
-  };
-
   const tabs = tieneAccesoTotal
     ? todosLosTabs
     : todosLosTabs.filter(t => seccionesUsuario.includes(t.key));
@@ -9084,96 +8927,6 @@ const renderTarjetaProduccion = (n) => (
       <ToastContainer />
       <CostoManualCotizacionModal data={modalCostoManual} onConfirmar={confirmarCostoManual} onCancelar={cancelarCostoManual} />
       <ConfirmContainer />
-
-      {modalDetalleMargen && (
-        <div onClick={()=>setModalDetalleMargen(null)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.76)",zIndex:100010,display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"24px 10px",overflowY:"auto"}}>
-          <div onClick={e=>e.stopPropagation()} style={{width:"min(1120px,96vw)",background:COLORS.card,border:`1px solid ${COLORS.border}`,borderRadius:16,padding:20,color:COLORS.text,boxShadow:"0 18px 50px rgba(0,0,0,.55)"}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,flexWrap:"wrap",marginBottom:16}}>
-              <div>
-                <h2 style={{margin:"0 0 4px",color:COLORS.accent,fontSize:19}}>💹 Detalle de margen — {rangoResumen.label}</h2>
-                <div style={{fontSize:12,color:COLORS.muted}}>La NV solo confirma aceptación. El margen de fabricación usa Neto de cotización − Costo directo.</div>
-              </div>
-              <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-                <button onClick={()=>abrirNuevoAjusteMargen("incluir")} style={{background:COLORS.accent,border:"none",borderRadius:8,padding:"9px 12px",fontWeight:800,cursor:"pointer"}}>+ Cotización aceptada</button>
-                <button onClick={()=>abrirNuevoAjusteMargen("manual")} style={{background:COLORS.success,color:"#fff",border:"none",borderRadius:8,padding:"9px 12px",fontWeight:800,cursor:"pointer"}}>+ Venta manual/oral</button>
-                <button onClick={()=>setModalDetalleMargen(null)} style={{background:COLORS.subtle,color:COLORS.text,border:`1px solid ${COLORS.border}`,borderRadius:8,padding:"9px 12px",cursor:"pointer"}}>✕ Cerrar</button>
-              </div>
-            </div>
-
-            {(modalDetalleMargen === "fabricacion" || modalDetalleMargen === "total") && (
-              <>
-                <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(170px,1fr))",gap:8,marginBottom:14}}>
-                  <StatCard label="Margen fabricación" value={fmt(margenFabricacionPeriodo)} sub={`${detalleMargenFabricacion.length} ventas consideradas`} icon="🏭" color={COLORS.success}/>
-                  <StatCard label="Venta neta" value={fmt(detalleMargenFabricacion.reduce((s,e)=>s+Number(e.venta_neta||0),0))} sub="Cotizaciones + registros manuales" icon="🧾" color={COLORS.accent}/>
-                  <StatCard label="Costo directo" value={fmt(detalleMargenFabricacion.reduce((s,e)=>s+Number(e.costo_directo_neto||0),0))} sub="MDF + lámina + Agorex / costo manual" icon="📦" color={COLORS.warning}/>
-                </div>
-                <div style={{overflowX:"auto",border:`1px solid ${COLORS.border}`,borderRadius:10,marginBottom:16}}>
-                  <table style={{width:"100%",borderCollapse:"collapse",fontSize:12,minWidth:880}}>
-                    <thead><tr style={{background:COLORS.surface,color:COLORS.muted,textAlign:"left"}}>
-                      {['Fecha','NV','Cotización','Cliente / detalle','Venta neta','Costo','Margen','Origen','Acciones'].map(h=><th key={h} style={{padding:"9px 8px",borderBottom:`1px solid ${COLORS.border}`}}>{h}</th>)}
-                    </tr></thead>
-                    <tbody>
-                      {detalleMargenFabricacion.length===0 ? <tr><td colSpan="9" style={{padding:18,textAlign:"center",color:COLORS.muted}}>No hay ventas con margen en este período.</td></tr> : detalleMargenFabricacion.map((e,i)=>(
-                        <tr key={`${e.origen}-${e.ajuste_id||e.cotizacion_numero}-${i}`} style={{borderBottom:`1px solid ${COLORS.border}`}}>
-                          <td style={{padding:8}}>{fmtDate(e.fecha)}</td>
-                          <td style={{padding:8}}>{e.notas_venta?.length ? e.notas_venta.join(', ') : '—'}</td>
-                          <td style={{padding:8,fontWeight:800,color:COLORS.accent}}>{e.cotizacion_numero || '—'}</td>
-                          <td style={{padding:8}}>{e.cliente || e.descripcion || '—'}</td>
-                          <td style={{padding:8}}>{fmt(e.venta_neta)}</td>
-                          <td style={{padding:8}}>{fmt(e.costo_directo_neto)}</td>
-                          <td style={{padding:8,fontWeight:900,color:Number(e.margen)>=0?COLORS.success:COLORS.danger}}>{fmt(e.margen)}</td>
-                          <td style={{padding:8,color:COLORS.muted}}>{e.origen==='automatica' ? (e.override_id?'NV + ajuste':'NV automática') : e.origen==='forzada'?'Forzada':'Manual/oral'}</td>
-                          <td style={{padding:8,whiteSpace:'nowrap'}}>
-                            {e.origen==='automatica' ? <>
-                              <button onClick={()=>abrirNuevoAjusteMargen('override',e)} style={{marginRight:5,background:COLORS.subtle,color:COLORS.text,border:`1px solid ${COLORS.border}`,borderRadius:6,padding:'5px 7px',cursor:'pointer'}}>Editar</button>
-                              <button onClick={()=>excluirDelMargen(e)} style={{background:'transparent',color:COLORS.danger,border:`1px solid ${COLORS.danger}`,borderRadius:6,padding:'5px 7px',cursor:'pointer'}}>Excluir</button>
-                            </> : <button onClick={()=>eliminarVentaManualMargen(e)} style={{background:'transparent',color:COLORS.danger,border:`1px solid ${COLORS.danger}`,borderRadius:6,padding:'5px 7px',cursor:'pointer'}}>Eliminar</button>}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                {detalleExcluidosPeriodo.length>0 && <div style={{marginBottom:16}}>
-                  <div style={{fontSize:12,fontWeight:800,color:COLORS.warning,marginBottom:6}}>Excluidas manualmente</div>
-                  <div style={{display:'flex',gap:7,flexWrap:'wrap'}}>{detalleExcluidosPeriodo.map(a=><button key={a.id} onClick={()=>restaurarAjusteMargen(a)} style={{background:COLORS.surface,color:COLORS.text,border:`1px solid ${COLORS.border}`,borderRadius:8,padding:'7px 9px',cursor:'pointer'}}>Cot. {a.cotizacion_numero || '—'} · restaurar</button>)}</div>
-                </div>}
-              </>
-            )}
-
-            {(modalDetalleMargen === "laminados" || modalDetalleMargen === "total") && (
-              <div style={{marginTop:modalDetalleMargen==='total'?18:0}}>
-                <h3 style={{color:'#5a8abe',margin:'0 0 10px'}}>🪵 Reventa de laminados — {fmt(margenLaminadosPeriodo)}</h3>
-                <div style={{overflowX:'auto',border:`1px solid ${COLORS.border}`,borderRadius:10}}>
-                  <table style={{width:'100%',borderCollapse:'collapse',fontSize:12,minWidth:650}}>
-                    <thead><tr style={{background:COLORS.surface,color:COLORS.muted,textAlign:'left'}}><th style={{padding:8}}>Fecha</th><th style={{padding:8}}>N°</th><th style={{padding:8}}>Venta</th><th style={{padding:8}}>Utilidad neta</th></tr></thead>
-                    <tbody>{(ventasLaminas||[]).filter(v=>estaEnRangoResumen(v.fecha,rangoResumen)).map(v=>{const rr=calcularResumenVentaLaminas(v);return <tr key={v.id||v.numero} style={{borderTop:`1px solid ${COLORS.border}`}}><td style={{padding:8}}>{fmtDate(v.fecha)}</td><td style={{padding:8}}>{v.numero}</td><td style={{padding:8}}>{fmt(v.total_venta||v.total||0)}</td><td style={{padding:8,fontWeight:800,color:COLORS.success}}>{fmt(rr.utilidadNeta||0)}</td></tr>})}</tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {modalAjusteMargen && (
-        <div onClick={()=>setModalAjusteMargen(null)} style={{position:'fixed',inset:0,background:'rgba(0,0,0,.8)',zIndex:100020,display:'flex',alignItems:'center',justifyContent:'center',padding:16}}>
-          <div onClick={e=>e.stopPropagation()} style={{width:'min(520px,95vw)',background:COLORS.card,border:`1px solid ${COLORS.border}`,borderRadius:14,padding:20}}>
-            <h2 style={{margin:'0 0 5px',color:COLORS.accent,fontSize:18}}>{modalAjusteMargen.tipo==='override'?'Editar margen de cotización':modalAjusteMargen.tipo==='incluir'?'Agregar cotización aceptada':'Agregar venta manual/oral'}</h2>
-            <div style={{fontSize:11,color:COLORS.muted,marginBottom:14}}>{modalAjusteMargen.tipo==='incluir'?'Si la cotización ya tiene COSTO/NETO guardados, puedes dejar esos montos vacíos y la APP los tomará automáticamente.':'Estos cambios afectan solo el cálculo de margen; no borran ni modifican la NV original.'}</div>
-            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
-              <label style={{fontSize:12,color:COLORS.muted}}>Fecha<input type='date' value={formAjusteMargen.fecha} onChange={e=>setFormAjusteMargen(p=>({...p,fecha:e.target.value}))} style={{width:'100%',boxSizing:'border-box',marginTop:5,padding:9,borderRadius:8,border:`1px solid ${COLORS.border}`,background:COLORS.surface,color:COLORS.text}}/></label>
-              <label style={{fontSize:12,color:COLORS.muted}}>Nota de Venta (opcional)<input value={formAjusteMargen.nota_venta_numero} onChange={e=>setFormAjusteMargen(p=>({...p,nota_venta_numero:e.target.value}))} style={{width:'100%',boxSizing:'border-box',marginTop:5,padding:9,borderRadius:8,border:`1px solid ${COLORS.border}`,background:COLORS.surface,color:COLORS.text}}/></label>
-              <label style={{fontSize:12,color:COLORS.muted}}>Cotización (opcional en venta oral)<input value={formAjusteMargen.cotizacion_numero} onChange={e=>setFormAjusteMargen(p=>({...p,cotizacion_numero:e.target.value}))} style={{width:'100%',boxSizing:'border-box',marginTop:5,padding:9,borderRadius:8,border:`1px solid ${COLORS.border}`,background:COLORS.surface,color:COLORS.text}}/></label>
-              <label style={{fontSize:12,color:COLORS.muted}}>Descripción<input value={formAjusteMargen.descripcion} onChange={e=>setFormAjusteMargen(p=>({...p,descripcion:e.target.value}))} placeholder='Ej: instalación cocina / venta oral' style={{width:'100%',boxSizing:'border-box',marginTop:5,padding:9,borderRadius:8,border:`1px solid ${COLORS.border}`,background:COLORS.surface,color:COLORS.text}}/></label>
-              <label style={{fontSize:12,color:COLORS.muted}}>Venta neta<input type='number' min='0' value={formAjusteMargen.venta_neta} onChange={e=>setFormAjusteMargen(p=>({...p,venta_neta:e.target.value}))} placeholder='Se autocompleta si existe la cotización' style={{width:'100%',boxSizing:'border-box',marginTop:5,padding:9,borderRadius:8,border:`1px solid ${COLORS.border}`,background:COLORS.surface,color:COLORS.text}}/></label>
-              <label style={{fontSize:12,color:COLORS.muted}}>Costo directo neto<input type='number' min='0' value={formAjusteMargen.costo_directo_neto} onChange={e=>setFormAjusteMargen(p=>({...p,costo_directo_neto:e.target.value}))} placeholder='MDF + lámina + Agorex' style={{width:'100%',boxSizing:'border-box',marginTop:5,padding:9,borderRadius:8,border:`1px solid ${COLORS.border}`,background:COLORS.surface,color:COLORS.text}}/></label>
-            </div>
-            <div style={{marginTop:12,padding:10,borderRadius:8,background:COLORS.surface,fontSize:13}}>Margen estimado: <b style={{color:COLORS.success}}>{fmt((Number(formAjusteMargen.venta_neta)||0)-(Number(formAjusteMargen.costo_directo_neto)||0))}</b></div>
-            <div style={{display:'flex',justifyContent:'flex-end',gap:8,marginTop:16}}><button onClick={()=>setModalAjusteMargen(null)} style={{background:COLORS.subtle,color:COLORS.text,border:`1px solid ${COLORS.border}`,borderRadius:8,padding:'9px 13px',cursor:'pointer'}}>Cancelar</button><button onClick={guardarAjusteMargen} style={{background:COLORS.accent,border:'none',borderRadius:8,padding:'9px 14px',fontWeight:800,cursor:'pointer'}}>Guardar</button></div>
-          </div>
-        </div>
-      )}
 
       {/* PANTALLA DE LOGIN OBLIGATORIO */}
       {!usuarioActual && (
@@ -9433,9 +9186,9 @@ const renderTarjetaProduccion = (n) => (
                 </label>
               </div>
               <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(165px,1fr))",gap:10}}>
-                <StatCard label="Margen fabricación" value={fmt(margenFabricacionPeriodo)} sub="Haz clic para ver NV, cotización, costo y margen" icon="🏭" color={COLORS.success} onClick={()=>setModalDetalleMargen("fabricacion")}/>
-                <StatCard label="Margen laminados" value={fmt(margenLaminadosPeriodo)} sub="Haz clic para ver el detalle de reventa" icon="🪵" color="#5a8abe" onClick={()=>setModalDetalleMargen("laminados")}/>
-                <StatCard label="Margen generado" value={fmt(margenTotalPeriodo)} sub={`${cumplimientoMargen}% de la meta · clic para detalle`} icon="📈" color={margenTotalPeriodo >= metaMargenMensual ? COLORS.success : COLORS.warning} onClick={()=>setModalDetalleMargen("total")}/>
+                <StatCard label="Margen fabricación" value={fmt(margenFabricacionPeriodo)} sub="NV confirma venta · Neto cotización − costo cotización" icon="🏭" color={COLORS.success}/>
+                <StatCard label="Margen laminados" value={fmt(margenLaminadosPeriodo)} sub="Utilidad neta de reventa" icon="🪵" color="#5a8abe"/>
+                <StatCard label="Margen generado" value={fmt(margenTotalPeriodo)} sub={`${cumplimientoMargen}% de la meta`} icon="📈" color={margenTotalPeriodo >= metaMargenMensual ? COLORS.success : COLORS.warning}/>
                 <StatCard label="Falta para equilibrio" value={fmt(faltaMargenPeriodo)} sub={resultadoSobreEquilibrio >= 0 ? `Sobre equilibrio: ${fmt(resultadoSobreEquilibrio)}` : "Meta pendiente"} icon="🎯" color={faltaMargenPeriodo === 0 ? COLORS.success : COLORS.danger}/>
                 <StatCard label="IVA a provisionar" value={fmt(ivaAProvisionarResumen)} sub={`IVA DF ${fmt(ivaDfPeriodo)} − IVA CF ${fmt(ivaCfPeriodo)}`} icon="🏛️" color={COLORS.accent}/>
               </div>
