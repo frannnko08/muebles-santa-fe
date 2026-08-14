@@ -4126,20 +4126,14 @@ export default function App() {
     ? Number(indicadoresRentabilidad.ventaNeta)
     : Number(total || 0) / 1.19;
 
-  // Verificamos directamente en Supabase si la cotización ya existe.
-  // No dependemos del estado local de la APP, porque una cotización histórica
-  // puede no estar cargada en memoria aunque sí exista en la base de datos.
-  const { data: cotizacionExistenteDB, error: errorBuscarCotizacion } = await supabase
-    .from("cotizaciones")
-    .select("id, numero")
-    .eq("numero", numero)
-    .maybeSingle();
+  // Si la cotización ya existe, NO intentamos insertarla nuevamente.
+  // Solo actualizamos los nuevos campos de rentabilidad para permitir
+  // reconstruir el histórico con los Excel antiguos.
+  const cotizacionExistente = cotizaciones.find(
+    (c) => String(c.numero).trim() === String(numero).trim()
+  );
 
-  if (errorBuscarCotizacion) {
-    throw new Error(`No se pudo verificar la cotización #${numero}: ${errorBuscarCotizacion.message}`);
-  }
-
-  if (cotizacionExistenteDB?.id) {
+  if (cotizacionExistente) {
     await guardarRentabilidadCotizacion({
       numero,
       costoNeto: Number(costoNeto),
