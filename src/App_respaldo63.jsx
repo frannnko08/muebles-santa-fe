@@ -71,21 +71,15 @@ function _detectarTipoToast(mensaje) {
 }
 
 // API global. Uso: toast("Mensaje") o toast("Mensaje", "success")
-function toast(mensaje, tipo, opciones = {}) {
+function toast(mensaje, tipo) {
   const id = ++_toastId;
-  const tipoFinal = tipo || _detectarTipoToast(mensaje);
-  // Los errores quedan visibles hasta que el usuario los cierre. Esto evita
-  // perder mensajes importantes durante importaciones o actualizaciones.
-  const persistente = opciones.persistente ?? (tipoFinal === "error");
-  const t = { id, mensaje: String(mensaje ?? ""), tipo: tipoFinal, persistente };
+  const t = { id, mensaje: String(mensaje ?? ""), tipo: tipo || _detectarTipoToast(mensaje) };
   _toastState.items = [..._toastState.items, t];
   _emitToasts();
-  if (!persistente) {
-    setTimeout(() => {
-      _toastState.items = _toastState.items.filter((x) => x.id !== id);
-      _emitToasts();
-    }, 4200);
-  }
+  setTimeout(() => {
+    _toastState.items = _toastState.items.filter((x) => x.id !== id);
+    _emitToasts();
+  }, 4200);
   return id;
 }
 
@@ -94,18 +88,7 @@ function ToastContainer() {
   useEffect(() => {
     _toastSubs.add(setItems);
     setItems([..._toastState.items]);
-    const cerrarPersistenteConTeclado = (e) => {
-      if (e.key !== "Enter" && e.key !== "Escape") return;
-      const persistente = [..._toastState.items].reverse().find(x => x.persistente);
-      if (!persistente) return;
-      _toastState.items = _toastState.items.filter(x => x.id !== persistente.id);
-      _emitToasts();
-    };
-    window.addEventListener("keydown", cerrarPersistenteConTeclado);
-    return () => {
-      _toastSubs.delete(setItems);
-      window.removeEventListener("keydown", cerrarPersistenteConTeclado);
-    };
+    return () => { _toastSubs.delete(setItems); };
   }, []);
 
   const estilos = {
@@ -136,12 +119,6 @@ function ToastContainer() {
           }}>
             <span style={{ color: e.borde, fontWeight: 800, fontSize: 15, lineHeight: 1.3 }}>{e.icono}</span>
             <span style={{ flex: 1, lineHeight: 1.35 }}>{t.mensaje}</span>
-            {t.persistente && (
-              <button
-                onClick={() => { _toastState.items = _toastState.items.filter((x) => x.id !== t.id); _emitToasts(); }}
-                style={{ background:e.borde, border:"none", color:"#fff", borderRadius:7, cursor:"pointer", fontSize:12, fontWeight:800, padding:"5px 9px" }}
-              >Aceptar</button>
-            )}
             <button
               onClick={() => { _toastState.items = _toastState.items.filter((x) => x.id !== t.id); _emitToasts(); }}
               style={{ background:"none", border:"none", color: COLORS.muted, cursor:"pointer", fontSize:14, padding:0 }}
@@ -4224,14 +4201,10 @@ export default function App() {
 
   toast(
     `Importación de cotizaciones terminada.\n\nNuevas: ${importadas}\nRentabilidad actualizada: ${actualizadas}\nSaltadas: ${saltadas}\nCon error: ${errores.length}` +
-    (errores.length ? `\n\nErrores:\n${errores.slice(0, 5).join("\n")}` : ""),
-    errores.length ? "error" : "success",
-    { persistente: errores.length > 0 }
+    (errores.length ? `\n\nErrores:\n${errores.slice(0, 5).join("\n")}` : "")
   );
 
-  // No recargamos la página automáticamente: así un error permanece visible
-  // hasta que el usuario lo cierre y la rentabilidad actualizada se conserva
-  // inmediatamente en el estado de la APP.
+  window.location.reload();
 };
   const procesarNotaVentaArchivo = async (file) => {
     const data = await file.arrayBuffer();
@@ -5691,11 +5664,8 @@ if (!errorDocumentosTrabajadores) {
   const rangoResumen = obtenerRangoResumen();
   const resumenActual = calcularMetricasResumen(rangoResumen);
   const rentabilidadPorNumero = new Map((rentabilidadCotizaciones || []).map(r => [String(r.cotizacion_numero), r]));
-  // El margen de fabricación se obtiene desde las cotizaciones que el propio
-  // Resumen reconoce como vendidas/aceptadas. No dependemos de que cada NV
-  // exponga nuevamente el número de cotización en su objeto local.
-  const margenFabricacionPeriodo = resumenActual.vendidasPeriodo.reduce((sum, cotizacionVendida) => {
-    const ref = rentabilidadPorNumero.get(String(cotizacionVendida.numero));
+  const margenFabricacionPeriodo = resumenActual.ventasPeriodo.reduce((sum, venta) => {
+    const ref = venta?.cotizacion ? rentabilidadPorNumero.get(String(venta.cotizacion)) : null;
     return sum + Number(ref?.margen_contribucion || 0);
   }, 0);
   const margenLaminadosPeriodo = (ventasLaminas || [])
