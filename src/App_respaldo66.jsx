@@ -3054,123 +3054,6 @@ function calcularResumenVentaLaminas(venta) {
   };
 }
 
-function VentaLaminasManualModal({ onClose, onSave }) {
-  const hoy = new Date().toISOString().split("T")[0];
-  const filaVacia = () => ({ nombre:"", cantidad:1, precio_neto:"", costo_neto:"" });
-  const [cliente, setCliente] = useState("");
-  const [fecha, setFecha] = useState(hoy);
-  const [filas, setFilas] = useState([filaVacia()]);
-  const [guardando, setGuardando] = useState(false);
-
-  useEffect(() => {
-    const cerrar = (e) => {
-      if (e.key === "Escape" && !guardando) onClose();
-    };
-    window.addEventListener("keydown", cerrar);
-    return () => window.removeEventListener("keydown", cerrar);
-  }, [onClose, guardando]);
-
-  const cambiarFila = (idx, campo, valor) => {
-    setFilas(prev => prev.map((f,i) => i === idx ? { ...f, [campo]:valor } : f));
-  };
-  const agregarFila = () => setFilas(prev => [...prev, filaVacia()]);
-  const quitarFila = (idx) => setFilas(prev => prev.length === 1 ? prev : prev.filter((_,i) => i !== idx));
-
-  const detallesValidos = filas.filter(f =>
-    String(f.nombre || "").trim() && Number(f.cantidad || 0) > 0 && Number(f.precio_neto || 0) > 0
-  );
-  const ventaNeta = detallesValidos.reduce((sum,f) => sum + Number(f.cantidad||0) * Number(f.precio_neto||0), 0);
-  const costoNeto = detallesValidos.reduce((sum,f) => sum + Number(f.cantidad||0) * Number(f.costo_neto||0), 0);
-  const ventaTotal = Math.round(ventaNeta * 1.19);
-  const costoTotal = Math.round(costoNeto * 1.19);
-  const ivaVenta = ventaTotal - Math.round(ventaNeta);
-  const ivaCompra = costoTotal - Math.round(costoNeto);
-  const margen = ventaNeta - costoNeto;
-  const ivaProvisionar = ivaVenta - ivaCompra;
-
-  const guardar = async () => {
-    if (!cliente.trim()) { toast("Ingresa el nombre del cliente.", "warning"); return; }
-    if (!fecha) { toast("Ingresa la fecha de la venta.", "warning"); return; }
-    if (detallesValidos.length === 0) { toast("Agrega al menos un laminado con cantidad y precio de venta neto.", "warning"); return; }
-    setGuardando(true);
-    try {
-      await onSave({
-        cliente:cliente.trim(),
-        fecha,
-        detalles:detallesValidos.map((f,idx) => ({
-          nombre:String(f.nombre||"").trim(),
-          cantidad:Number(f.cantidad||0),
-          precio_neto:Number(f.precio_neto||0),
-          costo_neto:Number(f.costo_neto||0),
-          orden:idx+1
-        })),
-        ventaNeta,
-        costoNeto,
-        ventaTotal,
-        costoTotal
-      });
-    } finally {
-      setGuardando(false);
-    }
-  };
-
-  return (
-    <div onClick={() => !guardando && onClose()} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.78)",zIndex:160,display:"flex",alignItems:"flex-start",justifyContent:"center",overflowY:"auto",padding:"20px 10px"}}>
-      <div onClick={e=>e.stopPropagation()} style={{width:900,maxWidth:"96vw",background:COLORS.card,border:`1px solid ${COLORS.border}`,borderRadius:16,padding:22,color:COLORS.text,boxSizing:"border-box"}}>
-        <div style={{display:"flex",justifyContent:"space-between",gap:12,alignItems:"flex-start",marginBottom:16}}>
-          <div>
-            <h3 style={{margin:"0 0 5px",color:COLORS.accent,fontFamily:"Georgia,serif",fontSize:18}}>➕ Venta manual de laminados</h3>
-            <div style={{fontSize:12,color:COLORS.muted}}>Para ventas por teléfono, presenciales o sin Excel. Ingresa precios y costos netos.</div>
-          </div>
-          <button disabled={guardando} onClick={onClose} style={{background:"transparent",border:`1px solid ${COLORS.border}`,color:COLORS.muted,borderRadius:8,padding:"6px 10px",cursor:"pointer"}}>✕</button>
-        </div>
-
-        <div style={{display:"grid",gridTemplateColumns:"2fr 1fr",gap:10,marginBottom:16}}>
-          <label style={{fontSize:11,color:COLORS.muted}}>Cliente
-            <input value={cliente} onChange={e=>setCliente(e.target.value)} placeholder="Nombre del cliente" style={{display:"block",width:"100%",boxSizing:"border-box",marginTop:5,background:COLORS.surface,border:`1px solid ${COLORS.border}`,color:COLORS.text,borderRadius:8,padding:"10px 11px"}}/>
-          </label>
-          <label style={{fontSize:11,color:COLORS.muted}}>Fecha
-            <input type="date" value={fecha} onChange={e=>setFecha(e.target.value)} style={{display:"block",width:"100%",boxSizing:"border-box",marginTop:5,background:COLORS.surface,border:`1px solid ${COLORS.border}`,color:COLORS.text,borderRadius:8,padding:"9px 11px"}}/>
-          </label>
-        </div>
-
-        <div style={{overflowX:"auto",border:`1px solid ${COLORS.border}`,borderRadius:10,marginBottom:12}}>
-          <table style={{width:"100%",borderCollapse:"collapse",fontSize:12,minWidth:760}}>
-            <thead><tr style={{background:COLORS.surface,color:COLORS.muted,textAlign:"left"}}>
-              <th style={{padding:9}}>Laminado / color</th><th style={{padding:9,width:90}}>Cantidad</th><th style={{padding:9,width:150}}>Venta neta/u.</th><th style={{padding:9,width:150}}>Costo neto/u.</th><th style={{padding:9,width:110,textAlign:"right"}}>Margen</th><th style={{padding:9,width:45}}></th>
-            </tr></thead>
-            <tbody>{filas.map((f,idx) => {
-              const margenFila=Number(f.cantidad||0)*(Number(f.precio_neto||0)-Number(f.costo_neto||0));
-              return <tr key={idx} style={{borderTop:`1px solid ${COLORS.border}`}}>
-                <td style={{padding:7}}><input value={f.nombre} onChange={e=>cambiarFila(idx,"nombre",e.target.value)} placeholder="Ej: Lamitech Blanco Nevado" style={{width:"100%",boxSizing:"border-box",background:COLORS.bg,border:`1px solid ${COLORS.border}`,color:COLORS.text,borderRadius:7,padding:"8px"}}/></td>
-                <td style={{padding:7}}><input type="number" min="0" step="1" value={f.cantidad} onChange={e=>cambiarFila(idx,"cantidad",e.target.value)} style={{width:"100%",boxSizing:"border-box",background:COLORS.bg,border:`1px solid ${COLORS.border}`,color:COLORS.text,borderRadius:7,padding:"8px"}}/></td>
-                <td style={{padding:7}}><input type="number" min="0" value={f.precio_neto} onChange={e=>cambiarFila(idx,"precio_neto",e.target.value)} placeholder="28000" style={{width:"100%",boxSizing:"border-box",background:COLORS.bg,border:`1px solid ${COLORS.border}`,color:COLORS.text,borderRadius:7,padding:"8px"}}/></td>
-                <td style={{padding:7}}><input type="number" min="0" value={f.costo_neto} onChange={e=>cambiarFila(idx,"costo_neto",e.target.value)} placeholder="20000" style={{width:"100%",boxSizing:"border-box",background:COLORS.bg,border:`1px solid ${COLORS.border}`,color:COLORS.text,borderRadius:7,padding:"8px"}}/></td>
-                <td style={{padding:9,textAlign:"right",fontWeight:800,color:margenFila>=0?COLORS.success:COLORS.danger}}>{fmt(margenFila)}</td>
-                <td style={{padding:7}}><button onClick={()=>quitarFila(idx)} disabled={filas.length===1} style={{background:"transparent",border:"none",color:COLORS.danger,cursor:filas.length===1?"default":"pointer",opacity:filas.length===1?.35:1,fontSize:16}}>✕</button></td>
-              </tr>;
-            })}</tbody>
-          </table>
-        </div>
-        <button onClick={agregarFila} style={{background:COLORS.subtle,border:`1px solid ${COLORS.border}`,color:COLORS.text,borderRadius:8,padding:"8px 11px",cursor:"pointer",fontWeight:700,marginBottom:16}}>+ Agregar laminado</button>
-
-        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:10,marginBottom:18}}>
-          <StatCard label="Venta neta" value={fmt(ventaNeta)} icon="💰" color={COLORS.success}/>
-          <StatCard label="Costo neto" value={fmt(costoNeto)} icon="🧾" color={COLORS.warning}/>
-          <StatCard label="Margen" value={fmt(margen)} icon="📈" color={margen>=0?COLORS.success:COLORS.danger}/>
-          <StatCard label="IVA a provisionar" value={fmt(ivaProvisionar)} sub={`DF ${fmt(ivaVenta)} − CF ${fmt(ivaCompra)}`} icon="🏛️" color={COLORS.accent}/>
-          <StatCard label="Cliente paga" value={fmt(ventaTotal)} sub="IVA incluido" icon="💳" color={COLORS.accent}/>
-        </div>
-
-        <div style={{display:"flex",justifyContent:"flex-end",gap:9}}>
-          <button disabled={guardando} onClick={onClose} style={{background:COLORS.subtle,border:`1px solid ${COLORS.border}`,color:COLORS.text,borderRadius:8,padding:"10px 14px",cursor:"pointer"}}>Cancelar</button>
-          <button disabled={guardando} onClick={guardar} style={{background:COLORS.success,border:"none",color:"#fff",borderRadius:8,padding:"10px 16px",fontWeight:800,cursor:guardando?"wait":"pointer",opacity:guardando?.65:1}}>{guardando?"Guardando...":"Guardar venta"}</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function VentaLaminasModal({ venta, detalles = [], onClose, onSaveCosto }) {
   const [costoCompra, setCostoCompra] = useState(venta.costo_compra_total || "");
   const resumen = calcularResumenVentaLaminas({ ...venta, costo_compra_total: costoCompra });
@@ -4913,7 +4796,6 @@ if (!errorDocumentosTrabajadores) {
   const [modalCxcClientes, setModalCxcClientes] = useState(false);
   const [mesVentaLaminas, setMesVentaLaminas] = useState(new Date().toISOString().slice(0, 7));
   const [topLaminasCantidad, setTopLaminasCantidad] = useState(10);
-  const [modalVentaLaminasManual, setModalVentaLaminasManual] = useState(false);
   const [asientosContables, setAsientosContables] = useState([]);
   const [modalContabilidad, setModalContabilidad] = useState(null);
   const [modalGestionContable, setModalGestionContable] = useState(null);
@@ -8483,66 +8365,6 @@ const importarVentaLaminasExcel = async (event) => {
   toast("Venta de láminas importada correctamente.");
 };
 
-const guardarVentaLaminasManual = async ({ cliente, fecha, detalles, ventaNeta, costoNeto, ventaTotal, costoTotal }) => {
-  const numero = `MAN-${String(Date.now()).slice(-10)}`;
-
-  const { data: ventaInsertada, error: errorVenta } = await supabase
-    .from("ventas_laminas")
-    .insert([{
-      numero,
-      cliente,
-      fecha,
-      total_venta:Math.round(Number(ventaTotal||0)),
-      costo_compra_total:Math.round(Number(costoTotal||0)),
-      origen:"manual"
-    }])
-    .select()
-    .single();
-
-  if (errorVenta) {
-    console.error(errorVenta);
-    toast(`No se pudo guardar la venta manual de láminas: ${errorVenta.message}`, "error");
-    throw errorVenta;
-  }
-
-  const detallesGuardar = detalles.map((d,idx) => ({
-    venta_lamina_id:ventaInsertada.id,
-    cantidad:Number(d.cantidad||0),
-    tipo:"LAMINADO",
-    largo:0,
-    ancho:0,
-    color:d.nombre,
-    valor_unitario:Math.round(Number(d.precio_neto||0)*1.19),
-    total:Math.round(Number(d.cantidad||0)*Number(d.precio_neto||0)*1.19),
-    costo_unitario_neto:Number(d.costo_neto||0),
-    orden:idx+1
-  }));
-
-  const { data: detallesInsertados, error:errorDetalles } = await supabase
-    .from("detalles_ventas_laminas")
-    .insert(detallesGuardar)
-    .select();
-
-  if (errorDetalles) {
-    console.error(errorDetalles);
-    await supabase.from("ventas_laminas").delete().eq("id", ventaInsertada.id);
-    toast(`No se pudo guardar el detalle de la venta manual: ${errorDetalles.message}`, "error");
-    throw errorDetalles;
-  }
-
-  setVentasLaminas(prev => [ventaInsertada, ...prev]);
-  setDetallesVentasLaminas(prev => [...prev, ...(detallesInsertados||[])]);
-
-  await crearAsientoVentaLaminasAutomatica({ fecha, numero, cliente, totalVenta:ventaTotal });
-  if (Number(costoTotal||0) > 0) {
-    await crearAsientoCostoVentaLaminasAutomatico({ fecha, numero, cliente, costoCompra:costoTotal });
-  }
-
-  setMesVentaLaminas(String(fecha).slice(0,7));
-  setModalVentaLaminasManual(false);
-  toast(`Venta manual registrada correctamente. Margen neto: ${fmt(Number(ventaNeta||0)-Number(costoNeto||0))}`, "success");
-};
-
 const guardarCostoVentaLaminas = async (venta, costoCompraTotal) => {
   const { data, error } = await supabase
     .from("ventas_laminas")
@@ -11326,9 +11148,7 @@ const renderTarjetaProduccion = (n) => (
                 <h2 style={{ margin:"0 0 6px", fontFamily:"Georgia,serif", color:COLORS.accent, fontSize:17 }}>🧾 Venta de Láminas</h2>
                 <p style={{ margin:0, fontSize:12, color:COLORS.muted }}>Cotizaciones de láminas revendidas, utilidad neta e IVA a provisionar.</p>
               </div>
-              <div style={{display:"flex",gap:10,alignItems:"flex-end",flexWrap:"wrap"}}>
-                <button onClick={()=>setModalVentaLaminasManual(true)} style={{background:COLORS.success,border:"none",color:"#fff",borderRadius:8,padding:"9px 12px",fontWeight:800,cursor:"pointer"}}>+ Venta manual</button>
-                <div>
+              <div>
                 <label style={{ display:"block", fontSize:10, color:COLORS.muted, marginBottom:5 }}>Mes</label>
                 <input
                   type="month"
@@ -11336,7 +11156,6 @@ const renderTarjetaProduccion = (n) => (
                   onChange={(e) => setMesVentaLaminas(e.target.value)}
                   style={{ background:COLORS.surface, border:`1px solid ${COLORS.border}`, color:COLORS.text, borderRadius:8, padding:"8px 10px" }}
                 />
-                </div>
               </div>
             </div>
 
@@ -11349,7 +11168,7 @@ const renderTarjetaProduccion = (n) => (
 
             <div style={{ display:"grid", gridTemplateColumns:"minmax(0,1.2fr) minmax(280px,0.8fr)", gap:16 }}>
               <div style={{ background:COLORS.card, border:`1px solid ${COLORS.border}`, borderRadius:12, padding:14 }}>
-                <div style={{ fontSize:13, fontWeight:700, color:COLORS.accent, marginBottom:10 }}>Ventas registradas</div>
+                <div style={{ fontSize:13, fontWeight:700, color:COLORS.accent, marginBottom:10 }}>Ventas importadas</div>
                 {ventasLaminasDelMes.length === 0 ? (
                   <div style={{ color:COLORS.muted, fontSize:12 }}>No hay ventas de láminas para este mes.</div>
                 ) : (
@@ -11364,7 +11183,7 @@ const renderTarjetaProduccion = (n) => (
                         >
                           <div>
                             <div style={{ fontWeight:700, color:COLORS.text }}>#{v.numero} · {v.cliente}</div>
-                            <div style={{ fontSize:11, color:COLORS.muted }}>{fmtDate(v.fecha)} · {v.origen === "manual" ? "Manual" : "Excel"} · Costo: {r.costoTotal > 0 ? fmt(r.costoTotal) : "pendiente"}</div>
+                            <div style={{ fontSize:11, color:COLORS.muted }}>{fmtDate(v.fecha)} · Costo: {r.costoTotal > 0 ? fmt(r.costoTotal) : "pendiente"}</div>
                           </div>
                           <div style={{ textAlign:"right", display:"flex", flexDirection:"column", alignItems:"flex-end", gap:6 }}>
                             <div>
@@ -12298,13 +12117,6 @@ const renderTarjetaProduccion = (n) => (
     onConfirm={confirmarImportacionOC}
   />
 )}
-{modalVentaLaminasManual && (
-  <VentaLaminasManualModal
-    onClose={() => setModalVentaLaminasManual(false)}
-    onSave={guardarVentaLaminasManual}
-  />
-)}
-
 {modalVentaLaminas && (
   <VentaLaminasModal
     venta={modalVentaLaminas}
