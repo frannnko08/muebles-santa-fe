@@ -4026,21 +4026,9 @@ export default function App() {
     if (resolver) resolver(null);
   };
 
-  // Normaliza números de cotización antiguos como "N° 12439", "#12439" o 12439.
-  // Supabase guarda el campo numero como entero, por lo que nunca debemos
-  // enviar el texto decorado del Excel a una comparación contra esa columna.
-  const normalizarNumeroCotizacion = (valor) => {
-    if (valor === null || valor === undefined) return "";
-    const texto = String(valor).trim();
-    const match = texto.match(/\d+/);
-    return match ? String(Number(match[0])) : "";
-  };
-
   const guardarRentabilidadCotizacion = async ({ numero, costoNeto, ventaNeta, origenCosto }) => {
-    const numeroNormalizado = normalizarNumeroCotizacion(numero);
-    if (!numeroNormalizado) throw new Error(`No se pudo interpretar el número de cotización: ${numero}`);
     const payload = {
-      cotizacion_numero: numeroNormalizado,
+      cotizacion_numero: String(numero),
       costo_directo_neto: Number(costoNeto || 0),
       venta_neta: Number(ventaNeta || 0),
       margen_contribucion: Number(ventaNeta || 0) - Number(costoNeto || 0),
@@ -4054,12 +4042,12 @@ export default function App() {
         margen_contribucion: payload.margen_contribucion,
         origen_costo: payload.origen_costo
       })
-      .eq("numero", Number(numeroNormalizado))
+      .eq("numero", String(numero))
       .select("*")
       .single();
     if (error) throw new Error(`Cotización importada, pero no se pudo guardar su rentabilidad: ${error.message}`);
-    setRentabilidadCotizaciones(prev => [...prev.filter(x=>normalizarNumeroCotizacion(x.cotizacion_numero)!==numeroNormalizado), {
-      cotizacion_numero:numeroNormalizado,
+    setRentabilidadCotizaciones(prev => [...prev.filter(x=>String(x.cotizacion_numero)!==String(numero)), {
+      cotizacion_numero:String(numero),
       costo_directo_neto:data.costo_directo_neto,
       venta_neta:data.venta_neta,
       margen_contribucion:data.margen_contribucion,
@@ -4140,14 +4128,13 @@ export default function App() {
     }
   }
 
-  const numeroLeido = sheet["A2"]?.v;
-  const numero = normalizarNumeroCotizacion(numeroLeido);
+  const numero = sheet["A2"]?.v;
   const cliente = sheet["B2"]?.v;
   const fecha = sheet["C2"]?.v;
   const total = sheet["D2"]?.v;
 
   if (!numero || !total) {
-    throw new Error(`No se pudo leer número o total en ${file.name}. Número leído: ${numeroLeido ?? "vacío"}`);
+    throw new Error(`No se pudo leer número o total en ${file.name}`);
   }
 
   let costoNeto = indicadoresRentabilidad.costoNeto;
@@ -4168,7 +4155,7 @@ export default function App() {
   const { data: cotizacionExistenteDB, error: errorBuscarCotizacion } = await supabase
     .from("cotizaciones")
     .select("id, numero")
-    .eq("numero", Number(numero))
+    .eq("numero", numero)
     .maybeSingle();
 
   if (errorBuscarCotizacion) {
@@ -4192,7 +4179,7 @@ export default function App() {
   }
 
   const ok = await importarCotizacionExcel({
-    numero: Number(numero),
+    numero,
     cliente,
     fecha,
     total,
@@ -5703,28 +5690,13 @@ if (!errorDocumentosTrabajadores) {
 
   const rangoResumen = obtenerRangoResumen();
   const resumenActual = calcularMetricasResumen(rangoResumen);
-  const rentabilidadPorNumero = new Map(
-    (rentabilidadCotizaciones || []).map(r => [normalizarNumeroCotizacion(r.cotizacion_numero), r])
-  );
-
-  // RENTABILIDAD DE FABRICACIÓN:
-  // La Nota de Venta SOLO confirma que la cotización fue aceptada y determina
-  // en qué período se reconoce la venta. Los importes siempre salen del Excel
-  // de la propia cotización: venta_neta - costo_directo_neto.
-  // Usamos un Set para no duplicar margen si una cotización llegara a quedar
-  // relacionada más de una vez por error.
-  const cotizacionesAceptadasPeriodo = new Set(
-    (resumenActual.notasPeriodo || [])
-      .map(n => normalizarNumeroCotizacion(n.cotizacion))
-      .filter(Boolean)
-  );
-
-  const margenFabricacionPeriodo = [...cotizacionesAceptadasPeriodo].reduce((sum, numeroCotizacion) => {
-    const ref = rentabilidadPorNumero.get(numeroCotizacion);
-    if (!ref) return sum;
-    const ventaNetaCotizacion = Number(ref.venta_neta || 0);
-    const costoNetoCotizacion = Number(ref.costo_directo_neto || 0);
-    return sum + Math.max(ventaNetaCotizacion - costoNetoCotizacion, 0);
+  const rentabilidadPorNumero = new Map((rentabilidadCotizaciones || []).map(r => [String(r.cotizacion_numero), r]));
+  // El margen de fabricación se obtiene desde las cotizaciones que el propio
+  // Resumen reconoce como vendidas/aceptadas. No dependemos de que cada NV
+  // exponga nuevamente el número de cotización en su objeto local.
+  const margenFabricacionPeriodo = resumenActual.vendidasPeriodo.reduce((sum, cotizacionVendida) => {
+    const ref = rentabilidadPorNumero.get(String(cotizacionVendida.numero));
+    return sum + Number(ref?.margen_contribucion || 0);
   }, 0);
   const margenLaminadosPeriodo = (ventasLaminas || [])
     .filter(v => estaEnRangoResumen(v.fecha, rangoResumen))
@@ -9186,7 +9158,7 @@ const renderTarjetaProduccion = (n) => (
                 </label>
               </div>
               <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(165px,1fr))",gap:10}}>
-                <StatCard label="Margen fabricación" value={fmt(margenFabricacionPeriodo)} sub="NV confirma venta · Neto cotización − costo cotización" icon="🏭" color={COLORS.success}/>
+                <StatCard label="Margen fabricación" value={fmt(margenFabricacionPeriodo)} sub="Venta neta − costo directo" icon="🏭" color={COLORS.success}/>
                 <StatCard label="Margen laminados" value={fmt(margenLaminadosPeriodo)} sub="Utilidad neta de reventa" icon="🪵" color="#5a8abe"/>
                 <StatCard label="Margen generado" value={fmt(margenTotalPeriodo)} sub={`${cumplimientoMargen}% de la meta`} icon="📈" color={margenTotalPeriodo >= metaMargenMensual ? COLORS.success : COLORS.warning}/>
                 <StatCard label="Falta para equilibrio" value={fmt(faltaMargenPeriodo)} sub={resultadoSobreEquilibrio >= 0 ? `Sobre equilibrio: ${fmt(resultadoSobreEquilibrio)}` : "Meta pendiente"} icon="🎯" color={faltaMargenPeriodo === 0 ? COLORS.success : COLORS.danger}/>
