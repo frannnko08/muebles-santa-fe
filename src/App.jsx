@@ -6015,7 +6015,7 @@ if (!errorDocumentosTrabajadores) {
 
   const abonosEnRangoResumen = abonosNV.filter(a => estaEnRangoResumen(a.fecha, rangoResumen));
   const cobradoPeriodo = abonosEnRangoResumen.reduce((sum,a) => sum + Number(a.monto || 0), 0) + resumenActual.barranesPeriodo.reduce((sum,b) => sum + Number(b.total || 0), 0);
-  const saldoNv = (nota) => Math.max(Number(nota.total || 0) - abonosNV.filter(a => String(a.nota_venta_id) === String(nota.id)).reduce((sum,a) => sum + Number(a.monto || 0), 0), 0);
+  const saldoNv = (nota) => Math.max(Number(nota.total || 0) - abonosNV.filter(a => String(a.nota_venta_id) === String(nota.id).replace("supabase-", "")).reduce((sum,a) => sum + Number(a.monto || 0), 0), 0);
   const cxcTotalGestion = notasVenta.reduce((sum,n) => sum + saldoNv(n), 0);
   const cxcEntregadaGestion = notasVenta.filter(n => String(n.proceso || "").toLowerCase() === "entregado").reduce((sum,n) => sum + saldoNv(n), 0);
   const cxcTerminadaGestion = notasVenta.filter(n => n.media_cana && String(n.proceso || "").toLowerCase() !== "entregado").reduce((sum,n) => sum + saldoNv(n), 0);
@@ -6351,11 +6351,27 @@ const mesSeleccionadoTexto = nombreMes(mesFiltro);
     if (error) { console.error("Error al gestionar abono:", error); toast(error.message || "No se pudo modificar el abono."); return false; }
     const { data: lista, error: lecturaError } = await supabase.from("abonos_nv").select("*").eq("nota_venta_id", notaId);
     if (lecturaError) { console.error(lecturaError); toast("Operación guardada. Recarga para ver el historial actualizado."); return true; }
+    // Verificar el valor persistido: no asumir que un RPC exitoso equivale a una NV actualizada.
+    const { data: notaPersistida, error: notaError } = await supabase
+      .from("notas_venta").select("id,total,abono,estado_pago").eq("id", notaId).single();
+    if (notaError || !notaPersistida) {
+      console.error("No se pudo comprobar el estado de la nota de venta:", notaError);
+      toast("El abono fue procesado, pero no se pudo verificar la nota de venta. Recarga y revisa antes de repetir la operación.");
+      return false;
+    }
+    const abonadoReal = (lista || []).reduce((s, a) => s + Number(a.monto || 0), 0);
+    const totalReal = Number(notaPersistida.total || 0);
+    const estadoReal = abonadoReal === 0 ? "pendiente" : abonadoReal >= totalReal && totalReal > 0 ? "pagada" : "abonada";
+    if (Number(notaPersistida.abono || 0) !== abonadoReal || notaPersistida.estado_pago !== estadoReal) {
+      console.error("Inconsistencia entre abonos_nv y notas_venta:", { notaId, abonadoReal, notaPersistida, estadoReal });
+      toast("Atención: el historial y la nota de venta no coinciden. No vuelvas a registrar el abono; revisa la conciliación en Supabase.");
+      return false;
+    }
     setAbonosNV(prev => [...prev.filter(a => Number(a.nota_venta_id) !== notaId), ...(lista || [])]);
     setNotas(prev => prev.map(n => Number(String(n.id).replace("supabase-", "")) === notaId
-      ? { ...n, abono: Number(data.total_abonado), estado_pago: data.estado_pago } : n));
+      ? { ...n, abono: abonadoReal, estado_pago: estadoReal } : n));
     setModalNV(prev => prev && Number(String(prev.id).replace("supabase-", "")) === notaId
-      ? { ...prev, abono: Number(data.total_abonado), estado_pago: data.estado_pago } : prev);
+      ? { ...prev, abono: abonadoReal, estado_pago: estadoReal } : prev);
     // Recargar asientos para mantener el panel contable sincronizado.
     const { data: asientos, error: asientosError } = await supabase.from("asientos_contables").select("*").order("fecha", { ascending: false });
     if (!asientosError) setAsientosContables(asientos || []);
@@ -8697,11 +8713,12 @@ const diferenciaContabilidad = resumenContabilidad.debe - resumenContabilidad.ha
 
 const calcularAbonadoDocumento = (nota) => {
   const idNota = Number(String(nota.id).replace("supabase-", ""));
-  const abonadoDesdeNota = Number(nota.abono || nota.abonado || 0);
+  // El historial es la fuente de verdad, incluso cuando el pago se reduce o anula.
+  // Math.max conservaba incorrectamente un abono anterior más alto.
   const abonadoDesdeHistorial = abonosNV
     .filter(a => Number(a.nota_venta_id) === idNota)
     .reduce((sum, a) => sum + Number(a.monto || 0), 0);
-  return Math.max(abonadoDesdeNota, abonadoDesdeHistorial);
+  return abonadoDesdeHistorial;
 };
 
 const obtenerEstadoCxc = (nota, saldo) => {
