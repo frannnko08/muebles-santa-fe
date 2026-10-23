@@ -1046,7 +1046,9 @@ boxSizing:"border-box"
     </div>
   );
 }
-function GestionNVModal({ nota, abonos = [], detalles = [], onClose, onSave }) {
+function GestionNVModal({ nota, abonos = [], detalles = [], onClose, onSave, onChangeAbono }) {
+  const [editandoAbono, setEditandoAbono] = useState(null);
+  const [guardandoCorreccion, setGuardandoCorreccion] = useState(false);
   const [nuevoAbono, setNuevoAbono] = useState("");
   const [observacionAbono, setObservacionAbono] = useState("");
   const [fechaAbono, setFechaAbono] = useState(new Date().toISOString().split("T")[0]);
@@ -1083,6 +1085,31 @@ const guardarGestionNV = () => {
   const totalAbonado = abonos.reduce((sum, a) => sum + Number(a.monto || 0), 0);
   const saldo = Math.max(total - totalAbonado, 0);
   const estadoProd = estadoProduccionDesdeNota(nota);
+  const corregirAbono = async (abono, accion) => {
+    if (guardandoCorreccion) return;
+    if (accion === "editar") {
+      const monto = Number(editandoAbono?.monto);
+      if (!Number.isFinite(monto) || monto <= 0) { alert("Ingresa un monto válido mayor a cero."); return; }
+      if (!editandoAbono.fecha) { alert("Debes ingresar la fecha del abono."); return; }
+      const otros = abonos.filter(a => a.id !== abono.id).reduce((sum,a) => sum + Number(a.monto || 0),0);
+      if (otros + monto > total) { alert("El total abonado no puede superar el valor de la venta."); return; }
+    }
+    const motivo = window.prompt("Motivo obligatorio de la corrección o anulación (se guardará en auditoría):");
+    if (!motivo || !motivo.trim()) return;
+    const mensaje = accion === "eliminar" ? "¿Anular este abono?" : "¿Guardar los cambios de este abono?";
+    const ok = await confirmDialog(`${mensaje}\n\nEl sistema conservará el asiento original, creará su reversa y, si corresponde, un nuevo asiento corregido. La acción quedará registrada en auditoría.`);
+    if (!ok) return;
+    setGuardandoCorreccion(true);
+    try {
+      const cambios = accion === "editar" ? {
+        monto: Number(editandoAbono.monto), fecha: editandoAbono.fecha,
+        medio_pago: editandoAbono.medio_pago, observacion: editandoAbono.observacion || "", motivo: motivo.trim()
+      } : { motivo: motivo.trim() };
+      const exito = await onChangeAbono(abono, accion, cambios);
+      if (exito) setEditandoAbono(null);
+    } finally { setGuardandoCorreccion(false); }
+  };
+
 
   return (
     <div
@@ -1271,6 +1298,7 @@ const guardarGestionNV = () => {
       {abonos.map(a => (
         <div key={a.id} style={{
           display:"flex",
+          flexWrap:"wrap",
           justifyContent:"space-between",
           gap:10,
           fontSize:13,
@@ -1283,6 +1311,21 @@ const guardarGestionNV = () => {
             {a.medio_pago ? `${String(a.medio_pago).charAt(0).toUpperCase()}${String(a.medio_pago).slice(1)}` : "Sin medio"}
             {a.observacion ? ` · ${a.observacion}` : ""}
           </span>
+          <span style={{ display:"flex", gap:6 }}>
+            <button type="button" disabled={guardandoCorreccion} onClick={() => setEditandoAbono({ ...a, monto: String(a.monto) })}>Editar</button>
+            <button type="button" disabled={guardandoCorreccion} onClick={() => corregirAbono(a, "eliminar")}>Anular</button>
+          </span>
+          {editandoAbono?.id === a.id && (
+            <div style={{ gridColumn:"1 / -1", width:"100%", display:"grid", gap:6 }}>
+              <label>Monto <input type="number" min="1" value={editandoAbono.monto} onChange={e => setEditandoAbono(v => ({ ...v, monto:e.target.value }))} /></label>
+              <label>Fecha <input type="date" value={editandoAbono.fecha || ""} onChange={e => setEditandoAbono(v => ({ ...v, fecha:e.target.value }))} /></label>
+              <label>Medio <select value={editandoAbono.medio_pago || "transferencia"} onChange={e => setEditandoAbono(v => ({ ...v, medio_pago:e.target.value }))}>
+                <option value="transferencia">Transferencia</option><option value="efectivo">Efectivo</option><option value="cheque">Cheque</option>
+              </select></label>
+              <label>Observación <input value={editandoAbono.observacion || ""} onChange={e => setEditandoAbono(v => ({ ...v, observacion:e.target.value }))} /></label>
+              <div style={{ display:"flex", gap:8 }}><button type="button" disabled={guardandoCorreccion} onClick={() => corregirAbono(a, "editar")}>Guardar corrección</button><button type="button" onClick={() => setEditandoAbono(null)}>Cancelar</button></div>
+            </div>
+          )}
         </div>
       ))}
     </div>
@@ -6299,99 +6342,56 @@ const mesSeleccionadoTexto = nombreMes(mesFiltro);
     toast("Nota de Venta actualizada correctamente.");
   };
 
-  const guardarGestionNV = async (nvActualizada) => {
-  const idReal = Number(String(nvActualizada.id).replace("supabase-", ""));
-
-  const nuevoAbono = Number(nvActualizada.nuevoAbono) || 0;
-  const fechaAbono = nvActualizada.fechaAbono || new Date().toISOString().split("T")[0];
-  const medioPagoAbono = nvActualizada.medioPagoAbono || "transferencia";
-
-  if (nuevoAbono > 0) {
-    const { error: errorInsert } = await supabase
-      .from("abonos_nv")
-      .insert({
-        nota_venta_id: idReal,
-        monto: nuevoAbono,
-        fecha: fechaAbono,
-        medio_pago: medioPagoAbono,
-        observacion: nvActualizada.observacionAbono || ""
-      });
-
-    if (errorInsert) {
-      toast("Error al guardar el abono");
-      console.error(errorInsert);
-      return;
-    }
-  }
-
-  const { data: abonosActualizados, error: errorAbonos } = await supabase
-    .from("abonos_nv")
-    .select("*")
-    .eq("nota_venta_id", idReal);
-
-  if (errorAbonos) {
-    toast("Error al calcular abonos");
-    console.error(errorAbonos);
-    return;
-  }
-
-  const totalAbonado = (abonosActualizados || []).reduce(
-    (sum, a) => sum + Number(a.monto || 0),
-    0
-  );
-
-  const total = Number(nvActualizada.total) || 0;
-
-  let estadoPago = "pendiente";
-
-  if (totalAbonado >= total && total > 0) {
-    estadoPago = "pagada";
-  } else if (totalAbonado > 0) {
-    estadoPago = "abonada";
-  }
-
-  const { error } = await supabase
-    .from("notas_venta")
-    .update({
-      abono: totalAbonado,
-      estado_pago: estadoPago,
-      materiales: nvActualizada.materiales,
-      proceso: nvActualizada.proceso,
-      observaciones: nvActualizada.observaciones,
-    })
-    .eq("id", idReal);
-
-  if (error) {
-    toast("Error al guardar gestión de NV");
-    console.error(error);
-    return;
-  }
-
-  setAbonosNV(prev => {
-    const otros = prev.filter(a => a.nota_venta_id !== idReal);
-    return [...otros, ...(abonosActualizados || [])];
-  });
-
-  setNotas(notas.map(n =>
-    n.id === nvActualizada.id
-      ? { ...nvActualizada, abono: totalAbonado, estado_pago: estadoPago }
-      : n
-  ));
-
-  if (nuevoAbono > 0) {
-    await crearAsientoAbonoNVAutomatico({
-      fecha: fechaAbono,
-      numero: nvActualizada.numero,
-      cliente: nvActualizada.cliente,
-      monto: nuevoAbono,
-      medioPago: medioPagoAbono,
-      tipoDocumento: nvActualizada.tipo_documento || "nv"
+  // La función SQL hace la operación completa de forma atómica.
+  const ejecutarAbonoNV = async ({notaId, accion, abonoId = null, monto = null, fecha = null, medio = null, observacion = null, motivo = null}) => {
+    const { data, error } = await supabase.rpc("gestionar_abono_nv", {
+      p_nota_id: notaId, p_accion: accion, p_abono_id: abonoId,
+      p_monto: monto, p_fecha: fecha, p_medio_pago: medio, p_observacion: observacion, p_motivo: motivo
     });
-  }
+    if (error) { console.error("Error al gestionar abono:", error); toast(error.message || "No se pudo modificar el abono."); return false; }
+    const { data: lista, error: lecturaError } = await supabase.from("abonos_nv").select("*").eq("nota_venta_id", notaId);
+    if (lecturaError) { console.error(lecturaError); toast("Operación guardada. Recarga para ver el historial actualizado."); return true; }
+    setAbonosNV(prev => [...prev.filter(a => Number(a.nota_venta_id) !== notaId), ...(lista || [])]);
+    setNotas(prev => prev.map(n => Number(String(n.id).replace("supabase-", "")) === notaId
+      ? { ...n, abono: Number(data.total_abonado), estado_pago: data.estado_pago } : n));
+    setModalNV(prev => prev && Number(String(prev.id).replace("supabase-", "")) === notaId
+      ? { ...prev, abono: Number(data.total_abonado), estado_pago: data.estado_pago } : prev);
+    // Recargar asientos para mantener el panel contable sincronizado.
+    const { data: asientos, error: asientosError } = await supabase.from("asientos_contables").select("*").order("fecha", { ascending: false });
+    if (!asientosError) setAsientosContables(asientos || []);
+    toast(accion === "crear" ? "Abono registrado correctamente." : "Abono corregido mediante reversa contable y asiento nuevo.");
+    return true;
+  };
 
-  setModalNV(null);
-};
-  
+  const cambiarAbonoNV = async (abono, accion, cambios) => {
+    const notaId = Number(abono.nota_venta_id);
+    return ejecutarAbonoNV({ notaId, accion: accion === "eliminar" ? "anular" : "editar",
+      abonoId: Number(abono.id), monto: cambios?.monto ?? null, fecha: cambios?.fecha ?? null,
+      medio: cambios?.medio_pago ?? null, observacion: cambios?.observacion ?? null, motivo: cambios?.motivo ?? null });
+  };
+
+  const guardarGestionNV = async (nvActualizada) => {
+    const notaId = Number(String(nvActualizada.id).replace("supabase-", ""));
+    const nuevo = String(nvActualizada.nuevoAbono ?? "").trim();
+    const monto = nuevo === "" ? 0 : Number(nuevo);
+    if (!Number.isInteger(monto) || monto < 0) { toast("Ingresa un abono válido."); return; }
+    if (monto > 0) {
+      const exito = await ejecutarAbonoNV({ notaId, accion:"crear", monto,
+        fecha:nvActualizada.fechaAbono, medio:nvActualizada.medioPagoAbono || "transferencia",
+        observacion:nvActualizada.observacionAbono || "" });
+      if (!exito) return;
+    }
+    const { error } = await supabase.from("notas_venta").update({
+      materiales:nvActualizada.materiales, proceso:nvActualizada.proceso,
+      observaciones:nvActualizada.observaciones
+    }).eq("id", notaId);
+    if (error) { console.error(error); toast("Abono guardado, pero no se actualizó la gestión de producción."); return; }
+    setNotas(prev => prev.map(n => Number(String(n.id).replace("supabase-", "")) === notaId
+      ? { ...n, materiales:nvActualizada.materiales, proceso:nvActualizada.proceso,
+          observaciones:nvActualizada.observaciones } : n));
+    setModalNV(null);
+  };
+
 const marcarComoEntregadaProduccion = async (nota) => {
   const confirmar = await confirmDialog(`¿Marcar ${((nota.tipo_documento || "nv") === "barran" ? "Barrán" : "NV")} ${nota.numero} como entregada?
 
@@ -9305,7 +9305,7 @@ const renderTarjetaProduccion = (n) => (
                             {e.origen==='automatica' ? <>
                               <button onClick={()=>abrirNuevoAjusteMargen('override',e)} style={{marginRight:5,background:COLORS.subtle,color:COLORS.text,border:`1px solid ${COLORS.border}`,borderRadius:6,padding:'5px 7px',cursor:'pointer'}}>Editar</button>
                               <button onClick={()=>excluirDelMargen(e)} style={{background:'transparent',color:COLORS.danger,border:`1px solid ${COLORS.danger}`,borderRadius:6,padding:'5px 7px',cursor:'pointer'}}>Excluir</button>
-                            </> : <button onClick={()=>eliminarVentaManualMargen(e)} style={{background:'transparent',color:COLORS.danger,border:`1px solid ${COLORS.danger}`,borderRadius:6,padding:'5px 7px',cursor:'pointer'}}>Eliminar</button>}
+                            </> : <button onClick={()=>eliminarVentaManualMargen(e)} style={{background:'transparent',color:COLORS.danger,border:`1px solid ${COLORS.danger}`,borderRadius:6,padding:'5px 7px',cursor:'pointer'}}>Anular</button>}
                           </td>
                         </tr>
                       ))}
@@ -11764,7 +11764,7 @@ const renderTarjetaProduccion = (n) => (
                           <td style={{ padding:"8px", borderBottom:`1px solid ${COLORS.border}` }}>
                             <div style={{ display:"flex", gap:6, flexWrap:"wrap", alignItems:"center" }}>
                               <button onClick={() => abrirClasificacionCartola(m)} style={{ background:COLORS.accent, color:"#111", border:"none", borderRadius:7, padding:"6px 9px", cursor:"pointer", fontSize:11, fontWeight:800 }}>{m.estado === "conciliado" ? "Editar" : "Clasificar"}</button>
-                              <button onClick={() => eliminarMovimientoCartola(m)} style={{ background:COLORS.danger, color:"#fff", border:"none", borderRadius:7, padding:"6px 8px", cursor:"pointer", fontSize:11 }}>Eliminar</button>
+                              <button onClick={() => eliminarMovimientoCartola(m)} style={{ background:COLORS.danger, color:"#fff", border:"none", borderRadius:7, padding:"6px 8px", cursor:"pointer", fontSize:11 }}>Anular</button>
                               {Number(m.abono || 0) > 0 && <button onClick={() => { setModalClasificarCartola(m); setTipoMovimientoCartola("ingreso"); setCategoriaCartolaSeleccionada("Cobros pendientes"); setSubcategoriaCartolaSeleccionada("Saldo Nota de Venta"); setBusquedaCategoriaCartola(""); setBusquedaCxcCartola(""); setCxcSeleccionadaCartola(null); setTipoAbonoCartola("abono"); }} style={{ background:COLORS.success, color:"#fff", border:"none", borderRadius:7, padding:"6px 8px", cursor:"pointer", fontSize:11 }}>Abono CxC</button>}
                               <span style={{ color:COLORS.muted, fontSize:11 }}>{m.nota_venta_id ? `Doc asociado #${m.nota_venta_id}` : (m.observacion || "")}</span>
                             </div>
@@ -12077,7 +12077,7 @@ const renderTarjetaProduccion = (n) => (
                           <td style={{ padding:"8px", borderBottom:`1px solid ${COLORS.border}`, textAlign:"right", color:COLORS.warning, fontWeight:700 }}>{Number(a.haber || 0) > 0 ? fmt(a.haber) : "-"}</td>
                           <td style={{ padding:"8px", borderBottom:`1px solid ${COLORS.border}`, textAlign:"right" }}>
                             <button onClick={() => setModalContabilidad(a)} style={{ marginRight:6, background:COLORS.surface, color:COLORS.text, border:`1px solid ${COLORS.border}`, borderRadius:7, padding:"5px 8px", cursor:"pointer" }}>Editar</button>
-                            <button onClick={() => eliminarAsientoContable(a)} style={{ background:COLORS.danger, color:"#fff", border:"none", borderRadius:7, padding:"5px 8px", cursor:"pointer" }}>Eliminar</button>
+                            <button onClick={() => eliminarAsientoContable(a)} style={{ background:COLORS.danger, color:"#fff", border:"none", borderRadius:7, padding:"5px 8px", cursor:"pointer" }}>Anular</button>
                           </td>
                         </tr>
                       ))}
@@ -12354,6 +12354,7 @@ const renderTarjetaProduccion = (n) => (
   detalles={detallesNotasVenta.filter(d => String(d.nota_venta_numero) === String(modalNV.numero))}
   onClose={() => setModalNV(null)}
   onSave={guardarGestionNV}
+  onChangeAbono={cambiarAbonoNV}
 />
 )}
 {modalCxcClientes && (
